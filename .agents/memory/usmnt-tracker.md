@@ -27,6 +27,14 @@ Sportmonks' Free plan (what you get by just registering, distinct from the 14-da
 
 **How to apply:** before assuming a Sportmonks integration is broken, log/inspect the raw response body (not just whether `data` is empty) — the `message` field says exactly this. Starter (€29/mo) lets you pick 5 leagues, Growth (€99/mo) covers 30 — pick a plan that includes every league your tracked entities are actually in, not just headline competitions.
 
+## Seed data narrative must stay cross-consistent
+
+The seed script (`scripts/src/seedUsmnt.ts`) drives Injuries, News, and Fixtures together — they need to agree on the same story (e.g. an injured player shouldn't also be "Player of the Month" in a same-week news item, or featured in a fixture happening during their injury). When adding/editing one of these seed sections, check the other two for contradictions before re-seeding.
+
+**Why:** the user caught Christian Pulisic showing as fully fit and thriving in News/Fixtures while having no Injuries record at all, despite being hurt in-story — the sections had drifted out of sync.
+
+**How to apply:** re-running `pnpm --filter @workspace/scripts run seed:usmnt` truncates `clubs` and `fixtures` (cascades), which wipes any live API-Football sync data (`apiFootballTeamId` on clubs, `apiFootballFixtureId` on fixtures) — restart the api-server workflow right after reseeding so the hourly sync re-resolves team IDs and repopulates live fixtures (takes a few minutes on the 7s/request throttle).
+
 ## API-Football free-plan limitations
 
 Tried API-Football (`v3.football.api-sports.io`, header `x-apisports-key`) as a Sportmonks alternative. Two free-plan blockers hit in one test run: (1) the `next=N` upcoming-fixtures param isn't available — had to fall back to `/fixtures?team={id}&season={year}` and filter client-side for not-yet-started fixtures; (2) the free plan only serves **historical** seasons (the error literally said "try from 2022 to 2024") — no current-season data at all, so it can't produce "upcoming fixtures" regardless of the `next`-param workaround; (3) the trial account got flagged/suspended mid-test ("Your account is suspended, check on...dashboard") after a modest burst of ~15 requests spaced 7s apart — free-tier abuse detection here is aggressive.
