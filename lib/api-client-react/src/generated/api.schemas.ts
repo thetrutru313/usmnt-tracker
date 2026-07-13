@@ -66,6 +66,7 @@ export interface PlayerSummary {
   slug: string;
   position: string;
   category: PlayerCategory;
+  poolTier: PlayerPoolTier;
   clubName: string;
   league: string;
   /** @nullable */

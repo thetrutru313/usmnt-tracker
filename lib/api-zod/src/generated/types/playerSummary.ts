@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlayerCategory } from './playerCategory';
+import type { PlayerPoolTier } from './playerPoolTier';
 import type { PlayerSummaryPerformanceTrend } from './playerSummaryPerformanceTrend';
 
 export interface PlayerSummary {
@@ -14,6 +15,7 @@ export interface PlayerSummary {
   slug: string;
   position: string;
   category: PlayerCategory;
+  poolTier: PlayerPoolTier;
   clubName: string;
   league: string;
   /** @nullable */

@@ -288,6 +288,7 @@ components:
         - slug
         - position
         - category
+        - poolTier
         - clubName
         - league
         - clubLogoUrl
@@ -304,6 +305,8 @@ components:
         position: { type: string }
         category:
           $ref: "#/components/schemas/PlayerCategory"
+        poolTier:
+          $ref: "#/components/schemas/PlayerPoolTier"
         clubName: { type: string }
         league: { type: string }
         clubLogoUrl: { type: ["string", "null"] }

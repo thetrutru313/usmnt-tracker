@@ -37,6 +37,7 @@ export const playerSummaryColumns = {
   slug: playersTable.slug,
   position: playersTable.position,
   category: playersTable.category,
+  worldCupRoster: playersTable.worldCupRoster,
   clubName: clubsTable.name,
   league: clubsTable.league,
   clubLogoUrl: clubsTable.logoUrl,
@@ -69,7 +70,7 @@ export async function listPlayers(filter: {
 
   const query = playerSummaryQuery();
   const rows = conditions.length ? await query.where(and(...conditions)) : await query;
-  return rows;
+  return rows.map(({ worldCupRoster, ...row }) => ({ ...row, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age: row.age }) }));
 }
 
 export async function getPlayerById(id: number) {

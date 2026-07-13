@@ -2,18 +2,46 @@ import { useListPlayers } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Search, SlidersHorizontal, Shield, Swords, Goal } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+type PoolTier = "core" | "inMix" | "prospect";
+
+const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "core", label: "Core Squad" },
+  { value: "inMix", label: "In the Mix" },
+  { value: "prospect", label: "Prospects" },
+];
 
 export default function Players() {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<"current" | "fringe" | "prospect" | "">("");
-  
-  const { data: players, isLoading } = useListPlayers({ 
+  const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
+
+  const { data: players, isLoading } = useListPlayers({
     search: search.length > 2 ? search : undefined,
-    category: category || undefined
   });
+
+  const handlePoolFilterChange = (next: string[]) => {
+    if (next.length === 0) {
+      setPoolFilter(["all"]);
+      return;
+    }
+    const addedAll = next.includes("all") && !poolFilter.includes("all");
+    if (addedAll) {
+      setPoolFilter(["all"]);
+      return;
+    }
+    setPoolFilter(next.filter((v) => v !== "all"));
+  };
+
+  const filteredPlayers = useMemo(() => {
+    if (!players) return players;
+    if (poolFilter.includes("all")) return players;
+    return players.filter((p) => poolFilter.includes(p.poolTier));
+  }, [players, poolFilter]);
 
   return (
     <div className="space-y-6">
@@ -36,31 +64,20 @@ export default function Players() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        <button 
-          onClick={() => setCategory("")}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${category === "" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50 text-foreground"}`}
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Filter by player pool</p>
+        <ToggleGroup
+          type="multiple"
+          value={poolFilter}
+          onValueChange={handlePoolFilterChange}
+          className="justify-start flex-wrap"
         >
-          All Players
-        </button>
-        <button 
-          onClick={() => setCategory("current")}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${category === "current" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50 text-foreground"}`}
-        >
-          Core Squad
-        </button>
-        <button 
-          onClick={() => setCategory("fringe")}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${category === "fringe" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50 text-foreground"}`}
-        >
-          In the Mix
-        </button>
-        <button 
-          onClick={() => setCategory("prospect")}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${category === "prospect" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50 text-foreground"}`}
-        >
-          Prospects
-        </button>
+          {POOL_FILTERS.map((f) => (
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-3 h-8 rounded-md border border-border data-[state=on]:border-primary">
+              {f.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
 
       {isLoading ? (
@@ -69,18 +86,18 @@ export default function Players() {
             <Card key={i} className="animate-pulse h-40" />
           ))}
         </div>
-      ) : players?.length === 0 ? (
+      ) : filteredPlayers?.length === 0 ? (
         <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
           <p className="text-muted-foreground font-mono">NO PLAYERS FOUND MATCHING CRITERIA</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {players?.map((player) => (
+          {filteredPlayers?.map((player) => (
             <Link key={player.id} href={`/players/${player.id}`}>
               <Card className="group hover:border-secondary hover:shadow-lg transition-all cursor-pointer overflow-hidden relative">
                 <div className={`absolute top-0 right-0 w-16 h-16 rounded-bl-full -mr-8 -mt-8 transition-colors ${
-                  player.category === 'current' ? 'bg-primary/20 group-hover:bg-primary/40' :
-                  player.category === 'fringe' ? 'bg-secondary/20 group-hover:bg-secondary/40' :
+                  player.poolTier === 'core' ? 'bg-primary/20 group-hover:bg-primary/40' :
+                  player.poolTier === 'inMix' ? 'bg-secondary/20 group-hover:bg-secondary/40' :
                   'bg-muted-foreground/20 group-hover:bg-muted-foreground/40'
                 }`} />
                 <CardContent className="p-5">
