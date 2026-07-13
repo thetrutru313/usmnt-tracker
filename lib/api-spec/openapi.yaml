@@ -264,6 +264,14 @@ components:
       type: string
       enum: [current, fringe, prospect]
 
+    PlayerPoolTier:
+      type: string
+      description: >
+        Player pool classification used for fixture filtering. "core" = named
+        to the 2026 World Cup roster. "inMix" = 5+ national team caps but not
+        on the World Cup roster. "prospect" = everyone else under 25.
+      enum: [core, inMix, prospect]
+
     InjuryStatus:
       type: string
       enum: [active, recovering, returned]
@@ -489,6 +497,15 @@ components:
         position: { type: string }
         photoUrl: { type: ["string", "null"] }
 
+    FixtureFeaturedPlayer:
+      allOf:
+        - $ref: "#/components/schemas/FeaturedPlayer"
+        - type: object
+          required: [poolTier]
+          properties:
+            poolTier:
+              $ref: "#/components/schemas/PlayerPoolTier"
+
     Fixture:
       type: object
       required:
@@ -528,7 +545,7 @@ components:
         featuredPlayers:
           type: array
           items:
-            $ref: "#/components/schemas/FeaturedPlayer"
+            $ref: "#/components/schemas/FixtureFeaturedPlayer"
 
     NewsArticle:
       type: object

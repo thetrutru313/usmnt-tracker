@@ -14,6 +14,23 @@ import {
   nationalTeamWindowsTable,
 } from "@workspace/db";
 
+export type PlayerPoolTier = "core" | "inMix" | "prospect";
+
+/**
+ * Player pool classification for fixture filtering:
+ * - "core": named to the 2026 World Cup 26-man roster.
+ * - "inMix": 5+ national team caps but not on the World Cup roster.
+ * - "prospect": everyone else, as long as they're under 25.
+ * Note this is distinct from `category` (current/fringe/prospect) — e.g. a
+ * "current" senior international who didn't make the World Cup roster (like
+ * Yunus Musah) lands in "inMix", not "core".
+ */
+export function computePoolTier(player: { worldCupRoster: boolean; nationalTeamCaps: number; age: number }): PlayerPoolTier {
+  if (player.worldCupRoster) return "core";
+  if (player.nationalTeamCaps >= 5) return "inMix";
+  return "prospect";
+}
+
 export const playerSummaryColumns = {
   id: playersTable.id,
   name: playersTable.name,
@@ -121,8 +138,10 @@ export async function getTransfersForPlayer(playerId: number) {
     .orderBy(desc(transfersTable.announcedAt));
 }
 
+type FeaturedPlayerRow = { id: number; name: string; slug: string; position: string; photoUrl: string | null; poolTier: PlayerPoolTier };
+
 export async function getFeaturedPlayersMap(playerIds: number[]) {
-  if (playerIds.length === 0) return new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }>();
+  if (playerIds.length === 0) return new Map<number, FeaturedPlayerRow>();
   const rows = await db
     .select({
       id: playersTable.id,
@@ -130,14 +149,17 @@ export async function getFeaturedPlayersMap(playerIds: number[]) {
       slug: playersTable.slug,
       position: playersTable.position,
       photoUrl: playersTable.photoUrl,
+      worldCupRoster: playersTable.worldCupRoster,
+      nationalTeamCaps: playersTable.nationalTeamCaps,
+      age: playersTable.age,
     })
     .from(playersTable)
     .where(inArray(playersTable.id, playerIds));
-  return new Map(rows.map((r) => [r.id, r]));
+  return new Map(rows.map((r) => [r.id, { id: r.id, name: r.name, slug: r.slug, position: r.position, photoUrl: r.photoUrl, poolTier: computePoolTier(r) }]));
 }
 
 export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
-  if (fixtureIds.length === 0) return new Map<number, ReturnType<typeof getFeaturedPlayersMap> extends Promise<Map<number, infer V>> ? V[] : never>();
+  if (fixtureIds.length === 0) return new Map<number, FeaturedPlayerRow[]>();
   const rows = await db
     .select({
       fixtureId: fixturePlayersTable.fixtureId,
@@ -146,15 +168,18 @@ export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
       slug: playersTable.slug,
       position: playersTable.position,
       photoUrl: playersTable.photoUrl,
+      worldCupRoster: playersTable.worldCupRoster,
+      nationalTeamCaps: playersTable.nationalTeamCaps,
+      age: playersTable.age,
     })
     .from(fixturePlayersTable)
     .innerJoin(playersTable, eq(fixturePlayersTable.playerId, playersTable.id))
     .where(inArray(fixturePlayersTable.fixtureId, fixtureIds));
 
-  const map = new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }[]>();
+  const map = new Map<number, FeaturedPlayerRow[]>();
   for (const row of rows) {
     const list = map.get(row.fixtureId) ?? [];
-    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl });
+    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl, poolTier: computePoolTier(row) });
     map.set(row.fixtureId, list);
   }
   return map;

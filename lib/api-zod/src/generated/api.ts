@@ -190,7 +190,9 @@ export const GetPlayerResponse = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "photoUrl": zod.string().nullable()
-}))
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
 })),
   "recentNews": zod.array(zod.object({
   "id": zod.number(),
@@ -244,7 +246,9 @@ export const ListFixturesResponseItem = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "photoUrl": zod.string().nullable()
-}))
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
 })
 export const ListFixturesResponse = zod.array(ListFixturesResponseItem)
 
@@ -362,7 +366,9 @@ export const GetDashboardResponse = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "photoUrl": zod.string().nullable()
-}))
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
 })),
   "upcomingGames": zod.array(zod.object({
   "id": zod.number(),
@@ -386,7 +392,9 @@ export const GetDashboardResponse = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "photoUrl": zod.string().nullable()
-}))
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
 })),
   "latestNews": zod.array(zod.object({
   "id": zod.number(),

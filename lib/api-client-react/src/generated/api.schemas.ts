@@ -22,6 +22,18 @@ export const PlayerCategory = {
   prospect: 'prospect',
 } as const;
 
+/**
+ * Player pool classification used for fixture filtering. "core" = named to the 2026 World Cup roster. "inMix" = 5+ national team caps but not on the World Cup roster. "prospect" = everyone else under 25.
+ */
+export type PlayerPoolTier = typeof PlayerPoolTier[keyof typeof PlayerPoolTier];
+
+
+export const PlayerPoolTier = {
+  core: 'core',
+  inMix: 'inMix',
+  prospect: 'prospect',
+} as const;
+
 export type InjuryStatus = typeof InjuryStatus[keyof typeof InjuryStatus];
 
 
@@ -168,6 +180,10 @@ export interface FeaturedPlayer {
   photoUrl: string | null;
 }
 
+export type FixtureFeaturedPlayer = FeaturedPlayer & {
+  poolTier: PlayerPoolTier;
+};
+
 export interface Fixture {
   id: number;
   isNationalTeam: boolean;
@@ -191,7 +207,7 @@ export interface Fixture {
   streamingService: string | null;
   /** @nullable */
   broadcastLink?: string | null;
-  featuredPlayers: FeaturedPlayer[];
+  featuredPlayers: FixtureFeaturedPlayer[];
 }
 
 export type NewsArticleSentiment = typeof NewsArticleSentiment[keyof typeof NewsArticleSentiment];

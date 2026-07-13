@@ -16,6 +16,10 @@ export const playersTable = pgTable("players", {
   marketValueUsd: doublePrecision("market_value_usd"),
   nationalTeamCaps: integer("national_team_caps").notNull().default(0),
   nationalTeamGoals: integer("national_team_goals").notNull().default(0),
+  // Whether this player was named to the USA's 2026 World Cup 26-man roster.
+  // Distinct from `category`: a player can be category "current" (an
+  // established senior international) without having made this roster.
+  worldCupRoster: boolean("world_cup_roster").notNull().default(false),
   youthNationalTeam: text("youth_national_team"),
   debutDate: date("debut_date", { mode: "string" }),
   potentialCallUpScore: integer("potential_call_up_score"),

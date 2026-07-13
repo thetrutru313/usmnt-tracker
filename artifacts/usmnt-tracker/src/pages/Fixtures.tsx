@@ -1,13 +1,72 @@
+import { useState } from "react";
 import { useListFixtures } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon, MonitorPlay, MapPin } from "lucide-react";
 import { formatTimeMst } from "@/lib/formatMst";
 import { Link } from "wouter";
 
+type PoolTier = "core" | "inMix" | "prospect";
+
+const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "core", label: "Core Squad" },
+  { value: "inMix", label: "In the Mix" },
+  { value: "prospect", label: "Prospects" },
+];
+
+const POOL_TIER_LABELS: Record<PoolTier, string> = {
+  core: "Core Squad — 2026 World Cup roster",
+  inMix: "In the Mix — 5+ national team caps",
+  prospect: "Prospect — under 25",
+};
+
+const POOL_TIER_STYLES: Record<PoolTier, string> = {
+  core: "bg-secondary/10 text-secondary border-secondary/20 hover:bg-secondary/20 hover:border-secondary/40",
+  inMix: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
+  prospect: "bg-muted text-muted-foreground border-border hover:bg-muted/70 hover:border-border",
+};
+
+function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string[]; onPoolFilterChange: (next: string[]) => void }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight uppercase mb-2">Watch Guide</h1>
+        <p className="text-muted-foreground text-sm">Every match featuring USMNT players worldwide.</p>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Filter by player pool</p>
+        <ToggleGroup
+          type="multiple"
+          value={poolFilter}
+          onValueChange={onPoolFilterChange}
+          className="justify-start flex-wrap"
+        >
+          {POOL_FILTERS.map((f) => (
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-3 h-8 rounded-md border border-border data-[state=on]:border-primary">
+              {f.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+    </div>
+  );
+}
+
 export default function Fixtures() {
   const { data: fixtures, isLoading } = useListFixtures({ scope: 'all' });
+  const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
+
+  const handlePoolFilterChange = (next: string[]) => {
+    setPoolFilter((prev) => {
+      const clickedAll = next.includes("all") && !prev.includes("all");
+      if (clickedAll) return ["all"];
+      const withoutAll = next.filter((v) => v !== "all");
+      return withoutAll.length === 0 ? ["all"] : withoutAll;
+    });
+  };
 
   if (isLoading) {
     return (
@@ -30,8 +89,23 @@ export default function Fixtures() {
     );
   }
 
+  const filteredFixtures = poolFilter.includes("all")
+    ? fixtures
+    : fixtures.filter((fixture) => fixture.featuredPlayers.some((p) => poolFilter.includes(p.poolTier)));
+
+  if (filteredFixtures.length === 0) {
+    return (
+      <div className="space-y-8 max-w-4xl mx-auto">
+        <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
+        <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+          <p className="text-muted-foreground font-mono">NO FIXTURES MATCH THIS FILTER</p>
+        </div>
+      </div>
+    );
+  }
+
   // Group fixtures by date
-  const groupedFixtures = fixtures.reduce((acc, fixture) => {
+  const groupedFixtures = filteredFixtures.reduce((acc, fixture) => {
     const dateStr = format(new Date(fixture.kickoff), 'yyyy-MM-dd');
     if (!acc[dateStr]) acc[dateStr] = [];
     acc[dateStr].push(fixture);
@@ -42,10 +116,7 @@ export default function Fixtures() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight uppercase mb-2">Watch Guide</h1>
-        <p className="text-muted-foreground text-sm">Every match featuring USMNT players worldwide.</p>
-      </div>
+      <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
 
       <div className="space-y-8">
         {sortedDates.map(dateStr => {
@@ -119,7 +190,8 @@ export default function Fixtures() {
                             <Link
                               key={p.id}
                               href={`/players/${p.id}`}
-                              className="text-xs bg-secondary/10 text-secondary border border-secondary/20 px-2 py-1 rounded flex items-center gap-1 font-medium hover:bg-secondary/20 hover:border-secondary/40 transition-colors"
+                              className={`text-xs px-2 py-1 rounded flex items-center gap-1 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
+                              title={POOL_TIER_LABELS[p.poolTier]}
                             >
                               {p.name}
                             </Link>

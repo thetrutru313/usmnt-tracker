@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { FeaturedPlayer } from './featuredPlayer';
+import type { FixtureFeaturedPlayer } from './fixtureFeaturedPlayer';
 import type { FixtureStatus } from './fixtureStatus';
 
 export interface Fixture {
@@ -31,5 +31,5 @@ export interface Fixture {
   streamingService: string | null;
   /** @nullable */
   broadcastLink?: string | null;
-  featuredPlayers: FeaturedPlayer[];
+  featuredPlayers: FixtureFeaturedPlayer[];
 }

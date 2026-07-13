@@ -290,6 +290,12 @@ async function main() {
     { name: "Joshua Wynder", slug: "joshua-wynder", position: "DF", category: "prospect", club: "Benfica", age: 20, contractUntil: "2028-06-30", marketValueUsd: 4500000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 26, trend: "steady", trending: false, bio: "A U-20 World Cup center-back who racked up nearly 3,000 USL minutes before turning 19, Wynder is now waiting for a Champions League breakthrough at Benfica." },
   ];
 
+  // The 2026 World Cup 26-man roster is a subset of "current" category
+  // players. Musah is a full senior international (category "current") but
+  // didn't make the final 26 — see the fixture-tagging fix in
+  // apiFootballSync.ts for context on why he's tracked separately.
+  const NOT_ON_WORLD_CUP_ROSTER = new Set(["Yunus Musah"]);
+
   const insertedPlayers = await db
     .insert(playersTable)
     .values(
@@ -305,6 +311,7 @@ async function main() {
         marketValueUsd: p.marketValueUsd,
         nationalTeamCaps: p.caps,
         nationalTeamGoals: p.goals,
+        worldCupRoster: p.category === "current" && !NOT_ON_WORLD_CUP_ROSTER.has(p.name),
         youthNationalTeam: p.youthNationalTeam,
         debutDate: p.debutDate,
         potentialCallUpScore: p.callUpScore,
