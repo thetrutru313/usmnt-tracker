@@ -75,21 +75,35 @@ function mapStatus(short: string): string {
   return "scheduled";
 }
 
+// API-Football's search matches on short/informal names, not full official
+// names — "AS Monaco" returns nothing but "Monaco" does. Override the search
+// term for clubs where the official name in our DB doesn't match.
+const SEARCH_TERM_OVERRIDES: Record<string, string> = {
+  "AS Monaco": "Monaco",
+  "FC Barcelona": "Barcelona",
+  "Inter Miami CF": "Inter Miami",
+  "Olympique de Marseille": "Marseille",
+  "Seattle Sounders FC": "Seattle Sounders",
+};
+
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */
 async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId: number | null }): Promise<number | null> {
   if (club.apiFootballTeamId) return club.apiFootballTeamId;
 
+  const searchTerm = SEARCH_TERM_OVERRIDES[club.name] ?? club.name;
   try {
-    const results = await afFetch<AfTeamSearchResult[]>(`/teams?search=${encodeURIComponent(club.name)}`);
-    const match = results[0];
+    const results = await afFetch<AfTeamSearchResult[]>(`/teams?search=${encodeURIComponent(searchTerm)}`);
+    // Prefer an exact (case-insensitive) name match over the first result —
+    // searches like "Barcelona" return a dozen youth/reserve/women's teams.
+    const match = results.find((r) => r.team.name.toLowerCase() === searchTerm.toLowerCase()) ?? results[0];
     if (!match) {
-      logger.warn({ club: club.name }, "API-Football team search returned no match");
+      logger.warn({ club: club.name, searchTerm }, "API-Football team search returned no match");
       return null;
     }
     await db.update(clubsTable).set({ apiFootballTeamId: match.team.id }).where(eq(clubsTable.id, club.id));
     return match.team.id;
   } catch (err) {
-    logger.warn({ err, club: club.name }, "API-Football team search failed");
+    logger.warn({ err, club: club.name, searchTerm }, "API-Football team search failed");
     return null;
   }
 }

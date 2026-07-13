@@ -3,8 +3,8 @@ import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
 import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
-// intentionally not started — the user switched to API-Football instead.
-// See replit.md and .agents/memory/usmnt-tracker.md.
+// intentionally not started — the user upgraded API-Football instead, which
+// is now live. See replit.md and .agents/memory/usmnt-tracker.md.
 
 const rawPort = process.env["PORT"];
 
@@ -33,7 +33,8 @@ app.listen(port, (err) => {
   // still rely on seeded data pending a paid provider decision (see replit.md).
   startRssIngestionSchedule();
 
-  // API-Football sync (./lib/apiFootballSync.ts) is implemented but not
-  // started: the free-plan key only covers 2022-2024 seasons (no current
-  // fixtures) and the account was flagged/suspended mid-test. See replit.md.
+  // Paid half of the hybrid pipeline: syncs upcoming club fixtures from
+  // API-Football (hourly). Skips itself if API_FOOTBALL_KEY isn't set.
+  // National-team fixtures stay seeded/curated.
+  startApiFootballSyncSchedule();
 });

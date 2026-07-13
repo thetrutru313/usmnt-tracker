@@ -28,7 +28,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 - Player roster, clubs, fixtures, stats, injuries, and transfers are seeded fabricated data (`scripts/src/seedUsmnt.ts`) — no live API for these yet.
 - News is live: `artifacts/api-server/src/lib/rssIngest.ts` pulls free public RSS feeds (BBC Sport, Google News searches for USMNT/ESPN) on a 15-min schedule, keeps only articles naming a tracked player or the senior men's national team, dedupes by URL, and caps inserts per run at 25 to avoid flooding the feed with noise.
-- Fixtures/stats are still seeded data. Two live-sync implementations exist but neither is started (see Gotchas): `artifacts/api-server/src/lib/sportmonksSync.ts` (Sportmonks) and `artifacts/api-server/src/lib/apiFootballSync.ts` (API-Football).
+- Club fixtures are now live via API-Football (`artifacts/api-server/src/lib/apiFootballSync.ts`, hourly sync, started from `index.ts`). National-team fixtures/windows stay curated/seeded (out of scope for the sync, lower churn). A Sportmonks sync also exists (`sportmonksSync.ts`) but is unused/not started — see Gotchas.
 
 ## Product
 
@@ -42,7 +42,7 @@ Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prosp
 
 - After changing `artifacts/api-server/src/lib/rssIngest.ts`, restart the workflow to re-run ingestion. If you restart twice in quick succession, the old process may still be mid-insert and can leave one stale/uncleaned row behind — check for and delete duplicates if so.
 - `SPORTMONKS_API_TOKEN` is set, but the account is on Sportmonks' Free plan, which only ships sample/demo leagues — none of the leagues the tracked players actually play in (Premier League, Serie A, Bundesliga, Ligue 1, La Liga, Eredivisie, MLS, Champions League). The user declined the paid upgrade (Starter €29/mo covers 5 leagues, Growth €99/mo covers all 8+), so `startSportmonksSyncSchedule()` is deliberately not called from `index.ts`. If the user upgrades later, call it from `index.ts` and it'll resolve club→Sportmonks-team IDs and sync upcoming fixtures automatically.
-- `API_FOOTBALL_KEY` is set, but that free plan only serves **historical** seasons (2022-2024) — no current fixtures at all — and the trial account got suspended mid-test after a light burst of requests. `startApiFootballSyncSchedule()` is deliberately not called from `index.ts`. Don't re-enable it without a paid plan with current-season access; see `.agents/memory/usmnt-tracker.md` for what was already tried.
+- `API_FOOTBALL_KEY` is on a paid plan now (upgraded after the free plan proved unusable — no current-season data, account got suspended under light load). `startApiFootballSyncSchedule()` is live and running hourly. Team-name search is picky about official vs. short names (e.g. "AS Monaco" must be searched as "Monaco") — see `SEARCH_TERM_OVERRIDES` in `apiFootballSync.ts` and `.agents/memory/usmnt-tracker.md` if new clubs fail to resolve.
 
 ## Pointers
 
