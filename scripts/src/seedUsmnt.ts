@@ -59,6 +59,10 @@ async function main() {
     Belgium: "https://media.api-sports.io/football/teams/1.png",
     Panama: "https://media.api-sports.io/football/teams/11.png",
     Colombia: "https://media.api-sports.io/football/teams/8.png",
+    "FC Augsburg": "https://media.api-sports.io/football/teams/170.png",
+    "Bayern Munich": "https://media.api-sports.io/football/teams/157.png",
+    "Real Salt Lake": "https://media.api-sports.io/football/teams/1606.png",
+    "San Jose Earthquakes": "https://media.api-sports.io/football/teams/1596.png",
   };
 
   // ---- Clubs ----
@@ -84,6 +88,10 @@ async function main() {
     { name: "Werder Bremen", league: "Bundesliga", country: "Germany" },
     { name: "Seattle Sounders FC", league: "MLS", country: "USA" },
     { name: "New England Revolution", league: "MLS", country: "USA" },
+    { name: "FC Augsburg", league: "Bundesliga", country: "Germany" },
+    { name: "Bayern Munich", league: "Bundesliga", country: "Germany" },
+    { name: "Real Salt Lake", league: "MLS", country: "USA" },
+    { name: "San Jose Earthquakes", league: "MLS", country: "USA" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
@@ -129,12 +137,18 @@ async function main() {
     "Aidan Morris": "https://cdn.ussoccerplayers.com/images/2025/10/usmnt-player-aidan-morris-september-10-2024-credit-joe-robbins-isiphotos-400x400.jpg",
     "Djordje Mihailovic": "https://cdn.ussoccerplayers.com/images/2023/12/djordje-mihailovic-usmnt-player-bio-banner-400x400.jpg",
     "Tanner Tessmann": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2026/03/17/ca45d1fd-b1a4-4928-8ad3-f588910fc7ab/tessmann-0317.jpg?width=400&crop=16:9,smart&w=3840&q=70",
-    "Cavan Sullivan": "https://library.sportingnews.com/styles/crop_style_16_9_1200_webp/s3/2026-05/GettyImages-2279117832.jpg.webp?itok=oO_yILmk",
     "Diego Kochen": "https://a57.foxsports.com/statics.foxsports.com/www.foxsports.com/content/uploads/2026/06/548/308/diego-kochen-1.jpg?ve=1&tl=1",
     "Benjamin Cremaschi": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2025/10/06/f437cf0b-c353-4bca-b237-0ae0af86cd94/cremaschi-v2.jpg?width=400&crop=16:9,smart&w=3840&q=70",
-    "Noel Buck": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-ner/fsib6ksgvlxwcbrwwwju",
+    "Noel Buck": "https://images.mlssoccer.com/image/private/t_thumb_squared/f_png/mls/uszfeypgkitxztkitbob.png",
     "Obed Vargas": "https://external-preview.redd.it/dazn-seattle-sounders-midfielder-obed-vargas-a-childhood-v0-OWpzbmoxa3p0NDhmMVSmKWAHyN7qFix2ArOkC4hhNTu5pJsM6g97VFOvAltl.png?width=640&crop=smart&format=pjpg&auto=webp&s=22c49750cacb16cf30a663422710bf8ce0a8b1d1",
     "Nimfasha Berchimas": "https://content.ussoccer.com/media/images/oyf3dba6/production/8dfee51234cfb163c45d7d4643a2ff433186a7ce-1080x1080.jpg?w=1080&h=1080&fit=max&auto=format",
+    // Verified against fresh photos before adding — see conversation notes on
+    // 2026-07-13 photo audit (Cavan Sullivan was previously showing Balogun's photo).
+    "Cavan Sullivan": "https://cdn.abcotvs.com/dip/images/18658561_cavan-sullivan-ap-img-022726.jpeg",
+    "Mathis Albert": "https://assets.goal.com/images/v3/bltfd885e9b81513290/albert.jpg?auto=webp&format=pjpg&width=3840&quality=60",
+    "Noahkai Banks": "https://i.guim.co.uk/img/media/094cf9ce3140ba4a5a7ee9202d0366bf912f7ca8/816_0_4502_3602/master/4502.jpg?width=465&dpr=1&s=none&crop=none",
+    "Leonard Prescott": "https://static01.nyt.com/athletic/uploads/wp/2026/03/16135902/GettyImages-2254908556-1024x683.jpg?width=1920&quality=70&auto=webp",
+    "Zavier Gozo": "https://cdn.sanity.io/images/oyf3dba6/production/7c5aabde2d031eddf43d49d0a9e7aa7fc5251e49-1440x1680.png",
   };
 
   const playerDefs: PlayerDef[] = [
@@ -159,9 +173,13 @@ async function main() {
     { name: "Cavan Sullivan", slug: "cavan-sullivan", position: "FW", category: "prospect", club: "Philadelphia Union", age: 15, contractUntil: "2029-12-31", marketValueUsd: 3000000, caps: 0, goals: 0, youthNationalTeam: "U-17", debutDate: "2024-05-18", callUpScore: 34, trend: "rising", trending: true, bio: "The youngest player ever to appear in MLS, Sullivan's blistering acceleration and finishing instincts have scouts across Europe circling." },
     { name: "Diego Kochen", slug: "diego-kochen", position: "GK", category: "prospect", club: "FC Barcelona", age: 18, contractUntil: "2027-06-30", marketValueUsd: 2500000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 22, trend: "rising", trending: false, bio: "A towering, composed shot-stopper progressing through Barcelona's famed academy pipeline, tipped as the long-term successor between the posts." },
     { name: "Benjamin Cremaschi", slug: "benjamin-cremaschi", position: "MF", category: "prospect", club: "Inter Miami CF", age: 20, contractUntil: "2027-12-31", marketValueUsd: 4000000, caps: 2, goals: 0, youthNationalTeam: "U-23", debutDate: "2024-01-18", callUpScore: 41, trend: "rising", trending: true, bio: "A composed deep-lying playmaker who has thrived alongside Messi and Busquets at Inter Miami, dictating tempo well beyond his years." },
-    { name: "Noel Buck", slug: "noel-buck", position: "MF", category: "prospect", club: "Werder Bremen", age: 20, contractUntil: "2026-06-30", marketValueUsd: 2000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 24, trend: "steady", trending: false, bio: "A tall, combative midfielder working his way up Werder Bremen's squad, admired for his range of passing and tackling numbers." },
+    { name: "Noel Buck", slug: "noel-buck", position: "MF", category: "prospect", club: "San Jose Earthquakes", age: 20, contractUntil: "2027-12-31", marketValueUsd: 2000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 24, trend: "steady", trending: false, bio: "A tall, combative midfielder who has bounced between MLS and a Southampton loan spell, admired for his range of passing and tackling numbers." },
     { name: "Obed Vargas", slug: "obed-vargas", position: "MF", category: "prospect", club: "Seattle Sounders FC", age: 20, contractUntil: "2027-12-31", marketValueUsd: 3500000, caps: 3, goals: 0, youthNationalTeam: "U-23", debutDate: "2023-10-14", callUpScore: 39, trend: "steady", trending: false, bio: "A physically mature two-way midfielder who broke through as a teenager in Seattle and has continued to add polish to his game each season." },
     { name: "Nimfasha Berchimas", slug: "nimfasha-berchimas", position: "DF", category: "prospect", club: "New England Revolution", age: 19, contractUntil: "2026-12-31", marketValueUsd: 1200000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: "2024-08-24", callUpScore: 19, trend: "rising", trending: false, bio: "An athletic, ball-playing center-back prospect who has forced his way into New England's first team ahead of schedule." },
+    { name: "Mathis Albert", slug: "mathis-albert", position: "FW", category: "prospect", club: "Borussia Dortmund", age: 17, contractUntil: "2028-06-30", marketValueUsd: 8000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 44, trend: "rising", trending: true, bio: "A dazzling dribbler who left the LA Galaxy academy for Dortmund and became the youngest American to play in the Bundesliga, already drawing senior-team buzz." },
+    { name: "Noahkai Banks", slug: "noahkai-banks", position: "DF", category: "prospect", club: "FC Augsburg", age: 19, contractUntil: "2028-06-30", marketValueUsd: 3000000, caps: 0, goals: 0, youthNationalTeam: null, debutDate: null, callUpScore: 33, trend: "rising", trending: false, bio: "A towering, German-born center-back who served as an alternate at World Cup qualifying — U.S. Soccer is racing to lock him in before other federations come calling." },
+    { name: "Leonard Prescott", slug: "leonard-prescott", position: "GK", category: "prospect", club: "Bayern Munich", age: 16, contractUntil: "2027-06-30", marketValueUsd: 2200000, caps: 0, goals: 0, youthNationalTeam: null, debutDate: null, callUpScore: 15, trend: "rising", trending: true, bio: "Born in New York but raised in Germany's academy system, Prescott became one of the youngest goalkeepers to warm up for a Bayern Champions League matchday — a long-shot dual-national target for U.S. Soccer." },
+    { name: "Zavier Gozo", slug: "zavier-gozo", position: "FW", category: "prospect", club: "Real Salt Lake", age: 19, contractUntil: "2027-12-31", marketValueUsd: 1500000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: "2026-05-02", callUpScore: 27, trend: "rising", trending: false, bio: "A direct, two-footed winger who forced his way into Real Salt Lake's first team and has scouts talking about a very bright USMNT future." },
   ];
 
   const insertedPlayers = await db
@@ -260,6 +278,10 @@ async function main() {
     "Noel Buck": { minutes: 540, starts: 5, goals: 0, assists: 1, xg: 0.3, xa: 0.7, shots: 6, keyPasses: 6, passCompletionPct: 82.6, progressivePasses: 22, progressiveCarries: 10, tackles: 16, interceptions: 10, duelsWonPct: 52.8, cleanSheets: 0, savePct: null, avgRating: 6.6 },
     "Obed Vargas": { minutes: 1640, starts: 17, goals: 1, assists: 2, xg: 0.9, xa: 1.4, shots: 14, keyPasses: 14, passCompletionPct: 85.4, progressivePasses: 70, progressiveCarries: 34, tackles: 46, interceptions: 24, duelsWonPct: 55.1, cleanSheets: 0, savePct: null, avgRating: 6.8 },
     "Nimfasha Berchimas": { minutes: 980, starts: 10, goals: 0, assists: 0, xg: 0.1, xa: 0.2, shots: 3, keyPasses: 4, passCompletionPct: 84.9, progressivePasses: 32, progressiveCarries: 8, tackles: 22, interceptions: 20, duelsWonPct: 58.2, cleanSheets: 4, savePct: null, avgRating: 6.7 },
+    "Mathis Albert": { minutes: 640, starts: 6, goals: 4, assists: 3, xg: 3.4, xa: 2.6, shots: 22, keyPasses: 16, passCompletionPct: 78.6, progressivePasses: 30, progressiveCarries: 48, tackles: 6, interceptions: 3, duelsWonPct: 44.8, cleanSheets: 0, savePct: null, avgRating: 6.9 },
+    "Noahkai Banks": { minutes: 810, starts: 9, goals: 0, assists: 1, xg: 0.2, xa: 0.4, shots: 5, keyPasses: 3, passCompletionPct: 86.3, progressivePasses: 40, progressiveCarries: 12, tackles: 20, interceptions: 26, duelsWonPct: 61.4, cleanSheets: 3, savePct: null, avgRating: 6.7 },
+    "Leonard Prescott": { minutes: 90, starts: 1, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 60.0, progressivePasses: 1, progressiveCarries: 0, tackles: 0, interceptions: 0, duelsWonPct: 0, cleanSheets: 1, savePct: 75.0, avgRating: 6.6 },
+    "Zavier Gozo": { minutes: 420, starts: 4, goals: 2, assists: 1, xg: 1.8, xa: 0.9, shots: 14, keyPasses: 6, passCompletionPct: 76.2, progressivePasses: 18, progressiveCarries: 24, tackles: 4, interceptions: 2, duelsWonPct: 46.5, cleanSheets: 0, savePct: null, avgRating: 6.7 },
   };
 
   const statRows = [];
@@ -357,7 +379,7 @@ async function main() {
     // placeholders that duplicate/conflict with the real fixtures the
     // apiFootballSync job pulls in for every club in clubDefs. Club schedules
     // should come exclusively from the live sync.
-    { isNationalTeam: true, competition: "FIFA World Cup", daysFromNow: -4, hour: 15, venue: "AT&T Stadium, Arlington", homeTeam: "USA", awayTeam: "Belgium", homeScore: 2, awayScore: 1, status: "finished", tvNetwork: "Fox", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Matt Turner"] },
+    { isNationalTeam: true, competition: "FIFA World Cup", daysFromNow: -4, hour: 15, venue: "AT&T Stadium, Arlington", homeTeam: "USA", awayTeam: "Belgium", homeScore: 1, awayScore: 4, status: "finished", tvNetwork: "Fox", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Matt Turner"] },
     { isNationalTeam: true, competition: "International Friendly", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Ricardo Pepi", "Matt Turner"] },
     { isNationalTeam: true, competition: "International Friendly", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Colombia", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
   ];

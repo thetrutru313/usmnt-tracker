@@ -77,7 +77,7 @@ const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingS
   "Ligue 1": { tvNetwork: "beIN Sports", streamingService: "beIN Sports Connect" },
   "Eredivisie": { tvNetwork: null, streamingService: "ESPN+" },
   "Primeira Liga": { tvNetwork: null, streamingService: "ESPN+" },
-  "MLS": { tvNetwork: "Apple TV", streamingService: "MLS Season Pass" },
+  "Major League Soccer": { tvNetwork: "Apple TV", streamingService: "MLS Season Pass" },
   "UEFA Champions League": { tvNetwork: "CBS", streamingService: "Paramount+" },
   "UEFA Europa League": { tvNetwork: null, streamingService: "Paramount+" },
 };
@@ -107,6 +107,7 @@ const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Seattle Sounders FC": "Seattle Sounders",
   "Norwich City": "Norwich",
   "Como 1907": "Como",
+  "Bayern Munich": "Bayern Munchen",
 };
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */

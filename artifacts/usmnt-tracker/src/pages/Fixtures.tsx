@@ -97,9 +97,19 @@ export default function Fixtures() {
                         </div>
                         
                         <div className="flex items-center justify-between gap-4 mb-3">
-                          <div className="flex-1 text-right font-bold text-lg">{fixture.homeTeam}</div>
+                          <div className="flex-1 flex items-center justify-end gap-2 text-right font-bold text-lg">
+                            <span>{fixture.homeTeam}</span>
+                            {fixture.homeLogoUrl && (
+                              <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="w-6 h-6 object-contain shrink-0" />
+                            )}
+                          </div>
                           <div className="text-muted-foreground font-mono text-xs w-4 text-center shrink-0">vs</div>
-                          <div className="flex-1 font-bold text-lg">{fixture.awayTeam}</div>
+                          <div className="flex-1 flex items-center gap-2 font-bold text-lg">
+                            {fixture.awayLogoUrl && (
+                              <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="w-6 h-6 object-contain shrink-0" />
+                            )}
+                            <span>{fixture.awayTeam}</span>
+                          </div>
                         </div>
 
                         {/* USMNT Players involved */}
