@@ -26,3 +26,11 @@ Sportmonks' Free plan (what you get by just registering, distinct from the 14-da
 **Why:** easy to misdiagnose as a broken integration (token invalid, wrong endpoint, etc.) when it's actually a plan/league-selection limitation. Confirmed by direct curl: `{"data":[],"message":"...you don't have access to it via your current subscription."}`.
 
 **How to apply:** before assuming a Sportmonks integration is broken, log/inspect the raw response body (not just whether `data` is empty) — the `message` field says exactly this. Starter (€29/mo) lets you pick 5 leagues, Growth (€99/mo) covers 30 — pick a plan that includes every league your tracked entities are actually in, not just headline competitions.
+
+## API-Football free-plan limitations
+
+Tried API-Football (`v3.football.api-sports.io`, header `x-apisports-key`) as a Sportmonks alternative. Two free-plan blockers hit in one test run: (1) the `next=N` upcoming-fixtures param isn't available — had to fall back to `/fixtures?team={id}&season={year}` and filter client-side for not-yet-started fixtures; (2) the free plan only serves **historical** seasons (the error literally said "try from 2022 to 2024") — no current-season data at all, so it can't produce "upcoming fixtures" regardless of the `next`-param workaround; (3) the trial account got flagged/suspended mid-test ("Your account is suspended, check on...dashboard") after a modest burst of ~15 requests spaced 7s apart — free-tier abuse detection here is aggressive.
+
+**Why:** worth recording so a future session doesn't re-diagnose the same dead end — this key/plan combination cannot serve live fixtures no matter how the request is shaped.
+
+**How to apply:** if the user wants to revisit API-Football, they need a paid plan with current-season access (check api-football.com pricing) and should watch for suspension/rate-limit emails after signup. The sync code (`artifacts/api-server/src/lib/apiFootballSync.ts`) already handles team-id caching, throttling (7s/request), and season fallback — it just isn't started from `index.ts` right now.

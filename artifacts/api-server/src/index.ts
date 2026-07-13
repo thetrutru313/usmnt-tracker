@@ -1,10 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
+import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
-// intentionally not started — the user decided the paid plan upgrade needed
-// to cover their tracked players' leagues isn't worth it right now. Fixtures
-// stay on seeded data. See replit.md and .agents/memory/usmnt-tracker.md.
+// intentionally not started — the user switched to API-Football instead.
+// See replit.md and .agents/memory/usmnt-tracker.md.
 
 const rawPort = process.env["PORT"];
 
@@ -32,4 +32,8 @@ app.listen(port, (err) => {
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
   startRssIngestionSchedule();
+
+  // API-Football sync (./lib/apiFootballSync.ts) is implemented but not
+  // started: the free-plan key only covers 2022-2024 seasons (no current
+  // fixtures) and the account was flagged/suspended mid-test. See replit.md.
 });

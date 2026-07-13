@@ -9,8 +9,11 @@ export const clubsTable = pgTable("clubs", {
   country: text("country").notNull(),
   logoUrl: text("logo_url"),
   // Cached Sportmonks team id (resolved once via team search, then reused) —
-  // null until the live fixtures sync has looked this club up.
+  // null until the live fixtures sync has looked this club up. Unused while
+  // the Sportmonks sync is disabled (see replit.md), kept for a future switch back.
   sportmonksTeamId: integer("sportmonks_team_id"),
+  // Cached API-Football team id, same idea as above but for the active provider.
+  apiFootballTeamId: integer("api_football_team_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
