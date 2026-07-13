@@ -1,7 +1,7 @@
 import { useGetDashboard } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight } from "lucide-react";
+import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, Tv, Users } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 
@@ -67,9 +67,9 @@ export default function Dashboard() {
             <div>
               <CardTitle className="text-lg uppercase tracking-tight flex items-center gap-2">
                 <Activity size={18} className="text-primary" />
-                Live & Today's Matches
+                Upcoming Matches
               </CardTitle>
-              <CardDescription>USMNT players in action today</CardDescription>
+              <CardDescription>USMNT players in action</CardDescription>
             </div>
             <Link href="/fixtures" className="text-sm font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
               ALL FIXTURES <ArrowUpRight size={14} />
@@ -83,22 +83,40 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {dashboard.todaysGames.map(game => (
-                  <div key={game.id} className="group relative flex items-center justify-between p-3 rounded-lg border bg-background hover:border-primary/50 transition-colors">
-                    <div className="flex items-center gap-4 w-1/3">
-                      <div className="text-right w-full font-medium truncate">{game.homeTeam}</div>
-                    </div>
-                    <div className="flex flex-col items-center justify-center px-4 w-1/4">
-                      {game.status === 'live' ? (
-                        <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-1.5 py-0">LIVE</Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground font-mono mb-1">{format(new Date(game.kickoff), "HH:mm")}</span>
-                      )}
-                      <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
-                        {game.homeScore !== null ? `${game.homeScore} - ${game.awayScore}` : 'v'}
+                  <div key={game.id} className="group relative flex flex-col gap-3 p-3 rounded-lg border bg-background hover:border-primary/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 w-1/3">
+                        <div className="text-right w-full font-medium truncate">{game.homeTeam}</div>
+                      </div>
+                      <div className="flex flex-col items-center justify-center px-4 w-1/4">
+                        {game.status === 'live' ? (
+                          <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-1.5 py-0">LIVE</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground font-mono mb-1">
+                            {format(new Date(game.kickoff), "MMM d, HH:mm")}
+                          </span>
+                        )}
+                        <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
+                          {game.homeScore !== null ? `${game.homeScore} - ${game.awayScore}` : 'v'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 w-1/3">
+                        <div className="w-full font-medium truncate">{game.awayTeam}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 w-1/3">
-                      <div className="w-full font-medium truncate">{game.awayTeam}</div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                        <Users size={12} className="shrink-0 text-primary" />
+                        <span className="truncate">
+                          {game.featuredPlayers.map(p => p.name).join(", ")}
+                        </span>
+                      </div>
+                      {game.streamingService && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+                          <Tv size={12} className="text-secondary" />
+                          <span className="font-mono">{game.streamingService}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
