@@ -4,6 +4,9 @@ import { z } from "zod/v4";
 
 export const fixturesTable = pgTable("fixtures", {
   id: serial("id").primaryKey(),
+  // Sportmonks fixture id, when this row came from the live sync — lets the
+  // sync upsert instead of duplicating on every run. Null for seeded/manual rows.
+  sportmonksFixtureId: integer("sportmonks_fixture_id").unique(),
   isNationalTeam: boolean("is_national_team").notNull().default(false),
   competition: text("competition").notNull(),
   kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),

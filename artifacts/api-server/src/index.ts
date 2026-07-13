@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
+import { startSportmonksSyncSchedule } from "./lib/sportmonksSync";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +29,9 @@ app.listen(port, (err) => {
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
   startRssIngestionSchedule();
+
+  // Paid half of the hybrid pipeline: syncs upcoming club fixtures from
+  // Sportmonks (hourly). Skips itself if SPORTMONKS_API_TOKEN isn't set.
+  // National-team fixtures stay seeded/curated.
+  startSportmonksSyncSchedule();
 });
