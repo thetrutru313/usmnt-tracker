@@ -86,6 +86,24 @@ function broadcastFor(leagueName: string): { tvNetwork: string | null; streaming
   return BROADCAST_BY_LEAGUE[leagueName] ?? { tvNetwork: null, streamingService: null };
 }
 
+// Reserve/academy/development sides (e.g. "Leeds United U21" in the EFL
+// Trophy) show up as a club's "fixture" in API-Football but never field
+// senior full internationals. Skip tagging entirely when either side looks
+// like a non-first-team squad.
+const RESERVE_TEAM_PATTERN = /\b(u1[5-9]|u2[0-3]|reserves?|development squad|academy)\b|(?:\sB|\sII)$/i;
+
+function isReserveOrYouthTeam(name: string): boolean {
+  return RESERVE_TEAM_PATTERN.test(name.trim());
+}
+
+// Preseason "Friendlies Clubs" fixtures are squad-rotation heavy and an
+// unreliable signal for who's actually involved. Senior full internationals
+// (category "current") in particular are typically rested for weeks after a
+// major tournament, so don't auto-tag them here — young "fringe"/"prospect"
+// players trying to break into a first team are the ones for whom these
+// friendlies are meaningfully worth tracking.
+const NON_COMPETITIVE_COMPETITIONS = new Set(["Friendlies Clubs"]);
+
 const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
 const POSTPONED_STATUSES = new Set(["PST", "CANC", "ABD"]);
 
@@ -145,9 +163,9 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
   const clubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
-  const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId }).from(playersTable);
-  const playersByClub = new Map<number, number[]>();
-  for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p.id]);
+  const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId, category: playersTable.category }).from(playersTable);
+  const playersByClub = new Map<number, typeof players>();
+  for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
 
   let clubsSynced = 0;
   let fixturesUpserted = 0;
@@ -219,14 +237,19 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
         fixtureId = inserted.id;
       }
 
-      const linkedPlayerIds = playersByClub.get(club.id) ?? [];
-      if (linkedPlayerIds.length > 0) {
+      const clubPlayers = playersByClub.get(club.id) ?? [];
+      const isReserveFixture = isReserveOrYouthTeam(f.teams.home.name) || isReserveOrYouthTeam(f.teams.away.name);
+      const isNonCompetitive = NON_COMPETITIVE_COMPETITIONS.has(f.league.name);
+      const eligiblePlayers = isReserveFixture
+        ? []
+        : clubPlayers.filter((p) => !(isNonCompetitive && p.category === "current"));
+      if (eligiblePlayers.length > 0) {
         const existingLinks = await db
           .select({ playerId: fixturePlayersTable.playerId })
           .from(fixturePlayersTable)
           .where(eq(fixturePlayersTable.fixtureId, fixtureId));
         const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
-        const toLink = linkedPlayerIds.filter((id) => !alreadyLinked.has(id));
+        const toLink = eligiblePlayers.filter((p) => !alreadyLinked.has(p.id)).map((p) => p.id);
         if (toLink.length > 0) {
           await db.insert(fixturePlayersTable).values(toLink.map((playerId) => ({ fixtureId, playerId })));
         }

@@ -59,6 +59,8 @@ async function main() {
     Belgium: "https://media.api-sports.io/football/teams/1.png",
     Panama: "https://media.api-sports.io/football/teams/11.png",
     Colombia: "https://media.api-sports.io/football/teams/8.png",
+    Jamaica: "https://media.api-sports.io/football/teams/2385.png",
+    "Trinidad and Tobago": "https://media.api-sports.io/football/teams/5168.png",
     "FC Augsburg": "https://media.api-sports.io/football/teams/170.png",
     "Bayern Munich": "https://media.api-sports.io/football/teams/157.png",
     "Real Salt Lake": "https://media.api-sports.io/football/teams/1606.png",
@@ -78,8 +80,11 @@ async function main() {
     "Hamburger SV": "https://media.api-sports.io/football/teams/175.png",
     "Hajduk Split": "https://media.api-sports.io/football/teams/608.png",
     Benfica: "https://media.api-sports.io/football/teams/211.png",
+    "Bayer Leverkusen": "https://media.api-sports.io/football/teams/168.png",
     // Not found in API-Football's DB (too new / too small a league) — logoUrl
-    // will fall back to null for clubs whose name isn't a key here.
+    // will fall back to null for clubs whose name isn't a key here. This
+    // includes "Bayern Munich II" (Regionalliga Bayern reserve side) — API-
+    // Football's team search has no entry for it.
   };
 
   // ---- Clubs ----
@@ -128,6 +133,8 @@ async function main() {
     { name: "Hajduk Split", league: "HNL", country: "Croatia" },
     { name: "San Diego FC", league: "MLS", country: "USA" },
     { name: "Benfica", league: "Primeira Liga", country: "Portugal" },
+    { name: "Bayer Leverkusen", league: "Bundesliga", country: "Germany" },
+    { name: "Bayern Munich II", league: "Regionalliga Bayern", country: "Germany" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
@@ -211,6 +218,11 @@ async function main() {
     "Luca Bombino": "https://tmssl.akamaized.net//images/foto/galerie/luca-bombino-to-san-diego-1763488417-183117.jpg",
     "Peyton Miller": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-ner/qmg2vcsoll1tozwsqqpc",
     "Joshua Wynder": "https://external-preview.redd.it/joshua-wynder-to-be-promoted-to-benficas-first-team-next-v0-Sk7QGule3yyz8SRIGVgcS_L-KJ4nanRUTR4HvscRqek.jpg?width=640&crop=smart&auto=webp&s=9fa35b7152ba03f95cd0854c709c8f5f4c9ca825",
+    // Added 2026-07-13: European-based US-eligible prospects/dual nationals
+    // per user request, included purely on "at a European club" grounds
+    // rather than caps.
+    "Bajung Darboe": "https://b.thumbs.redditmedia.com/QCPzNwwK6fvbU5R7Yl4z4CKli1jiGCi23MuN-h7wO2E.jpg",
+    "Montrell Culbreath": "https://assets.bundesliga.com/contender/2025/11/2526_MD15_RBLB04_BS_051.jpg?crop=239px,0px,4187px,3350px&fit=540,540",
   };
 
   const playerDefs: PlayerDef[] = [
@@ -265,6 +277,12 @@ async function main() {
     { name: "Caleb Wiley", slug: "caleb-wiley", position: "DF", category: "fringe", club: "Chelsea", age: 21, contractUntil: "2029-06-30", marketValueUsd: 10000000, caps: 8, goals: 0, youthNationalTeam: "U-23", debutDate: "2023-09-09", callUpScore: 47, trend: "steady", trending: false, bio: "An attacking left-back who made the jump from Atlanta United to Chelsea as a teenager, Wiley's development has stalled amid loan spells but he remains firmly in the senior picture." },
     { name: "Damion Downs", slug: "damion-downs", position: "FW", category: "fringe", club: "Hamburger SV", age: 21, contractUntil: "2027-06-30", marketValueUsd: 6000000, caps: 6, goals: 2, youthNationalTeam: "U-23", debutDate: "2024-09-10", callUpScore: 45, trend: "rising", trending: true, bio: "A physical target man who impressed at the 2025 Gold Cup, Downs is rebuilding minutes on loan in the Bundesliga after a quiet spell at Southampton." },
     { name: "Cole Campbell", slug: "cole-campbell", position: "MF", category: "prospect", club: "SV Elversberg", age: 20, contractUntil: "2030-06-30", marketValueUsd: 4000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 36, trend: "rising", trending: true, bio: "A Texas-born dual national (US/Iceland) who left Borussia Dortmund's academy for a permanent move to Bundesliga newcomer Elversberg, chasing first-team minutes and a senior call-up." },
+    // Added 2026-07-13: European-based US-eligible prospects/dual nationals,
+    // included on "currently at a European club" grounds alone (per user
+    // request) rather than any cap requirement — both are real, verified
+    // signings/dual-national storylines, not fabricated.
+    { name: "Bajung Darboe", slug: "bajung-darboe", position: "FW", category: "fringe", club: "Bayern Munich II", age: 19, contractUntil: "2029-06-30", marketValueUsd: 1800000, caps: 0, goals: 0, youthNationalTeam: "U-17", debutDate: null, callUpScore: 21, trend: "steady", trending: false, bio: "A Gambian-born winger who came up through the Philadelphia Union and LAFC academy pipeline before Bayern Munich paid a $1.5M fee to bring him to Germany, where he's starting out with the club's second team in the Regionalliga." },
+    { name: "Montrell Culbreath", slug: "montrell-culbreath", position: "MF", category: "prospect", club: "Bayer Leverkusen", age: 18, contractUntil: "2028-06-30", marketValueUsd: 3200000, caps: 0, goals: 0, youthNationalTeam: null, debutDate: "2025-12-20", callUpScore: 25, trend: "rising", trending: false, bio: "A German-American right winger who scored on his Bundesliga debut for Leverkusen as a teenager. Still uncapped by either country he's eligible for, but very much on U.S. Soccer's radar." },
     { name: "Rokas Pukstas", slug: "rokas-pukstas", position: "MF", category: "prospect", club: "Hajduk Split", age: 20, contractUntil: "2027-06-30", marketValueUsd: 5000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 38, trend: "rising", trending: true, bio: "A U.S.-eligible dual national starring for Hajduk Split in Croatia's top flight, Pukstas has drawn interest from German clubs and pundit chatter about a surprise World Cup call." },
     { name: "Quinn Sullivan", slug: "quinn-sullivan", position: "FW", category: "fringe", club: "Philadelphia Union", age: 21, contractUntil: "2027-12-31", marketValueUsd: 4500000, caps: 1, goals: 0, youthNationalTeam: "U-20", debutDate: "2025-09-06", callUpScore: 40, trend: "falling", trending: false, bio: "The most productive goal-and-assist producer in his age group, Sullivan's rise stalled when a torn ACL cost him a chance to push for a World Cup roster spot." },
     { name: "Luca Bombino", slug: "luca-bombino", position: "DF", category: "prospect", club: "San Diego FC", age: 20, contractUntil: "2028-12-31", marketValueUsd: 2000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 30, trend: "steady", trending: false, bio: "A progressive-passing left-back and member of the U-20 World Cup squad, Bombino ranked in the 93rd percentile among MLS fullbacks for progressive passes last season." },
@@ -391,6 +409,8 @@ async function main() {
     "Caleb Wiley": { minutes: 860, starts: 9, goals: 0, assists: 2, xg: 0.4, xa: 1.4, shots: 10, keyPasses: 12, passCompletionPct: 79.0, progressivePasses: 32, progressiveCarries: 38, tackles: 16, interceptions: 8, duelsWonPct: 49.1, cleanSheets: 0, savePct: null, avgRating: 6.6 },
     "Damion Downs": { minutes: 780, starts: 8, goals: 4, assists: 1, xg: 3.6, xa: 0.6, shots: 26, keyPasses: 6, passCompletionPct: 73.4, progressivePasses: 14, progressiveCarries: 20, tackles: 4, interceptions: 2, duelsWonPct: 52.9, cleanSheets: 0, savePct: null, avgRating: 6.8 },
     "Cole Campbell": { minutes: 420, starts: 4, goals: 1, assists: 2, xg: 1.2, xa: 1.6, shots: 12, keyPasses: 10, passCompletionPct: 80.6, progressivePasses: 20, progressiveCarries: 24, tackles: 6, interceptions: 4, duelsWonPct: 45.2, cleanSheets: 0, savePct: null, avgRating: 6.7 },
+    "Bajung Darboe": { minutes: 610, starts: 6, goals: 3, assists: 2, xg: 2.6, xa: 1.8, shots: 18, keyPasses: 14, passCompletionPct: 76.8, progressivePasses: 24, progressiveCarries: 32, tackles: 4, interceptions: 3, duelsWonPct: 48.5, cleanSheets: 0, savePct: null, avgRating: 6.8 },
+    "Montrell Culbreath": { minutes: 800, starts: 6, goals: 1, assists: 1, xg: 1.4, xa: 1.1, shots: 15, keyPasses: 9, passCompletionPct: 79.3, progressivePasses: 18, progressiveCarries: 22, tackles: 5, interceptions: 3, duelsWonPct: 44.0, cleanSheets: 0, savePct: null, avgRating: 6.6 },
     "Rokas Pukstas": { minutes: 1980, starts: 22, goals: 3, assists: 4, xg: 2.8, xa: 3.6, shots: 30, keyPasses: 28, passCompletionPct: 84.2, progressivePasses: 76, progressiveCarries: 40, tackles: 34, interceptions: 20, duelsWonPct: 53.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
     "Quinn Sullivan": { minutes: 640, starts: 6, goals: 2, assists: 3, xg: 1.8, xa: 2.4, shots: 20, keyPasses: 16, passCompletionPct: 81.3, progressivePasses: 26, progressiveCarries: 30, tackles: 6, interceptions: 2, duelsWonPct: 44.6, cleanSheets: 0, savePct: null, avgRating: 6.8 },
     "Luca Bombino": { minutes: 1860, starts: 20, goals: 0, assists: 3, xg: 0.4, xa: 2.6, shots: 10, keyPasses: 20, passCompletionPct: 85.8, progressivePasses: 96, progressiveCarries: 34, tackles: 32, interceptions: 18, duelsWonPct: 51.7, cleanSheets: 0, savePct: null, avgRating: 6.9 },
@@ -501,9 +521,15 @@ async function main() {
     // placeholders that duplicate/conflict with the real fixtures the
     // apiFootballSync job pulls in for every club in clubDefs. Club schedules
     // should come exclusively from the live sync.
-    { isNationalTeam: true, competition: "FIFA World Cup", daysFromNow: -4, hour: 15, venue: "AT&T Stadium, Arlington", homeTeam: "USA", awayTeam: "Belgium", homeScore: 1, awayScore: 4, status: "finished", tvNetwork: "Fox", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Matt Turner"] },
-    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Ricardo Pepi", "Matt Turner"] },
-    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Colombia", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
+    // Note: Yunus Musah did not make the final 26-man World Cup roster, so he
+    // is deliberately left off this fixture's featured tags (2026-07-13 audit).
+    { isNationalTeam: true, competition: "FIFA World Cup", daysFromNow: -4, hour: 15, venue: "AT&T Stadium, Arlington", homeTeam: "USA", awayTeam: "Belgium", homeScore: 1, awayScore: 4, status: "finished", tvNetwork: "Fox", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Matt Turner"] },
+    // CONCACAF Nations League - Group Stage window (next up after the World Cup).
+    { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Jamaica", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Ricardo Pepi", "Matt Turner"] },
+    { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Trinidad and Tobago", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
+    // November friendly window, after the Nations League group stage.
+    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 119, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Weston McKennie", "Tyler Adams", "Yunus Musah", "Ricardo Pepi"] },
+    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 123, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Colombia", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Malik Tillman", "Folarin Balogun", "Timothy Weah", "Sergiño Dest"] },
   ];
 
   for (const f of fixtureDefs) {
@@ -655,13 +681,24 @@ async function main() {
     });
   }
 
-  // ---- National Team Window ----
-  await db.insert(nationalTeamWindowsTable).values({
-    name: "September International Friendlies",
-    startDate: isoDateOffset(42),
-    endDate: isoDateOffset(50),
-    description: "With the World Cup run behind them, the USMNT regroups for two friendlies — against Panama in Saint Paul and Colombia in Austin — as the squad turns its focus toward the next cycle.",
-  });
+  // ---- National Team Windows ----
+  // Post-World Cup, the next two official FIFA windows are a CONCACAF
+  // Nations League group-stage window (first up) and a friendly window
+  // after it — not a lone "September friendlies" window (fixed 2026-07-13).
+  await db.insert(nationalTeamWindowsTable).values([
+    {
+      name: "CONCACAF Nations League - Group Stage",
+      startDate: isoDateOffset(42),
+      endDate: isoDateOffset(50),
+      description: "The USMNT opens Nations League group play on home soil, with the new-cycle player pool getting its first competitive minutes since the World Cup.",
+    },
+    {
+      name: "November International Friendlies",
+      startDate: isoDateOffset(119),
+      endDate: isoDateOffset(127),
+      description: "A pair of send-off-style friendlies against European opposition rounds out the fall calendar as Pochettino continues auditioning depth ahead of the next Nations League window.",
+    },
+  ]);
 
   console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${statRows.length} stat rows, ${matchLogRows.length} match logs, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles, ${injuryDefs.length} injuries, ${transferDefs.length} transfers.`);
   process.exit(0);

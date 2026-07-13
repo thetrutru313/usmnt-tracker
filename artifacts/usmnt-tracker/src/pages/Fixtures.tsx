@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon, MonitorPlay, MapPin } from "lucide-react";
 import { formatTimeMst } from "@/lib/formatMst";
+import { Link } from "wouter";
 
 export default function Fixtures() {
   const { data: fixtures, isLoading } = useListFixtures({ scope: 'all' });
@@ -115,9 +116,13 @@ export default function Fixtures() {
                         {/* USMNT Players involved */}
                         <div className="flex flex-wrap gap-2 pt-3 border-t border-border/50">
                           {fixture.featuredPlayers.map(p => (
-                            <span key={p.id} className="text-xs bg-secondary/10 text-secondary border border-secondary/20 px-2 py-1 rounded flex items-center gap-1 font-medium">
+                            <Link
+                              key={p.id}
+                              href={`/players/${p.id}`}
+                              className="text-xs bg-secondary/10 text-secondary border border-secondary/20 px-2 py-1 rounded flex items-center gap-1 font-medium hover:bg-secondary/20 hover:border-secondary/40 transition-colors"
+                            >
                               {p.name}
-                            </span>
+                            </Link>
                           ))}
                         </div>
                       </div>
