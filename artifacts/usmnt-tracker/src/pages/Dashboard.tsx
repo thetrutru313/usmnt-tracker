@@ -108,7 +108,7 @@ export default function Dashboard() {
                             <Badge variant="default" className="mb-1 rounded-sm px-1.5 py-0 font-mono">TODAY</Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground font-mono mb-1">
-                              {format(new Date(game.kickoff), "MMM d")} · {formatKickoffMst(game.kickoff)}
+                              {formatKickoffMst(game.kickoff)}
                             </span>
                           )}
                           <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
