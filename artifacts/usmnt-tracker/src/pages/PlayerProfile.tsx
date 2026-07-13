@@ -1,0 +1,285 @@
+import { useGetPlayer } from "@workspace/api-client-react";
+import { useParams } from "wouter";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, TrendingUp, Calendar, Info, Clock, AlertTriangle } from "lucide-react";
+import { Link } from "wouter";
+import { format } from "date-fns";
+
+export default function PlayerProfile() {
+  const { id } = useParams<{ id: string }>();
+  const playerId = parseInt(id || "0", 10);
+  
+  const { data: player, isLoading, error } = useGetPlayer(playerId, {
+    query: { enabled: !!playerId }
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-64 bg-card rounded-xl border border-card-border" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-2 h-96 bg-card rounded-xl border border-card-border" />
+          <div className="col-span-1 h-96 bg-card rounded-xl border border-card-border" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !player) {
+    return (
+      <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+        <p className="text-muted-foreground font-mono">PLAYER NOT FOUND OR ERROR LOADING PROFILE</p>
+        <Link href="/players" className="text-primary mt-4 inline-block hover:underline">Return to Player Pool</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-10">
+      <Link href="/players" className="inline-flex items-center text-sm font-mono text-muted-foreground hover:text-foreground transition-colors">
+        <ArrowLeft size={14} className="mr-1" /> BACK TO POOL
+      </Link>
+
+      {/* Hero Profile */}
+      <div className="relative overflow-hidden rounded-2xl bg-card border border-card-border shadow-lg">
+        <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-primary/10 to-transparent pointer-events-none" />
+        
+        <div className="p-6 md:p-8 relative z-10">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-center">
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-xl bg-background border-2 border-border overflow-hidden shrink-0 shadow-md">
+              {player.photoUrl ? (
+                <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-4xl font-bold font-mono text-muted-foreground">
+                  {player.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Badge variant={
+                  player.category === 'current' ? 'default' : 
+                  player.category === 'fringe' ? 'secondary' : 'outline'
+                } className="uppercase font-mono text-[10px] tracking-widest">
+                  {player.category === 'current' ? 'Core Squad' : player.category === 'fringe' ? 'In the Mix' : 'Prospect'}
+                </Badge>
+                {player.trending && (
+                  <Badge variant="success" className="uppercase font-mono text-[10px] tracking-widest gap-1">
+                    <TrendingUp size={10} /> TRENDING
+                  </Badge>
+                )}
+              </div>
+              
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground leading-none">
+                {player.name}
+              </h1>
+              
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                <span className="font-medium flex items-center gap-1.5 text-foreground">
+                  {player.clubLogoUrl && <img src={player.clubLogoUrl} alt={player.clubName} className="w-4 h-4" />}
+                  {player.clubName} <span className="text-muted-foreground">({player.league})</span>
+                </span>
+                <span className="uppercase tracking-wider font-medium">{player.position}</span>
+                <span>Age: {player.age}</span>
+                {player.marketValueUsd && (
+                  <span className="text-green-600 dark:text-green-400 font-mono">
+                    ${(player.marketValueUsd / 1000000).toFixed(1)}M
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-row md:flex-col gap-4 bg-background/50 p-4 rounded-xl border border-border shrink-0 self-stretch md:self-auto justify-center">
+              <div className="text-center md:text-right">
+                <div className="text-xs text-muted-foreground uppercase font-mono tracking-wider mb-1">CAPS</div>
+                <div className="text-2xl font-bold data-value leading-none">{player.nationalTeamCaps}</div>
+              </div>
+              <div className="w-px h-full md:w-full md:h-px bg-border"></div>
+              <div className="text-center md:text-right">
+                <div className="text-xs text-muted-foreground uppercase font-mono tracking-wider mb-1">GOALS</div>
+                <div className="text-2xl font-bold data-value leading-none">{player.nationalTeamGoals}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6 lg:col-span-2">
+          {/* Season Stats */}
+          <Card>
+            <CardHeader className="pb-4 border-b">
+              <CardTitle className="text-lg uppercase tracking-tight flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity size={18} className="text-primary" />
+                  Season Performance
+                </div>
+                <span className="text-sm font-mono text-muted-foreground">{player.seasonStats.season}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
+                <div className="p-4 flex flex-col justify-center items-center text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Minutes / Starts</span>
+                  <span className="text-xl font-bold data-value">{player.seasonStats.minutes} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.starts}</span></span>
+                </div>
+                <div className="p-4 flex flex-col justify-center items-center text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Goals / Assists</span>
+                  <span className="text-xl font-bold data-value">{player.seasonStats.goals} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.assists}</span></span>
+                </div>
+                <div className="p-4 flex flex-col justify-center items-center text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Avg Rating</span>
+                  <span className="text-xl font-bold data-value text-secondary">{player.seasonStats.avgRating.toFixed(2)}</span>
+                </div>
+                <div className="p-4 flex flex-col justify-center items-center text-center">
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">xG / xA</span>
+                  <span className="text-xl font-bold data-value">{player.seasonStats.xg.toFixed(2)} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.xa.toFixed(2)}</span></span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Match Log */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg uppercase tracking-tight">Recent Matches</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-border text-xs uppercase font-mono text-muted-foreground tracking-wider">
+                      <th className="pb-2 font-medium">Date</th>
+                      <th className="pb-2 font-medium">Opponent</th>
+                      <th className="pb-2 font-medium">Comp</th>
+                      <th className="pb-2 font-medium">Min</th>
+                      <th className="pb-2 font-medium">G/A</th>
+                      <th className="pb-2 font-medium text-right">Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {player.matchLog.slice(0, 5).map(match => (
+                      <tr key={match.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="py-3 text-muted-foreground font-mono">{format(new Date(match.date), "MMM d")}</td>
+                        <td className="py-3 font-medium flex items-center gap-2">
+                          <span className={match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}>{match.result}</span>
+                          {match.opponent}
+                        </td>
+                        <td className="py-3 text-muted-foreground text-xs">{match.competition}</td>
+                        <td className="py-3 font-mono">{match.minutes}'</td>
+                        <td className="py-3 font-mono">
+                          {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
+                          {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
+                          {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
+                        </td>
+                        <td className="py-3 text-right font-bold data-value">
+                          <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
+                            {match.rating.toFixed(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          {/* Status / Injuries */}
+          {player.injuries && player.injuries.length > 0 && (
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2 text-destructive">
+                  <AlertTriangle size={16} />
+                  Medical Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {player.injuries.filter(i => i.status === 'active' || i.status === 'recovering').map(injury => (
+                    <div key={injury.id}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold">{injury.bodyPart}</span>
+                        <Badge variant="outline" className="text-[10px] uppercase font-mono text-destructive border-destructive">{injury.status}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">Since {format(new Date(injury.startDate), "MMM d")} • Missed {injury.matchesMissed} matches</p>
+                      {injury.expectedReturn && (
+                        <div className="bg-background rounded p-2 text-xs border border-destructive/20 flex items-center gap-2">
+                          <Clock size={12} className="text-muted-foreground" />
+                          Expected return: <span className="font-bold">{format(new Date(injury.expectedReturn), "MMM d, yyyy")}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bio & Details */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
+                <Info size={16} className="text-muted-foreground" />
+                Player Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed mb-4 text-muted-foreground">
+                {player.bio}
+              </p>
+              
+              <div className="space-y-3 pt-4 border-t border-border">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Contract Until</span>
+                  <span className="font-medium">{player.contractUntil ? format(new Date(player.contractUntil), "MMM yyyy") : 'Unknown'}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Youth NT</span>
+                  <span className="font-medium">{player.youthNationalTeam || 'None'}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Senior Debut</span>
+                  <span className="font-medium">{player.debutDate ? format(new Date(player.debutDate), "MMM yyyy") : 'Not capped'}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Fixtures */}
+          {player.upcomingFixtures && player.upcomingFixtures.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
+                  <Calendar size={16} className="text-muted-foreground" />
+                  Upcoming Matches
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {player.upcomingFixtures.slice(0, 3).map(fixture => (
+                    <div key={fixture.id} className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{format(new Date(fixture.kickoff), "MMM d • HH:mm")}</span>
+                        <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm font-medium">
+                        <span className="truncate w-1/3">{fixture.homeTeam}</span>
+                        <span className="text-muted-foreground text-xs font-mono px-2">v</span>
+                        <span className="truncate w-1/3 text-right">{fixture.awayTeam}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

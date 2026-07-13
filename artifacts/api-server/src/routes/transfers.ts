@@ -1,0 +1,21 @@
+import { Router, type IRouter } from "express";
+import { ListTransfersQueryParams, ListTransfersResponse } from "@workspace/api-zod";
+import { desc, eq, transfersTable, transfersWithPlayerQuery } from "../lib/queries";
+
+const router: IRouter = Router();
+
+router.get("/transfers", async (req, res): Promise<void> => {
+  const parsed = ListTransfersQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { status } = parsed.data;
+
+  const query = transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt));
+  const rows = status ? await query.where(eq(transfersTable.status, status)) : await query;
+
+  res.json(ListTransfersResponse.parse(rows));
+});
+
+export default router;

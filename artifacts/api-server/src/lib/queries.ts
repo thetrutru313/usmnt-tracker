@@ -1,0 +1,263 @@
+import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+import {
+  db,
+  clubsTable,
+  playersTable,
+  playerStatsTable,
+  matchLogsTable,
+  fixturesTable,
+  fixturePlayersTable,
+  newsArticlesTable,
+  newsArticlePlayersTable,
+  injuriesTable,
+  transfersTable,
+  nationalTeamWindowsTable,
+} from "@workspace/db";
+
+export const playerSummaryColumns = {
+  id: playersTable.id,
+  name: playersTable.name,
+  slug: playersTable.slug,
+  position: playersTable.position,
+  category: playersTable.category,
+  clubName: clubsTable.name,
+  league: clubsTable.league,
+  clubLogoUrl: clubsTable.logoUrl,
+  photoUrl: playersTable.photoUrl,
+  age: playersTable.age,
+  marketValueUsd: playersTable.marketValueUsd,
+  nationalTeamCaps: playersTable.nationalTeamCaps,
+  nationalTeamGoals: playersTable.nationalTeamGoals,
+  trending: playersTable.trending,
+  performanceTrend: playersTable.performanceTrend,
+  potentialCallUpScore: playersTable.potentialCallUpScore,
+};
+
+export function playerSummaryQuery() {
+  return db
+    .select(playerSummaryColumns)
+    .from(playersTable)
+    .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id));
+}
+
+export async function listPlayers(filter: {
+  category?: "current" | "fringe" | "prospect";
+  position?: string;
+  search?: string;
+}) {
+  const conditions = [];
+  if (filter.category) conditions.push(eq(playersTable.category, filter.category));
+  if (filter.position) conditions.push(ilike(playersTable.position, filter.position));
+  if (filter.search) conditions.push(ilike(playersTable.name, `%${filter.search}%`));
+
+  const query = playerSummaryQuery();
+  const rows = conditions.length ? await query.where(and(...conditions)) : await query;
+  return rows;
+}
+
+export async function getPlayerById(id: number) {
+  const [row] = await db
+    .select({
+      id: playersTable.id,
+      name: playersTable.name,
+      slug: playersTable.slug,
+      position: playersTable.position,
+      category: playersTable.category,
+      clubName: clubsTable.name,
+      league: clubsTable.league,
+      clubCountry: clubsTable.country,
+      clubLogoUrl: clubsTable.logoUrl,
+      photoUrl: playersTable.photoUrl,
+      age: playersTable.age,
+      contractUntil: playersTable.contractUntil,
+      marketValueUsd: playersTable.marketValueUsd,
+      nationalTeamCaps: playersTable.nationalTeamCaps,
+      nationalTeamGoals: playersTable.nationalTeamGoals,
+      youthNationalTeam: playersTable.youthNationalTeam,
+      debutDate: playersTable.debutDate,
+      potentialCallUpScore: playersTable.potentialCallUpScore,
+      performanceTrend: playersTable.performanceTrend,
+      trending: playersTable.trending,
+      bio: playersTable.bio,
+    })
+    .from(playersTable)
+    .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+    .where(eq(playersTable.id, id));
+  return row;
+}
+
+export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season") {
+  const [row] = await db
+    .select()
+    .from(playerStatsTable)
+    .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, periodType)))
+    .orderBy(desc(playerStatsTable.createdAt))
+    .limit(1);
+  return row;
+}
+
+export async function getMatchLogForPlayer(playerId: number, limit = 10) {
+  return db
+    .select()
+    .from(matchLogsTable)
+    .where(eq(matchLogsTable.playerId, playerId))
+    .orderBy(desc(matchLogsTable.date))
+    .limit(limit);
+}
+
+export async function getInjuriesForPlayer(playerId: number) {
+  return db
+    .select()
+    .from(injuriesTable)
+    .where(eq(injuriesTable.playerId, playerId))
+    .orderBy(desc(injuriesTable.startDate));
+}
+
+export async function getTransfersForPlayer(playerId: number) {
+  return db
+    .select()
+    .from(transfersTable)
+    .where(eq(transfersTable.playerId, playerId))
+    .orderBy(desc(transfersTable.announcedAt));
+}
+
+export async function getFeaturedPlayersMap(playerIds: number[]) {
+  if (playerIds.length === 0) return new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }>();
+  const rows = await db
+    .select({
+      id: playersTable.id,
+      name: playersTable.name,
+      slug: playersTable.slug,
+      position: playersTable.position,
+      photoUrl: playersTable.photoUrl,
+    })
+    .from(playersTable)
+    .where(inArray(playersTable.id, playerIds));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
+  if (fixtureIds.length === 0) return new Map<number, ReturnType<typeof getFeaturedPlayersMap> extends Promise<Map<number, infer V>> ? V[] : never>();
+  const rows = await db
+    .select({
+      fixtureId: fixturePlayersTable.fixtureId,
+      id: playersTable.id,
+      name: playersTable.name,
+      slug: playersTable.slug,
+      position: playersTable.position,
+      photoUrl: playersTable.photoUrl,
+    })
+    .from(fixturePlayersTable)
+    .innerJoin(playersTable, eq(fixturePlayersTable.playerId, playersTable.id))
+    .where(inArray(fixturePlayersTable.fixtureId, fixtureIds));
+
+  const map = new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }[]>();
+  for (const row of rows) {
+    const list = map.get(row.fixtureId) ?? [];
+    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl });
+    map.set(row.fixtureId, list);
+  }
+  return map;
+}
+
+export async function attachFeaturedPlayers<T extends { id: number }>(fixtures: T[]) {
+  const map = await getFeaturedPlayersForFixtures(fixtures.map((f) => f.id));
+  return fixtures.map((f) => ({ ...f, featuredPlayers: map.get(f.id) ?? [] }));
+}
+
+export async function getPlayersForNewsArticles(articleIds: number[]) {
+  if (articleIds.length === 0) return new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }[]>();
+  const rows = await db
+    .select({
+      articleId: newsArticlePlayersTable.articleId,
+      id: playersTable.id,
+      name: playersTable.name,
+      slug: playersTable.slug,
+      position: playersTable.position,
+      photoUrl: playersTable.photoUrl,
+    })
+    .from(newsArticlePlayersTable)
+    .innerJoin(playersTable, eq(newsArticlePlayersTable.playerId, playersTable.id))
+    .where(inArray(newsArticlePlayersTable.articleId, articleIds));
+
+  const map = new Map<number, { id: number; name: string; slug: string; position: string; photoUrl: string | null }[]>();
+  for (const row of rows) {
+    const list = map.get(row.articleId) ?? [];
+    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl });
+    map.set(row.articleId, list);
+  }
+  return map;
+}
+
+export async function attachPlayersToNews<T extends { id: number }>(articles: T[]) {
+  const map = await getPlayersForNewsArticles(articles.map((a) => a.id));
+  return articles.map((a) => ({ ...a, players: map.get(a.id) ?? [] }));
+}
+
+const injuryWithPlayerColumns = {
+  id: injuriesTable.id,
+  bodyPart: injuriesTable.bodyPart,
+  status: injuriesTable.status,
+  expectedReturn: injuriesTable.expectedReturn,
+  daysMissed: injuriesTable.daysMissed,
+  matchesMissed: injuriesTable.matchesMissed,
+  latestUpdate: injuriesTable.latestUpdate,
+  startDate: injuriesTable.startDate,
+  clubName: clubsTable.name,
+  player: {
+    id: playersTable.id,
+    name: playersTable.name,
+    slug: playersTable.slug,
+    position: playersTable.position,
+    photoUrl: playersTable.photoUrl,
+  },
+};
+
+export function injuriesWithPlayerQuery() {
+  return db
+    .select(injuryWithPlayerColumns)
+    .from(injuriesTable)
+    .innerJoin(playersTable, eq(injuriesTable.playerId, playersTable.id))
+    .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id));
+}
+
+const transferWithPlayerColumns = {
+  id: transfersTable.id,
+  fromClub: transfersTable.fromClub,
+  toClub: transfersTable.toClub,
+  transferType: transfersTable.transferType,
+  fee: transfersTable.fee,
+  status: transfersTable.status,
+  probabilityScore: transfersTable.probabilityScore,
+  announcedAt: transfersTable.announcedAt,
+  summary: transfersTable.summary,
+  player: {
+    id: playersTable.id,
+    name: playersTable.name,
+    slug: playersTable.slug,
+    position: playersTable.position,
+    photoUrl: playersTable.photoUrl,
+  },
+};
+
+export function transfersWithPlayerQuery() {
+  return db
+    .select(transferWithPlayerColumns)
+    .from(transfersTable)
+    .innerJoin(playersTable, eq(transfersTable.playerId, playersTable.id));
+}
+
+export { and, desc, eq, gte, ilike, inArray, or, sql };
+export {
+  clubsTable,
+  playersTable,
+  playerStatsTable,
+  matchLogsTable,
+  fixturesTable,
+  fixturePlayersTable,
+  newsArticlesTable,
+  newsArticlePlayersTable,
+  injuriesTable,
+  transfersTable,
+  nationalTeamWindowsTable,
+};

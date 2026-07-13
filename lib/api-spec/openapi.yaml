@@ -10,6 +10,22 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: players
+    description: Player operations
+  - name: fixtures
+    description: Fixture operations
+  - name: news
+    description: News operations
+  - name: injuries
+    description: Injury operations
+  - name: transfers
+    description: Transfer operations
+  - name: dashboard
+    description: Dashboard operations
+  - name: rankings
+    description: Ranking operations
+  - name: search
+    description: Search operations
 paths:
   /healthz:
     get:
@@ -24,6 +40,209 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /players:
+    get:
+      operationId: listPlayers
+      tags: [players]
+      summary: List players
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PlayerCategory"
+        - name: position
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlayerSummary"
+
+  /players/{id}:
+    get:
+      operationId: getPlayer
+      tags: [players]
+      summary: Get a player's full profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Player profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /fixtures:
+    get:
+      operationId: listFixtures
+      tags: [fixtures]
+      summary: List fixtures
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: "Filter to today's or upcoming fixtures"
+          schema:
+            type: string
+            enum: [today, upcoming, all]
+        - name: playerId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of fixtures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Fixture"
+
+  /news:
+    get:
+      operationId: listNews
+      tags: [news]
+      summary: List news articles
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: playerId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of news articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NewsArticle"
+
+  /injuries:
+    get:
+      operationId: listInjuries
+      tags: [injuries]
+      summary: List injuries
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/InjuryStatus"
+      responses:
+        "200":
+          description: List of injuries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Injury"
+
+  /transfers:
+    get:
+      operationId: listTransfers
+      tags: [transfers]
+      summary: List transfers and rumors
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TransferStatus"
+      responses:
+        "200":
+          description: List of transfers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transfer"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /rankings:
+    get:
+      operationId: getRankings
+      tags: [rankings]
+      summary: Get smart rankings
+      responses:
+        "200":
+          description: Ranking lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rankings"
+
+  /search:
+    get:
+      operationId: search
+      tags: [search]
+      summary: Global search across players and clubs
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +253,500 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    PlayerCategory:
+      type: string
+      enum: [current, fringe, prospect]
+
+    InjuryStatus:
+      type: string
+      enum: [active, recovering, returned]
+
+    TransferStatus:
+      type: string
+      enum: [confirmed, rumor]
+
+    PlayerSummary:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - position
+        - category
+        - clubName
+        - league
+        - clubLogoUrl
+        - photoUrl
+        - age
+        - nationalTeamCaps
+        - nationalTeamGoals
+        - trending
+        - performanceTrend
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        position: { type: string }
+        category:
+          $ref: "#/components/schemas/PlayerCategory"
+        clubName: { type: string }
+        league: { type: string }
+        clubLogoUrl: { type: ["string", "null"] }
+        photoUrl: { type: ["string", "null"] }
+        age: { type: integer }
+        marketValueUsd: { type: ["number", "null"] }
+        nationalTeamCaps: { type: integer }
+        nationalTeamGoals: { type: integer }
+        trending: { type: boolean }
+        performanceTrend:
+          type: string
+          enum: [rising, steady, falling]
+        potentialCallUpScore: { type: ["integer", "null"] }
+
+    PlayerStats:
+      type: object
+      required:
+        - season
+        - minutes
+        - starts
+        - goals
+        - assists
+        - xg
+        - xa
+        - shots
+        - keyPasses
+        - passCompletionPct
+        - progressivePasses
+        - progressiveCarries
+        - tackles
+        - interceptions
+        - duelsWonPct
+        - cleanSheets
+        - savePct
+        - avgRating
+      properties:
+        season: { type: string }
+        minutes: { type: integer }
+        starts: { type: integer }
+        goals: { type: integer }
+        assists: { type: integer }
+        xg: { type: number }
+        xa: { type: number }
+        shots: { type: integer }
+        keyPasses: { type: integer }
+        passCompletionPct: { type: number }
+        progressivePasses: { type: integer }
+        progressiveCarries: { type: integer }
+        tackles: { type: integer }
+        interceptions: { type: integer }
+        duelsWonPct: { type: number }
+        cleanSheets: { type: integer }
+        savePct: { type: ["number", "null"] }
+        avgRating: { type: number }
+
+    MatchLog:
+      type: object
+      required: [id, date, opponent, competition, result, minutes, goals, assists, rating]
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        opponent: { type: string }
+        competition: { type: string }
+        result: { type: string }
+        minutes: { type: integer }
+        goals: { type: integer }
+        assists: { type: integer }
+        rating: { type: number }
+
+    PlayerInjurySummary:
+      type: object
+      required: [id, bodyPart, status, expectedReturn, daysMissed, matchesMissed, latestUpdate, startDate]
+      properties:
+        id: { type: integer }
+        bodyPart: { type: string }
+        status:
+          $ref: "#/components/schemas/InjuryStatus"
+        expectedReturn: { type: ["string", "null"], format: date }
+        daysMissed: { type: integer }
+        matchesMissed: { type: integer }
+        latestUpdate: { type: string }
+        startDate: { type: string, format: date }
+
+    PlayerTransferSummary:
+      type: object
+      required: [id, fromClub, toClub, transferType, status, announcedAt, summary]
+      properties:
+        id: { type: integer }
+        fromClub: { type: string }
+        toClub: { type: string }
+        transferType:
+          type: string
+          enum: [transfer, loan, contract_extension]
+        fee: { type: ["string", "null"] }
+        status:
+          $ref: "#/components/schemas/TransferStatus"
+        probabilityScore: { type: ["integer", "null"] }
+        announcedAt: { type: string, format: date-time }
+        summary: { type: string }
+
+    PlayerProfile:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - position
+        - category
+        - clubName
+        - league
+        - clubCountry
+        - clubLogoUrl
+        - photoUrl
+        - age
+        - contractUntil
+        - marketValueUsd
+        - nationalTeamCaps
+        - nationalTeamGoals
+        - youthNationalTeam
+        - debutDate
+        - potentialCallUpScore
+        - performanceTrend
+        - trending
+        - bio
+        - seasonStats
+        - last5Stats
+        - previousSeasonStats
+        - matchLog
+        - injuries
+        - transfers
+        - upcomingFixtures
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        position: { type: string }
+        category:
+          $ref: "#/components/schemas/PlayerCategory"
+        clubName: { type: string }
+        league: { type: string }
+        clubCountry: { type: string }
+        clubLogoUrl: { type: ["string", "null"] }
+        photoUrl: { type: ["string", "null"] }
+        age: { type: integer }
+        contractUntil: { type: ["string", "null"], format: date }
+        marketValueUsd: { type: ["number", "null"] }
+        nationalTeamCaps: { type: integer }
+        nationalTeamGoals: { type: integer }
+        youthNationalTeam: { type: ["string", "null"] }
+        debutDate: { type: ["string", "null"], format: date }
+        potentialCallUpScore: { type: ["integer", "null"] }
+        performanceTrend:
+          type: string
+          enum: [rising, steady, falling]
+        trending: { type: boolean }
+        bio: { type: string }
+        seasonStats:
+          $ref: "#/components/schemas/PlayerStats"
+        last5Stats:
+          $ref: "#/components/schemas/PlayerStats"
+        previousSeasonStats:
+          $ref: "#/components/schemas/PlayerStats"
+        matchLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchLog"
+        injuries:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerInjurySummary"
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerTransferSummary"
+        upcomingFixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
+        recentNews:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsArticle"
+
+    FeaturedPlayer:
+      type: object
+      required: [id, name, slug, position, photoUrl]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        position: { type: string }
+        photoUrl: { type: ["string", "null"] }
+
+    Fixture:
+      type: object
+      required:
+        - id
+        - isNationalTeam
+        - competition
+        - kickoff
+        - venue
+        - homeTeam
+        - awayTeam
+        - homeLogoUrl
+        - awayLogoUrl
+        - homeScore
+        - awayScore
+        - status
+        - tvNetwork
+        - streamingService
+        - featuredPlayers
+      properties:
+        id: { type: integer }
+        isNationalTeam: { type: boolean }
+        competition: { type: string }
+        kickoff: { type: string, format: date-time }
+        venue: { type: string }
+        homeTeam: { type: string }
+        awayTeam: { type: string }
+        homeLogoUrl: { type: ["string", "null"] }
+        awayLogoUrl: { type: ["string", "null"] }
+        homeScore: { type: ["integer", "null"] }
+        awayScore: { type: ["integer", "null"] }
+        status:
+          type: string
+          enum: [scheduled, live, finished, postponed]
+        tvNetwork: { type: ["string", "null"] }
+        streamingService: { type: ["string", "null"] }
+        broadcastLink: { type: ["string", "null"] }
+        featuredPlayers:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeaturedPlayer"
+
+    NewsArticle:
+      type: object
+      required:
+        - id
+        - headline
+        - source
+        - publishedAt
+        - category
+        - url
+        - summary
+        - whyItMatters
+        - impactScore
+        - sentiment
+        - players
+      properties:
+        id: { type: integer }
+        headline: { type: string }
+        source: { type: string }
+        publishedAt: { type: string, format: date-time }
+        category: { type: string }
+        url: { type: string }
+        summary: { type: string }
+        whyItMatters: { type: string }
+        impactScore: { type: integer }
+        sentiment:
+          type: string
+          enum: [positive, neutral, negative]
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeaturedPlayer"
+
+    Injury:
+      type: object
+      required:
+        - id
+        - player
+        - bodyPart
+        - status
+        - expectedReturn
+        - daysMissed
+        - matchesMissed
+        - latestUpdate
+        - startDate
+      properties:
+        id: { type: integer }
+        player:
+          $ref: "#/components/schemas/FeaturedPlayer"
+        clubName: { type: string }
+        bodyPart: { type: string }
+        status:
+          $ref: "#/components/schemas/InjuryStatus"
+        expectedReturn: { type: ["string", "null"], format: date }
+        daysMissed: { type: integer }
+        matchesMissed: { type: integer }
+        latestUpdate: { type: string }
+        startDate: { type: string, format: date }
+
+    Transfer:
+      type: object
+      required:
+        - id
+        - player
+        - fromClub
+        - toClub
+        - transferType
+        - status
+        - announcedAt
+        - summary
+      properties:
+        id: { type: integer }
+        player:
+          $ref: "#/components/schemas/FeaturedPlayer"
+        fromClub: { type: string }
+        toClub: { type: string }
+        transferType:
+          type: string
+          enum: [transfer, loan, contract_extension]
+        fee: { type: ["string", "null"] }
+        status:
+          $ref: "#/components/schemas/TransferStatus"
+        probabilityScore: { type: ["integer", "null"] }
+        announcedAt: { type: string, format: date-time }
+        summary: { type: string }
+
+    DashboardSummary:
+      type: object
+      required:
+        - todaysGames
+        - upcomingGames
+        - latestNews
+        - injuries
+        - transfers
+        - topPerformers
+        - trending
+        - recentlyReturned
+        - nextWindow
+      properties:
+        todaysGames:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
+        upcomingGames:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
+        latestNews:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsArticle"
+        injuries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Injury"
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transfer"
+        topPerformers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        trending:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        recentlyReturned:
+          type: array
+          items:
+            $ref: "#/components/schemas/Injury"
+        nextWindow:
+          $ref: "#/components/schemas/NationalTeamWindow"
+
+    NationalTeamWindow:
+      type: object
+      required: [name, startDate, endDate, description]
+      properties:
+        name: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        description: { type: string }
+
+    Rankings:
+      type: object
+      required:
+        - mostInForm
+        - bestWeekendPerformances
+        - mostMinutes
+        - mostGoalContributions
+        - returningFromInjury
+        - risingFast
+        - transferBuzz
+      properties:
+        mostInForm:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        bestWeekendPerformances:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchLogWithPlayer"
+        mostMinutes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        mostGoalContributions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        returningFromInjury:
+          type: array
+          items:
+            $ref: "#/components/schemas/Injury"
+        risingFast:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        transferBuzz:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transfer"
+
+    MatchLogWithPlayer:
+      type: object
+      required: [id, date, opponent, competition, result, minutes, goals, assists, rating, player]
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        opponent: { type: string }
+        competition: { type: string }
+        result: { type: string }
+        minutes: { type: integer }
+        goals: { type: integer }
+        assists: { type: integer }
+        rating: { type: number }
+        player:
+          $ref: "#/components/schemas/FeaturedPlayer"
+
+    SearchResults:
+      type: object
+      required: [players, clubs]
+      properties:
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerSummary"
+        clubs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClubResult"
+
+    ClubResult:
+      type: object
+      required: [name, league, country, logoUrl, playerCount]
+      properties:
+        name: { type: string }
+        league: { type: string }
+        country: { type: string }
+        logoUrl: { type: ["string", "null"] }
+        playerCount: { type: integer }

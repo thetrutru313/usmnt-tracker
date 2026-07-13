@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "USMNT Tracker"
+version = "1.0.0"
+id = "artifacts/usmnt-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24983
+
+[services.development]
+run = "pnpm --filter @workspace/usmnt-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/usmnt-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/usmnt-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24983"
+BASE_PATH = "/"

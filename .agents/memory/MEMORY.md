@@ -1,0 +1,1 @@
+- [USMNT Tracker data model](usmnt-tracker.md) — seeded sports-data app: schema/route/seed conventions and gotchas worth reusing.
