@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, TrendingUp, Calendar, Info, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { formatKickoffMst } from "@/lib/formatMst";
 
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
@@ -264,7 +265,7 @@ export default function PlayerProfile() {
                   {player.upcomingFixtures.slice(0, 3).map(fixture => (
                     <div key={fixture.id} className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{format(new Date(fixture.kickoff), "MMM d • HH:mm")}</span>
+                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{formatKickoffMst(fixture.kickoff)}</span>
                         <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-medium">

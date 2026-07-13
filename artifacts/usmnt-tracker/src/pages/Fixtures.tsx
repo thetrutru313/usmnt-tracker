@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon, MonitorPlay, MapPin } from "lucide-react";
+import { formatTimeMst } from "@/lib/formatMst";
 
 export default function Fixtures() {
   const { data: fixtures, isLoading } = useListFixtures({ scope: 'all' });
@@ -81,8 +82,7 @@ export default function Fixtures() {
                           <Badge variant="outline" className="text-[10px] border-destructive text-destructive">POSTPONED</Badge>
                         ) : (
                           <div className="flex flex-col items-center">
-                            <span className="text-lg font-bold data-value">{format(new Date(fixture.kickoff), "HH:mm")}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase font-mono">EST</span>
+                            <span className="text-lg font-bold data-value">{formatTimeMst(fixture.kickoff)}</span>
                           </div>
                         )}
                       </div>

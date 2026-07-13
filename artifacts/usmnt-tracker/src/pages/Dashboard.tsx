@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, Tv, Users } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { formatKickoffMst } from "@/lib/formatMst";
 
 export default function Dashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -93,7 +94,7 @@ export default function Dashboard() {
                           <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-1.5 py-0">LIVE</Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground font-mono mb-1">
-                            {format(new Date(game.kickoff), "MMM d, HH:mm")}
+                            {formatKickoffMst(game.kickoff)}
                           </span>
                         )}
                         <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
