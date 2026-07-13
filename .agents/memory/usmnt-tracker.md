@@ -18,3 +18,11 @@ News is no longer seeded-only: `rssIngest.ts` polls public RSS feeds (BBC Sport,
 **Why:** raw RSS/Google-News search results are extremely noisy — a bare org-name keyword like "US Soccer" or "U.S. Soccer" matches youth academies, women's team, and unrelated op-eds, and floods the feed. Matching on player surnames alone also false-positives on common names.
 
 **How to apply:** keep relevance keywords narrow (must name the senior men's team specifically, e.g. "USMNT", "U.S. men's national team" — not bare org names), require a real player-name match or a narrow keyword hit, cap inserts per run (~25) prioritizing player-matched articles, dedupe by URL, and strip outlet-name suffixes ("Headline - ESPN" / "Headline | ESPN") from titles before storing. Also: don't restart the workflow twice in quick succession — the dying old process can race the new one's first insert and leave one stale/uncleaned row (harmless but worth a cleanup query if noticed).
+
+## Sportmonks free-plan league coverage gap
+
+Sportmonks' Free plan (what you get by just registering, distinct from the 14-day trial of a *paid* plan) includes only sample/demo leagues — none of the Premier League/Serie A/Bundesliga/Ligue 1/La Liga/Eredivisie/MLS/Champions League tier that a roster of pro players actually needs. Team search and fixture calls all succeed (200 OK) but return empty `data` with a "no access to it via your current subscription" message — this looks like a bug (silent empty result) if you don't read the `message` field.
+
+**Why:** easy to misdiagnose as a broken integration (token invalid, wrong endpoint, etc.) when it's actually a plan/league-selection limitation. Confirmed by direct curl: `{"data":[],"message":"...you don't have access to it via your current subscription."}`.
+
+**How to apply:** before assuming a Sportmonks integration is broken, log/inspect the raw response body (not just whether `data` is empty) — the `message` field says exactly this. Starter (€29/mo) lets you pick 5 leagues, Growth (€99/mo) covers 30 — pick a plan that includes every league your tracked entities are actually in, not just headline competitions.

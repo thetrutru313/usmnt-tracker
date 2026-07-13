@@ -28,7 +28,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 - Player roster, clubs, fixtures, stats, injuries, and transfers are seeded fabricated data (`scripts/src/seedUsmnt.ts`) — no live API for these yet.
 - News is live: `artifacts/api-server/src/lib/rssIngest.ts` pulls free public RSS feeds (BBC Sport, Google News searches for USMNT/ESPN) on a 15-min schedule, keeps only articles naming a tracked player or the senior men's national team, dedupes by URL, and caps inserts per run at 25 to avoid flooding the feed with noise.
-- Live fixtures/stats would need a paid provider (Sportmonks or API-Football, ~$30-100/mo) — not wired up; user has not yet approved the recurring cost. See `.agents/memory/usmnt-tracker.md` for the tradeoffs researched.
+- Fixtures/stats are still seeded data. A Sportmonks club-fixtures sync exists (`artifacts/api-server/src/lib/sportmonksSync.ts`) but is **not started** — see the Gotchas note below for why.
 
 ## Product
 
@@ -41,6 +41,7 @@ Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prosp
 ## Gotchas
 
 - After changing `artifacts/api-server/src/lib/rssIngest.ts`, restart the workflow to re-run ingestion. If you restart twice in quick succession, the old process may still be mid-insert and can leave one stale/uncleaned row behind — check for and delete duplicates if so.
+- `SPORTMONKS_API_TOKEN` is set, but the account is on Sportmonks' Free plan, which only ships sample/demo leagues — none of the leagues the tracked players actually play in (Premier League, Serie A, Bundesliga, Ligue 1, La Liga, Eredivisie, MLS, Champions League). The user declined the paid upgrade (Starter €29/mo covers 5 leagues, Growth €99/mo covers all 8+), so `startSportmonksSyncSchedule()` is deliberately not called from `index.ts`. If the user upgrades later, call it from `index.ts` and it'll resolve club→Sportmonks-team IDs and sync upcoming fixtures automatically.
 
 ## Pointers
 

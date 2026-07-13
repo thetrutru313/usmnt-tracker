@@ -1,7 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
-import { startSportmonksSyncSchedule } from "./lib/sportmonksSync";
+// Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
+// intentionally not started — the user decided the paid plan upgrade needed
+// to cover their tracked players' leagues isn't worth it right now. Fixtures
+// stay on seeded data. See replit.md and .agents/memory/usmnt-tracker.md.
 
 const rawPort = process.env["PORT"];
 
@@ -29,9 +32,4 @@ app.listen(port, (err) => {
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
   startRssIngestionSchedule();
-
-  // Paid half of the hybrid pipeline: syncs upcoming club fixtures from
-  // Sportmonks (hourly). Skips itself if SPORTMONKS_API_TOKEN isn't set.
-  // National-team fixtures stay seeded/curated.
-  startSportmonksSyncSchedule();
 });
