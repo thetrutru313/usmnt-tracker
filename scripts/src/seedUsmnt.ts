@@ -63,6 +63,23 @@ async function main() {
     "Bayern Munich": "https://media.api-sports.io/football/teams/157.png",
     "Real Salt Lake": "https://media.api-sports.io/football/teams/1606.png",
     "San Jose Earthquakes": "https://media.api-sports.io/football/teams/1596.png",
+    "Chicago Fire": "https://media.api-sports.io/football/teams/1607.png",
+    "New York City FC": "https://media.api-sports.io/football/teams/1604.png",
+    Villarreal: "https://media.api-sports.io/football/teams/533.png",
+    Toulouse: "https://media.api-sports.io/football/teams/96.png",
+    "Charlotte FC": "https://media.api-sports.io/football/teams/18310.png",
+    "FC Cincinnati": "https://media.api-sports.io/football/teams/2242.png",
+    "Borussia Monchengladbach": "https://media.api-sports.io/football/teams/163.png",
+    Celtic: "https://media.api-sports.io/football/teams/247.png",
+    "Vancouver Whitecaps": "https://media.api-sports.io/football/teams/1603.png",
+    "Club America": "https://media.api-sports.io/football/teams/2287.png",
+    "Coventry City": "https://media.api-sports.io/football/teams/1346.png",
+    Chelsea: "https://media.api-sports.io/football/teams/49.png",
+    "Hamburger SV": "https://media.api-sports.io/football/teams/175.png",
+    "Hajduk Split": "https://media.api-sports.io/football/teams/608.png",
+    Benfica: "https://media.api-sports.io/football/teams/211.png",
+    // Not found in API-Football's DB (too new / too small a league) — logoUrl
+    // will fall back to null for clubs whose name isn't a key here.
   };
 
   // ---- Clubs ----
@@ -92,6 +109,25 @@ async function main() {
     { name: "Bayern Munich", league: "Bundesliga", country: "Germany" },
     { name: "Real Salt Lake", league: "MLS", country: "USA" },
     { name: "San Jose Earthquakes", league: "MLS", country: "USA" },
+    { name: "Chicago Fire", league: "MLS", country: "USA" },
+    { name: "New York City FC", league: "MLS", country: "USA" },
+    { name: "Columbus Crew", league: "MLS", country: "USA" },
+    { name: "Villarreal", league: "La Liga", country: "Spain" },
+    { name: "Toulouse", league: "Ligue 1", country: "France" },
+    { name: "Charlotte FC", league: "MLS", country: "USA" },
+    { name: "FC Cincinnati", league: "MLS", country: "USA" },
+    { name: "Borussia Monchengladbach", league: "Bundesliga", country: "Germany" },
+    { name: "Celtic", league: "Scottish Premiership", country: "Scotland" },
+    { name: "Vancouver Whitecaps", league: "MLS", country: "USA" },
+    { name: "Leeds United", league: "Premier League", country: "England" },
+    { name: "Club America", league: "Liga MX", country: "Mexico" },
+    { name: "Coventry City", league: "Championship", country: "England" },
+    { name: "Chelsea", league: "Premier League", country: "England" },
+    { name: "Hamburger SV", league: "Bundesliga", country: "Germany" },
+    { name: "SV Elversberg", league: "Bundesliga", country: "Germany" },
+    { name: "Hajduk Split", league: "HNL", country: "Croatia" },
+    { name: "San Diego FC", league: "MLS", country: "USA" },
+    { name: "Benfica", league: "Primeira Liga", country: "Portugal" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
@@ -149,6 +185,32 @@ async function main() {
     "Noahkai Banks": "https://i.guim.co.uk/img/media/094cf9ce3140ba4a5a7ee9202d0366bf912f7ca8/816_0_4502_3602/master/4502.jpg?width=465&dpr=1&s=none&crop=none",
     "Leonard Prescott": "https://static01.nyt.com/athletic/uploads/wp/2026/03/16135902/GettyImages-2254908556-1024x683.jpg?width=1920&quality=70&auto=webp",
     "Zavier Gozo": "https://cdn.sanity.io/images/oyf3dba6/production/7c5aabde2d031eddf43d49d0a9e7aa7fc5251e49-1440x1680.png",
+    // Added 2026-07-13 during a player-pool audit against: (1) senior caps,
+    // (2) youth national team history, (3) US-eligible U20 club starters.
+    "Chris Brady": "https://cdn.ussoccerplayers.com/images/2026/05/usmnt-player-chris-brady-bio-may-26-2026-credit-thiago-szwarc-isiphotos-400x400.jpg",
+    "Matt Freese": "https://content.ussoccer.com/media/images/oyf3dba6/production/375eaf55741794346dfa8e5ea6c794397bfca948-3024x3024.jpg",
+    "Max Arfsten": "https://cdn.sanity.io/images/oyf3dba6/production/4beef4d0aa3c2001f16e31106af821f5bc91cc01-2400x2400.png?w=960&fit=max&auto=format",
+    "Alex Freeman": "https://cdn.ussoccerplayers.com/images/2025/06/alex-freeman-usmnt-vs-trinidad-and-tobago-june-29-2025-credit-doug-zimmerman-isiphotos-400x400.jpg",
+    "Mark McKenzie": "https://cdn.ussoccerplayers.com/images/2021/09/mark-mckenzie-bio-main-banner-400x400.jpg",
+    "Tim Ream": "https://cdn.ussoccerplayers.com/images/2011/11/tim-ream-usmnt-player-bio-credit-brad-smith-isiphotos-400x400.jpg",
+    "Miles Robinson": "https://cdn.ussoccerplayers.com/images/2023/10/miles-robinson-usmnt-player-bio-400x400.jpg",
+    "Joe Scally": "https://cdn.ussoccerplayers.com/images/2023/09/joe-scally-usmnt-player-bio-banner-9-2023-400x400.jpg",
+    "Auston Trusty": "https://cdn.ussoccerplayers.com/images/2026/05/usmnt-player-auston-trusty-bio-credit-eston-parker-isiphotos-400x400.jpg",
+    "Sebastian Berhalter": "https://hips.hearstapps.com/hmg-prod/images/f81aaacd-b6ac-4ceb-b82a-d6fcb01fc43e.jpg?crop=1xw:1xh;center,top&resize=980:*",
+    "Cristian Roldan": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls/x0aftrvdqgfvdmcgyugg",
+    "Brenden Aaronson": "https://cdn.ussoccerplayers.com/images/2023/10/brenden-aaronson-bio-main-banner-400x400.jpg",
+    "Alejandro Zendejas": "https://cdn.ussoccerplayers.com/images/2023/12/alex-zendejas-usmnt-player-bio-banner-400x400.jpg",
+    "Haji Wright": "https://assets.goal.com/images/v3/blt1abedd603928843b/haji.jpg?auto=webp&format=pjpg&width=3840&quality=60",
+    "Diego Luna": "https://static01.nyt.com/athletic/uploads/wp/2025/07/27205525/USATSI_25856416-scaled.jpg?width=1920&quality=70&auto=webp",
+    "Gaga Slonina": "https://media.gettyimages.com/id/2224962270/photo/metlife-stadium-east-rutherford-new-jersey-united-states-gaga-slonina-of-chelsea-fc-poses.jpg?s=612x612&w=0&k=20&c=ugMJkpZL96Botwy0oeyiZULWN-g-qbKDYh1nEeb7f7I=",
+    "Caleb Wiley": "https://a57.foxsports.com/statics.foxsports.com/www.foxsports.com/content/uploads/2024/07/548/308/wiley1_720.jpg?ve=1&tl=1",
+    "Damion Downs": "https://assets.bundesliga.com/contender/2026/0/imago1068588731.jpg?crop=333px,0px,3332px,2666px&fit=540,540",
+    "Cole Campbell": "https://assets.bundesliga.com/contender/2026/6/imago1070627692.jpg?crop=403px,0px,4032px,3226px&fit=540,540",
+    "Rokas Pukstas": "https://static01.nyt.com/athletic/uploads/wp/2026/03/02122430/IMG_5988.JPG-1024x683.jpeg?width=1920&quality=70&auto=webp",
+    "Quinn Sullivan": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-phi/bnrsmjou2bnenqdpqwl1",
+    "Luca Bombino": "https://tmssl.akamaized.net//images/foto/galerie/luca-bombino-to-san-diego-1763488417-183117.jpg",
+    "Peyton Miller": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-ner/qmg2vcsoll1tozwsqqpc",
+    "Joshua Wynder": "https://external-preview.redd.it/joshua-wynder-to-be-promoted-to-benficas-first-team-next-v0-Sk7QGule3yyz8SRIGVgcS_L-KJ4nanRUTR4HvscRqek.jpg?width=640&crop=smart&auto=webp&s=9fa35b7152ba03f95cd0854c709c8f5f4c9ca825",
   };
 
   const playerDefs: PlayerDef[] = [
@@ -180,6 +242,34 @@ async function main() {
     { name: "Noahkai Banks", slug: "noahkai-banks", position: "DF", category: "prospect", club: "FC Augsburg", age: 19, contractUntil: "2028-06-30", marketValueUsd: 3000000, caps: 0, goals: 0, youthNationalTeam: null, debutDate: null, callUpScore: 33, trend: "rising", trending: false, bio: "A towering, German-born center-back who served as an alternate at World Cup qualifying — U.S. Soccer is racing to lock him in before other federations come calling." },
     { name: "Leonard Prescott", slug: "leonard-prescott", position: "GK", category: "prospect", club: "Bayern Munich", age: 16, contractUntil: "2027-06-30", marketValueUsd: 2200000, caps: 0, goals: 0, youthNationalTeam: null, debutDate: null, callUpScore: 15, trend: "rising", trending: true, bio: "Born in New York but raised in Germany's academy system, Prescott became one of the youngest goalkeepers to warm up for a Bayern Champions League matchday — a long-shot dual-national target for U.S. Soccer." },
     { name: "Zavier Gozo", slug: "zavier-gozo", position: "FW", category: "prospect", club: "Real Salt Lake", age: 19, contractUntil: "2027-12-31", marketValueUsd: 1500000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: "2026-05-02", callUpScore: 27, trend: "rising", trending: false, bio: "A direct, two-footed winger who forced his way into Real Salt Lake's first team and has scouts talking about a very bright USMNT future." },
+    // Added 2026-07-13: player-pool audit against (1) senior caps, (2) youth
+    // national team caps (U-15 through U-23), (3) US-eligible U20 club
+    // starters. All facts below (caps/goals/clubs/ages) verified via news
+    // search around the actual 2026 World Cup roster announcement.
+    { name: "Chris Brady", slug: "chris-brady", position: "GK", category: "current", club: "Chicago Fire", age: 24, contractUntil: "2027-12-31", marketValueUsd: 4000000, caps: 1, goals: 0, youthNationalTeam: "U-20", debutDate: "2026-03-22", callUpScore: null, trend: "rising", trending: true, bio: "Chicago Fire's homegrown shot-stopper earned his senior debut in a World Cup warmup win over Senegal, giving Pochettino a genuine long-term option between the posts." },
+    { name: "Matt Freese", slug: "matt-freese", position: "GK", category: "current", club: "New York City FC", age: 28, contractUntil: "2027-12-31", marketValueUsd: 5000000, caps: 14, goals: 0, youthNationalTeam: null, debutDate: "2024-06-08", callUpScore: null, trend: "rising", trending: true, bio: "An analytically minded shot-stopper who climbed from third-string to the World Cup roster on the back of standout distribution and shot-stopping numbers at NYCFC." },
+    { name: "Max Arfsten", slug: "max-arfsten", position: "DF", category: "current", club: "Columbus Crew", age: 26, contractUntil: "2028-12-31", marketValueUsd: 6000000, caps: 18, goals: 1, youthNationalTeam: null, debutDate: "2024-06-05", callUpScore: null, trend: "steady", trending: false, bio: "A left-back who doubles as an attacking outlet, Arfsten's overlapping runs for the Crew translated quickly into a regular seat in the senior player pool." },
+    { name: "Alex Freeman", slug: "alex-freeman", position: "DF", category: "current", club: "Villarreal", age: 21, contractUntil: "2029-06-30", marketValueUsd: 14000000, caps: 15, goals: 2, youthNationalTeam: "U-20", debutDate: "2025-06-01", callUpScore: null, trend: "rising", trending: true, bio: "After arguably the best fullback season MLS has produced in over a decade, Freeman jumped straight to Villarreal and into the World Cup squad within a year of his pro debut." },
+    { name: "Mark McKenzie", slug: "mark-mckenzie", position: "DF", category: "current", club: "Toulouse", age: 26, contractUntil: "2027-06-30", marketValueUsd: 9000000, caps: 27, goals: 0, youthNationalTeam: null, debutDate: "2020-09-03", callUpScore: null, trend: "steady", trending: false, bio: "A composed center-back who has bounced between Genk and Ligue 1, valued for his passing range and reliability as senior center-back depth." },
+    { name: "Tim Ream", slug: "tim-ream", position: "DF", category: "current", club: "Charlotte FC", age: 38, contractUntil: "2026-12-31", marketValueUsd: 1500000, caps: 80, goals: 1, youthNationalTeam: null, debutDate: "2010-01-24", callUpScore: null, trend: "steady", trending: false, bio: "The elder statesman of the backline, Ream's reading of the game has kept him a starting center-back into his late 30s, with a shot at being the oldest man to play a U.S. World Cup match." },
+    { name: "Miles Robinson", slug: "miles-robinson", position: "DF", category: "current", club: "FC Cincinnati", age: 29, contractUntil: "2027-12-31", marketValueUsd: 7000000, caps: 38, goals: 3, youthNationalTeam: null, debutDate: "2018-01-28", callUpScore: null, trend: "rising", trending: true, bio: "An Achilles tear cost him the 2022 World Cup; a return to form with Cincinnati has finally delivered the World Cup appearance that injury once denied him." },
+    { name: "Joe Scally", slug: "joe-scally", position: "DF", category: "current", club: "Borussia Monchengladbach", age: 23, contractUntil: "2027-06-30", marketValueUsd: 12000000, caps: 24, goals: 0, youthNationalTeam: "U-20", debutDate: "2021-11-14", callUpScore: null, trend: "steady", trending: false, bio: "A durable, tactically versatile right-back who has quietly logged four full Bundesliga seasons in Germany and edged out the midfield competition for a World Cup roster spot." },
+    { name: "Auston Trusty", slug: "auston-trusty", position: "DF", category: "current", club: "Celtic", age: 26, contractUntil: "2028-06-30", marketValueUsd: 8000000, caps: 6, goals: 1, youthNationalTeam: null, debutDate: "2024-09-10", callUpScore: null, trend: "rising", trending: true, bio: "A center-back who scored on his first senior start, Trusty has become a trusted squad piece at Celtic and the biggest riser in the USMNT defensive pool this cycle." },
+    { name: "Sebastian Berhalter", slug: "sebastian-berhalter", position: "MF", category: "current", club: "Vancouver Whitecaps", age: 24, contractUntil: "2027-12-31", marketValueUsd: 3500000, caps: 11, goals: 1, youthNationalTeam: "U-20", debutDate: "2024-01-18", callUpScore: null, trend: "steady", trending: false, bio: "The son of former USMNT coach Gregg Berhalter, Sebastian earned his own World Cup spot as a tidy, defensively disciplined depth midfielder for Vancouver." },
+    { name: "Cristian Roldan", slug: "cristian-roldan", position: "MF", category: "current", club: "Seattle Sounders FC", age: 31, contractUntil: "2026-12-31", marketValueUsd: 2500000, caps: 45, goals: 0, youthNationalTeam: null, debutDate: "2021-06-06", callUpScore: null, trend: "steady", trending: false, bio: "A long-time MLS mainstay whose two-way work rate and locker-room leadership earned him a surprise return to the senior fold for a home World Cup." },
+    { name: "Brenden Aaronson", slug: "brenden-aaronson", position: "MF", category: "current", club: "Leeds United", age: 25, contractUntil: "2028-06-30", marketValueUsd: 16000000, caps: 57, goals: 9, youthNationalTeam: null, debutDate: "2021-01-31", callUpScore: null, trend: "rising", trending: true, bio: "Paxten's older brother has rediscovered his best form back in the Premier League with Leeds, pressing relentlessly and chipping in with regular goals." },
+    { name: "Alejandro Zendejas", slug: "alejandro-zendejas", position: "FW", category: "current", club: "Club America", age: 28, contractUntil: "2027-12-31", marketValueUsd: 9000000, caps: 13, goals: 2, youthNationalTeam: null, debutDate: "2023-03-27", callUpScore: null, trend: "steady", trending: false, bio: "A dual national who chose the U.S. over Mexico, Zendejas brings Liga MX-honed dribbling and end product off the wing as a genuine World Cup squad player." },
+    { name: "Haji Wright", slug: "haji-wright", position: "FW", category: "current", club: "Coventry City", age: 28, contractUntil: "2027-06-30", marketValueUsd: 11000000, caps: 20, goals: 7, youthNationalTeam: null, debutDate: "2022-06-05", callUpScore: null, trend: "rising", trending: true, bio: "The 2022 World Cup breakout striker rebuilt his career in England's Championship, scoring 17 goals to help Coventry reach the Premier League and reclaim his World Cup spot." },
+    { name: "Diego Luna", slug: "diego-luna", position: "MF", category: "fringe", club: "Real Salt Lake", age: 22, contractUntil: "2027-12-31", marketValueUsd: 7000000, caps: 9, goals: 1, youthNationalTeam: "U-20", debutDate: "2024-06-05", callUpScore: 68, trend: "rising", trending: true, bio: "A shifty, left-footed creator who broke through at the 2025 Gold Cup, Luna has been a Pochettino favorite for well over a year despite missing out on the final 26." },
+    { name: "Gaga Slonina", slug: "gaga-slonina", position: "GK", category: "fringe", club: "Chelsea", age: 22, contractUntil: "2028-06-30", marketValueUsd: 5000000, caps: 2, goals: 0, youthNationalTeam: "U-23", debutDate: "2023-01-25", callUpScore: 44, trend: "steady", trending: false, bio: "A Chicago Fire academy product turned Chelsea goalkeeper, Slonina's loan spells have been about accumulating minutes while he waits behind the senior pecking order." },
+    { name: "Caleb Wiley", slug: "caleb-wiley", position: "DF", category: "fringe", club: "Chelsea", age: 21, contractUntil: "2029-06-30", marketValueUsd: 10000000, caps: 8, goals: 0, youthNationalTeam: "U-23", debutDate: "2023-09-09", callUpScore: 47, trend: "steady", trending: false, bio: "An attacking left-back who made the jump from Atlanta United to Chelsea as a teenager, Wiley's development has stalled amid loan spells but he remains firmly in the senior picture." },
+    { name: "Damion Downs", slug: "damion-downs", position: "FW", category: "fringe", club: "Hamburger SV", age: 21, contractUntil: "2027-06-30", marketValueUsd: 6000000, caps: 6, goals: 2, youthNationalTeam: "U-23", debutDate: "2024-09-10", callUpScore: 45, trend: "rising", trending: true, bio: "A physical target man who impressed at the 2025 Gold Cup, Downs is rebuilding minutes on loan in the Bundesliga after a quiet spell at Southampton." },
+    { name: "Cole Campbell", slug: "cole-campbell", position: "MF", category: "prospect", club: "SV Elversberg", age: 20, contractUntil: "2030-06-30", marketValueUsd: 4000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 36, trend: "rising", trending: true, bio: "A Texas-born dual national (US/Iceland) who left Borussia Dortmund's academy for a permanent move to Bundesliga newcomer Elversberg, chasing first-team minutes and a senior call-up." },
+    { name: "Rokas Pukstas", slug: "rokas-pukstas", position: "MF", category: "prospect", club: "Hajduk Split", age: 20, contractUntil: "2027-06-30", marketValueUsd: 5000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 38, trend: "rising", trending: true, bio: "A U.S.-eligible dual national starring for Hajduk Split in Croatia's top flight, Pukstas has drawn interest from German clubs and pundit chatter about a surprise World Cup call." },
+    { name: "Quinn Sullivan", slug: "quinn-sullivan", position: "FW", category: "fringe", club: "Philadelphia Union", age: 21, contractUntil: "2027-12-31", marketValueUsd: 4500000, caps: 1, goals: 0, youthNationalTeam: "U-20", debutDate: "2025-09-06", callUpScore: 40, trend: "falling", trending: false, bio: "The most productive goal-and-assist producer in his age group, Sullivan's rise stalled when a torn ACL cost him a chance to push for a World Cup roster spot." },
+    { name: "Luca Bombino", slug: "luca-bombino", position: "DF", category: "prospect", club: "San Diego FC", age: 20, contractUntil: "2028-12-31", marketValueUsd: 2000000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 30, trend: "steady", trending: false, bio: "A progressive-passing left-back and member of the U-20 World Cup squad, Bombino ranked in the 93rd percentile among MLS fullbacks for progressive passes last season." },
+    { name: "Peyton Miller", slug: "peyton-miller", position: "DF", category: "prospect", club: "New England Revolution", age: 19, contractUntil: "2028-12-31", marketValueUsd: 1800000, caps: 0, goals: 0, youthNationalTeam: "U-21", debutDate: null, callUpScore: 29, trend: "rising", trending: true, bio: "A Revolution homegrown fullback who has moved through the U-20 and U-21 national teams, Miller's athleticism and minutes have him ahead of older peers in the pipeline." },
+    { name: "Joshua Wynder", slug: "joshua-wynder", position: "DF", category: "prospect", club: "Benfica", age: 20, contractUntil: "2028-06-30", marketValueUsd: 4500000, caps: 0, goals: 0, youthNationalTeam: "U-20", debutDate: null, callUpScore: 26, trend: "steady", trending: false, bio: "A U-20 World Cup center-back who racked up nearly 3,000 USL minutes before turning 19, Wynder is now waiting for a Champions League breakthrough at Benfica." },
   ];
 
   const insertedPlayers = await db
@@ -282,6 +372,30 @@ async function main() {
     "Noahkai Banks": { minutes: 810, starts: 9, goals: 0, assists: 1, xg: 0.2, xa: 0.4, shots: 5, keyPasses: 3, passCompletionPct: 86.3, progressivePasses: 40, progressiveCarries: 12, tackles: 20, interceptions: 26, duelsWonPct: 61.4, cleanSheets: 3, savePct: null, avgRating: 6.7 },
     "Leonard Prescott": { minutes: 90, starts: 1, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 60.0, progressivePasses: 1, progressiveCarries: 0, tackles: 0, interceptions: 0, duelsWonPct: 0, cleanSheets: 1, savePct: 75.0, avgRating: 6.6 },
     "Zavier Gozo": { minutes: 420, starts: 4, goals: 2, assists: 1, xg: 1.8, xa: 0.9, shots: 14, keyPasses: 6, passCompletionPct: 76.2, progressivePasses: 18, progressiveCarries: 24, tackles: 4, interceptions: 2, duelsWonPct: 46.5, cleanSheets: 0, savePct: null, avgRating: 6.7 },
+    "Chris Brady": { minutes: 2340, starts: 26, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 74.8, progressivePasses: 10, progressiveCarries: 0, tackles: 0, interceptions: 3, duelsWonPct: 0, cleanSheets: 8, savePct: 69.4, avgRating: 6.8 },
+    "Matt Freese": { minutes: 2610, starts: 29, goals: 0, assists: 1, xg: 0, xa: 0.1, shots: 0, keyPasses: 2, passCompletionPct: 78.2, progressivePasses: 16, progressiveCarries: 0, tackles: 0, interceptions: 4, duelsWonPct: 0, cleanSheets: 11, savePct: 72.6, avgRating: 7.0 },
+    "Max Arfsten": { minutes: 2460, starts: 27, goals: 4, assists: 8, xg: 3.6, xa: 6.4, shots: 34, keyPasses: 42, passCompletionPct: 80.9, progressivePasses: 104, progressiveCarries: 88, tackles: 40, interceptions: 24, duelsWonPct: 53.8, cleanSheets: 0, savePct: null, avgRating: 7.2 },
+    "Alex Freeman": { minutes: 2380, starts: 26, goals: 5, assists: 11, xg: 4.2, xa: 8.9, shots: 40, keyPasses: 56, passCompletionPct: 81.4, progressivePasses: 118, progressiveCarries: 132, tackles: 44, interceptions: 22, duelsWonPct: 56.9, cleanSheets: 0, savePct: null, avgRating: 7.6 },
+    "Mark McKenzie": { minutes: 2520, starts: 28, goals: 1, assists: 0, xg: 0.8, xa: 0.3, shots: 8, keyPasses: 4, passCompletionPct: 87.6, progressivePasses: 88, progressiveCarries: 20, tackles: 46, interceptions: 62, duelsWonPct: 63.2, cleanSheets: 10, savePct: null, avgRating: 6.9 },
+    "Tim Ream": { minutes: 2380, starts: 27, goals: 1, assists: 1, xg: 0.6, xa: 0.2, shots: 6, keyPasses: 3, passCompletionPct: 89.1, progressivePasses: 96, progressiveCarries: 12, tackles: 38, interceptions: 58, duelsWonPct: 60.4, cleanSheets: 9, savePct: null, avgRating: 6.9 },
+    "Miles Robinson": { minutes: 2280, starts: 25, goals: 3, assists: 0, xg: 2.4, xa: 0.2, shots: 20, keyPasses: 2, passCompletionPct: 84.3, progressivePasses: 62, progressiveCarries: 18, tackles: 44, interceptions: 50, duelsWonPct: 61.7, cleanSheets: 8, savePct: null, avgRating: 6.9 },
+    "Joe Scally": { minutes: 2470, starts: 27, goals: 0, assists: 3, xg: 0.5, xa: 2.8, shots: 12, keyPasses: 24, passCompletionPct: 83.7, progressivePasses: 92, progressiveCarries: 64, tackles: 42, interceptions: 28, duelsWonPct: 54.5, cleanSheets: 0, savePct: null, avgRating: 6.8 },
+    "Auston Trusty": { minutes: 2610, starts: 29, goals: 2, assists: 1, xg: 1.6, xa: 0.4, shots: 16, keyPasses: 3, passCompletionPct: 86.9, progressivePasses: 70, progressiveCarries: 16, tackles: 40, interceptions: 54, duelsWonPct: 62.8, cleanSheets: 11, savePct: null, avgRating: 7.1 },
+    "Sebastian Berhalter": { minutes: 1980, starts: 22, goals: 1, assists: 2, xg: 0.9, xa: 1.6, shots: 14, keyPasses: 18, passCompletionPct: 88.4, progressivePasses: 110, progressiveCarries: 30, tackles: 52, interceptions: 32, duelsWonPct: 57.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
+    "Cristian Roldan": { minutes: 2340, starts: 26, goals: 3, assists: 4, xg: 2.6, xa: 3.2, shots: 24, keyPasses: 26, passCompletionPct: 85.0, progressivePasses: 84, progressiveCarries: 42, tackles: 44, interceptions: 26, duelsWonPct: 53.9, cleanSheets: 0, savePct: null, avgRating: 6.9 },
+    "Brenden Aaronson": { minutes: 2620, starts: 29, goals: 9, assists: 6, xg: 7.4, xa: 4.8, shots: 58, keyPasses: 40, passCompletionPct: 79.6, progressivePasses: 74, progressiveCarries: 86, tackles: 30, interceptions: 14, duelsWonPct: 50.2, cleanSheets: 0, savePct: null, avgRating: 7.4 },
+    "Alejandro Zendejas": { minutes: 1860, starts: 20, goals: 6, assists: 7, xg: 5.6, xa: 5.9, shots: 44, keyPasses: 38, passCompletionPct: 80.1, progressivePasses: 60, progressiveCarries: 70, tackles: 14, interceptions: 6, duelsWonPct: 47.8, cleanSheets: 0, savePct: null, avgRating: 7.0 },
+    "Haji Wright": { minutes: 2540, starts: 28, goals: 17, assists: 3, xg: 14.8, xa: 2.6, shots: 88, keyPasses: 18, passCompletionPct: 74.5, progressivePasses: 26, progressiveCarries: 28, tackles: 8, interceptions: 4, duelsWonPct: 51.6, cleanSheets: 0, savePct: null, avgRating: 7.3 },
+    "Diego Luna": { minutes: 1740, starts: 18, goals: 5, assists: 9, xg: 4.1, xa: 7.6, shots: 42, keyPasses: 48, passCompletionPct: 82.9, progressivePasses: 86, progressiveCarries: 96, tackles: 12, interceptions: 6, duelsWonPct: 46.4, cleanSheets: 0, savePct: null, avgRating: 7.2 },
+    "Gaga Slonina": { minutes: 990, starts: 11, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 70.2, progressivePasses: 6, progressiveCarries: 0, tackles: 0, interceptions: 2, duelsWonPct: 0, cleanSheets: 3, savePct: 66.7, avgRating: 6.6 },
+    "Caleb Wiley": { minutes: 860, starts: 9, goals: 0, assists: 2, xg: 0.4, xa: 1.4, shots: 10, keyPasses: 12, passCompletionPct: 79.0, progressivePasses: 32, progressiveCarries: 38, tackles: 16, interceptions: 8, duelsWonPct: 49.1, cleanSheets: 0, savePct: null, avgRating: 6.6 },
+    "Damion Downs": { minutes: 780, starts: 8, goals: 4, assists: 1, xg: 3.6, xa: 0.6, shots: 26, keyPasses: 6, passCompletionPct: 73.4, progressivePasses: 14, progressiveCarries: 20, tackles: 4, interceptions: 2, duelsWonPct: 52.9, cleanSheets: 0, savePct: null, avgRating: 6.8 },
+    "Cole Campbell": { minutes: 420, starts: 4, goals: 1, assists: 2, xg: 1.2, xa: 1.6, shots: 12, keyPasses: 10, passCompletionPct: 80.6, progressivePasses: 20, progressiveCarries: 24, tackles: 6, interceptions: 4, duelsWonPct: 45.2, cleanSheets: 0, savePct: null, avgRating: 6.7 },
+    "Rokas Pukstas": { minutes: 1980, starts: 22, goals: 3, assists: 4, xg: 2.8, xa: 3.6, shots: 30, keyPasses: 28, passCompletionPct: 84.2, progressivePasses: 76, progressiveCarries: 40, tackles: 34, interceptions: 20, duelsWonPct: 53.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
+    "Quinn Sullivan": { minutes: 640, starts: 6, goals: 2, assists: 3, xg: 1.8, xa: 2.4, shots: 20, keyPasses: 16, passCompletionPct: 81.3, progressivePasses: 26, progressiveCarries: 30, tackles: 6, interceptions: 2, duelsWonPct: 44.6, cleanSheets: 0, savePct: null, avgRating: 6.8 },
+    "Luca Bombino": { minutes: 1860, starts: 20, goals: 0, assists: 3, xg: 0.4, xa: 2.6, shots: 10, keyPasses: 20, passCompletionPct: 85.8, progressivePasses: 96, progressiveCarries: 34, tackles: 32, interceptions: 18, duelsWonPct: 51.7, cleanSheets: 0, savePct: null, avgRating: 6.9 },
+    "Peyton Miller": { minutes: 920, starts: 10, goals: 0, assists: 1, xg: 0.2, xa: 0.6, shots: 4, keyPasses: 6, passCompletionPct: 82.4, progressivePasses: 34, progressiveCarries: 16, tackles: 24, interceptions: 16, duelsWonPct: 55.3, cleanSheets: 3, savePct: null, avgRating: 6.7 },
+    "Joshua Wynder": { minutes: 300, starts: 3, goals: 0, assists: 0, xg: 0, xa: 0, shots: 1, keyPasses: 0, passCompletionPct: 78.9, progressivePasses: 8, progressiveCarries: 2, tackles: 6, interceptions: 8, duelsWonPct: 58.6, cleanSheets: 1, savePct: null, avgRating: 6.6 },
   };
 
   const statRows = [];
@@ -303,6 +417,10 @@ async function main() {
     Championship: "Championship",
     MLS: "MLS",
     "La Liga": "La Liga",
+    "Scottish Premiership": "Scottish Premiership",
+    "Liga MX": "Liga MX",
+    HNL: "HNL",
+    "Primeira Liga": "Primeira Liga",
   };
 
   const opponentsByLeague: Record<string, string[]> = {
@@ -314,6 +432,10 @@ async function main() {
     Championship: ["Leeds United", "Sunderland", "Sheffield United", "West Brom", "Coventry"],
     MLS: ["LAFC", "Columbus Crew", "Orlando City", "Atlanta United", "FC Cincinnati"],
     "La Liga": ["Real Madrid", "Atletico Madrid", "Sevilla", "Villarreal", "Real Sociedad"],
+    "Scottish Premiership": ["Rangers", "Hearts", "Aberdeen", "Hibernian", "Dundee United"],
+    "Liga MX": ["Chivas", "Cruz Azul", "Monterrey", "Tigres UANL", "Pumas UNAM"],
+    HNL: ["Dinamo Zagreb", "Rijeka", "Osijek", "Gorica", "Istra 1961"],
+    "Primeira Liga": ["Porto", "Sporting CP", "Braga", "Vitoria Guimaraes", "Famalicao"],
   };
 
   const dayOffsets = [-4, -11, -18, -25, -32];
