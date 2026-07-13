@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, Tv, Users } from "lucide-react";
 import { Link } from "wouter";
-import { format } from "date-fns";
+import { format, isToday } from "date-fns";
 import { formatKickoffMst } from "@/lib/formatMst";
 
 export default function Dashboard() {
@@ -77,52 +77,70 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            {dashboard.todaysGames.length === 0 ? (
-              <div className="py-8 text-center border border-dashed rounded-lg bg-muted/20">
-                <p className="text-muted-foreground font-mono text-sm">NO MATCHES SCHEDULED FOR TODAY</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {dashboard.todaysGames.map(game => (
-                  <div key={game.id} className="group relative flex flex-col gap-3 p-3 rounded-lg border bg-background hover:border-primary/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 w-1/3">
-                        <div className="text-right w-full font-medium truncate">{game.homeTeam}</div>
-                      </div>
-                      <div className="flex flex-col items-center justify-center px-4 w-1/4">
-                        {game.status === 'live' ? (
-                          <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-1.5 py-0">LIVE</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground font-mono mb-1">
-                            {formatKickoffMst(game.kickoff)}
-                          </span>
-                        )}
-                        <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
-                          {game.homeScore !== null ? `${game.homeScore} - ${game.awayScore}` : 'v'}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 w-1/3">
-                        <div className="w-full font-medium truncate">{game.awayTeam}</div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border text-xs">
-                      <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
-                        <Users size={12} className="shrink-0 text-primary" />
-                        <span className="truncate">
-                          {game.featuredPlayers.map(p => p.name).join(", ")}
-                        </span>
-                      </div>
-                      {game.streamingService && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                          <Tv size={12} className="text-secondary" />
-                          <span className="font-mono">{game.streamingService}</span>
-                        </div>
-                      )}
-                    </div>
+            {(() => {
+              const nextGames = [...dashboard.todaysGames, ...dashboard.upcomingGames]
+                .sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+                .slice(0, 5);
+
+              if (nextGames.length === 0) {
+                return (
+                  <div className="py-8 text-center border border-dashed rounded-lg bg-muted/20">
+                    <p className="text-muted-foreground font-mono text-sm">NO UPCOMING MATCHES SCHEDULED</p>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {nextGames.map(game => (
+                    <div key={game.id} className="group relative flex flex-col gap-3 p-3 rounded-lg border bg-background hover:border-primary/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 w-1/3">
+                          {game.homeLogoUrl && (
+                            <img src={game.homeLogoUrl} alt={game.homeTeam} className="w-6 h-6 object-contain shrink-0" />
+                          )}
+                          <div className="text-right w-full font-medium truncate">{game.homeTeam}</div>
+                        </div>
+                        <div className="flex flex-col items-center justify-center px-4 w-1/4">
+                          {game.status === 'live' ? (
+                            <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-1.5 py-0">LIVE</Badge>
+                          ) : isToday(new Date(game.kickoff)) ? (
+                            <Badge variant="default" className="mb-1 rounded-sm px-1.5 py-0 font-mono">TODAY</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground font-mono mb-1">
+                              {format(new Date(game.kickoff), "MMM d")} · {formatKickoffMst(game.kickoff)}
+                            </span>
+                          )}
+                          <div className="font-mono text-lg font-bold tracking-widest bg-muted px-3 py-1 rounded">
+                            {game.homeScore !== null ? `${game.homeScore} - ${game.awayScore}` : 'v'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 w-1/3 justify-end">
+                          <div className="w-full font-medium truncate text-right">{game.awayTeam}</div>
+                          {game.awayLogoUrl && (
+                            <img src={game.awayLogoUrl} alt={game.awayTeam} className="w-6 h-6 object-contain shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border text-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                          <Users size={12} className="shrink-0 text-primary" />
+                          <span className="truncate">
+                            {game.featuredPlayers.map(p => p.name).join(", ")}
+                          </span>
+                        </div>
+                        {game.streamingService && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+                            <Tv size={12} className="text-secondary" />
+                            <span className="font-mono">{game.streamingService}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

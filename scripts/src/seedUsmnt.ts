@@ -23,6 +23,44 @@ async function main() {
     players, clubs
     RESTART IDENTITY CASCADE`);
 
+  // ---- Team/country logo & flag crests (real API-Football media CDN URLs,
+  // resolved once via the team-search endpoint; see scripts/src/fetchLogos.ts) ----
+  const TEAM_LOGOS: Record<string, string> = {
+    "AC Milan": "https://media.api-sports.io/football/teams/489.png",
+    Juventus: "https://media.api-sports.io/football/teams/496.png",
+    Bournemouth: "https://media.api-sports.io/football/teams/35.png",
+    Fulham: "https://media.api-sports.io/football/teams/36.png",
+    Atalanta: "https://media.api-sports.io/football/teams/499.png",
+    "PSV Eindhoven": "https://media.api-sports.io/football/teams/197.png",
+    "AS Monaco": "https://media.api-sports.io/football/teams/91.png",
+    "Olympique de Marseille": "https://media.api-sports.io/football/teams/81.png",
+    "Crystal Palace": "https://media.api-sports.io/football/teams/52.png",
+    "Borussia Dortmund": "https://media.api-sports.io/football/teams/165.png",
+    "Norwich City": "https://media.api-sports.io/football/teams/71.png",
+    "Union Berlin": "https://media.api-sports.io/football/teams/182.png",
+    Middlesbrough: "https://media.api-sports.io/football/teams/70.png",
+    "AZ Alkmaar": "https://media.api-sports.io/football/teams/201.png",
+    "Como 1907": "https://media.api-sports.io/football/teams/895.png",
+    "Philadelphia Union": "https://media.api-sports.io/football/teams/1599.png",
+    "FC Barcelona": "https://media.api-sports.io/football/teams/529.png",
+    "Inter Miami CF": "https://media.api-sports.io/football/teams/9568.png",
+    "Werder Bremen": "https://media.api-sports.io/football/teams/162.png",
+    "Seattle Sounders FC": "https://media.api-sports.io/football/teams/1595.png",
+    "New England Revolution": "https://media.api-sports.io/football/teams/1609.png",
+    Inter: "https://media.api-sports.io/football/teams/505.png",
+    Bologna: "https://media.api-sports.io/football/teams/500.png",
+    Lille: "https://media.api-sports.io/football/teams/79.png",
+    Mainz: "https://media.api-sports.io/football/teams/164.png",
+    "Leeds United": "https://media.api-sports.io/football/teams/63.png",
+    "Columbus Crew": "https://media.api-sports.io/football/teams/1613.png",
+    "Atlanta United": "https://media.api-sports.io/football/teams/1608.png",
+    Everton: "https://media.api-sports.io/football/teams/45.png",
+    USA: "https://media.api-sports.io/football/teams/2384.png",
+    Belgium: "https://media.api-sports.io/football/teams/1.png",
+    Panama: "https://media.api-sports.io/football/teams/11.png",
+    Colombia: "https://media.api-sports.io/football/teams/8.png",
+  };
+
   // ---- Clubs ----
   const clubDefs = [
     { name: "AC Milan", league: "Serie A", country: "Italy" },
@@ -46,7 +84,7 @@ async function main() {
     { name: "Werder Bremen", league: "Bundesliga", country: "Germany" },
     { name: "Seattle Sounders FC", league: "MLS", country: "USA" },
     { name: "New England Revolution", league: "MLS", country: "USA" },
-  ];
+  ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
   const clubIdByName = new Map(insertedClubs.map((c) => [c.name, c.id]));
@@ -69,6 +107,34 @@ async function main() {
     trend: "rising" | "steady" | "falling";
     trending: boolean;
     bio: string;
+  };
+
+  // Real public headshots (US Soccer / news wire bio photos), keyed by player name.
+  const PLAYER_PHOTOS: Record<string, string> = {
+    "Christian Pulisic": "https://cdn.ussoccerplayers.com/images/2016/05/usmnt-player-christian-pulisic-credit-greg-bartram-isiphotos-400x400.jpg",
+    "Weston McKennie": "https://cdn.ussoccerplayers.com/images/2019/06/usmnt-player-weston-mckennie-vs-trinidad-and-tobabo-november-16-2023-credit-robin-alam-isiphotos.jpg",
+    "Tyler Adams": "https://cdn.ussoccerplayers.com/images/2018/12/tyler-adams-bio-main-banner-400x400.jpg",
+    "Antonee Robinson": "https://cdn.ussoccerplayers.com/images/2021/09/antonee-robinson-bio-main-banner-400x400.jpg",
+    "Yunus Musah": "https://cdn.ussoccerplayers.com/images/2021/10/yunus-musah-usmnt-vs-trinidad-and-tobago-november-15-2023-credit-robin-alam-isiphotos.jpg",
+    "Ricardo Pepi": "https://cdn.ussoccerplayers.com/images/2022/10/ricardo-pepi-usmnt-vs-trinidad-and-tobago-november-16-2023-credit-robin-alam-isiphotos.jpg",
+    "Folarin Balogun": "https://static01.nyt.com/athletic/uploads/wp/2026/06/22172514/GettyImages-2282406782-1024x683.jpg?width=400&quality=70",
+    "Timothy Weah": "https://cdn.ussoccerplayers.com/images/2021/04/tim-weah-bio-main-banner-400x400.jpg",
+    "Malik Tillman": "https://cdn.ussoccerplayers.com/images/2023/10/malik-tillman-usmnt-player-bio-main-400x400.jpg",
+    "Sergiño Dest": "https://content.ussoccer.com/media/images/oyf3dba6/production/6e89d7320f73d55cb2023e6975101e3d43f2cc65-1080x1638.png",
+    "Chris Richards": "https://cdn.ussoccerplayers.com/images/2023/06/chris-richards-bio-main-banner-400x400.jpg",
+    "Matt Turner": "https://library.sportingnews.com/styles/crop_style_16_9_desktop_webp/s3/2022-02/Matt%20Turner%20USMNT%20021122.jpg.webp?itok=dywwnpUG",
+    "Giovanni Reyna": "https://cdn.ussoccerplayers.com/images/2021/04/gio-reyna-bio-main-banner-400x400.jpg",
+    "Josh Sargent": "https://statico.profootballnetwork.com/wp-content/uploads/2026/02/27112130/usmnt-star-josh-sargent-opens-02-27-26-1920x1280.jpg",
+    "Paxten Aaronson": "https://cdn.ussoccerplayers.com/images/2025/06/paxten-aaronson-usmnt-vs-switzerland-june-10-2025-credit-robin-alam-isiphotos-400x400.jpg",
+    "Aidan Morris": "https://cdn.ussoccerplayers.com/images/2025/10/usmnt-player-aidan-morris-september-10-2024-credit-joe-robbins-isiphotos-400x400.jpg",
+    "Djordje Mihailovic": "https://cdn.ussoccerplayers.com/images/2023/12/djordje-mihailovic-usmnt-player-bio-banner-400x400.jpg",
+    "Tanner Tessmann": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2026/03/17/ca45d1fd-b1a4-4928-8ad3-f588910fc7ab/tessmann-0317.jpg?width=400&crop=16:9,smart&w=3840&q=70",
+    "Cavan Sullivan": "https://library.sportingnews.com/styles/crop_style_16_9_1200_webp/s3/2026-05/GettyImages-2279117832.jpg.webp?itok=oO_yILmk",
+    "Diego Kochen": "https://a57.foxsports.com/statics.foxsports.com/www.foxsports.com/content/uploads/2026/06/548/308/diego-kochen-1.jpg?ve=1&tl=1",
+    "Benjamin Cremaschi": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2025/10/06/f437cf0b-c353-4bca-b237-0ae0af86cd94/cremaschi-v2.jpg?width=400&crop=16:9,smart&w=3840&q=70",
+    "Noel Buck": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-ner/fsib6ksgvlxwcbrwwwju",
+    "Obed Vargas": "https://external-preview.redd.it/dazn-seattle-sounders-midfielder-obed-vargas-a-childhood-v0-OWpzbmoxa3p0NDhmMVSmKWAHyN7qFix2ArOkC4hhNTu5pJsM6g97VFOvAltl.png?width=640&crop=smart&format=pjpg&auto=webp&s=22c49750cacb16cf30a663422710bf8ce0a8b1d1",
+    "Nimfasha Berchimas": "https://content.ussoccer.com/media/images/oyf3dba6/production/8dfee51234cfb163c45d7d4643a2ff433186a7ce-1080x1080.jpg?w=1080&h=1080&fit=max&auto=format",
   };
 
   const playerDefs: PlayerDef[] = [
@@ -107,7 +173,7 @@ async function main() {
         position: p.position,
         category: p.category,
         clubId: clubIdByName.get(p.club)!,
-        photoUrl: null,
+        photoUrl: PLAYER_PHOTOS[p.name] ?? null,
         age: p.age,
         contractUntil: p.contractUntil,
         marketValueUsd: p.marketValueUsd,
@@ -296,7 +362,7 @@ async function main() {
     { isNationalTeam: false, competition: "MLS", daysFromNow: 5, hour: 20, venue: "Subaru Park, Philadelphia", homeTeam: "Philadelphia Union", awayTeam: "Columbus Crew", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: null, streamingService: "Apple TV", broadcastLink: null, featured: ["Cavan Sullivan"] },
     { isNationalTeam: false, competition: "MLS", daysFromNow: 5, hour: 21, venue: "Chase Stadium, Fort Lauderdale", homeTeam: "Inter Miami CF", awayTeam: "Atlanta United", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: null, streamingService: "Apple TV", broadcastLink: null, featured: ["Benjamin Cremaschi"] },
     { isNationalTeam: false, competition: "Premier League", daysFromNow: -3, hour: 15, venue: "Selhurst Park, London", homeTeam: "Crystal Palace", awayTeam: "Everton", homeScore: 2, awayScore: 1, status: "finished", tvNetwork: "USA Network", streamingService: "Fubo", broadcastLink: null, featured: ["Chris Richards", "Matt Turner"] },
-    { isNationalTeam: true, competition: "World Cup Qualifying", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Ricardo Pepi", "Matt Turner"] },
+    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Yunus Musah", "Ricardo Pepi", "Matt Turner"] },
     { isNationalTeam: true, competition: "International Friendly", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Colombia", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
   ];
 
@@ -310,8 +376,8 @@ async function main() {
         venue: f.venue,
         homeTeam: f.homeTeam,
         awayTeam: f.awayTeam,
-        homeLogoUrl: null,
-        awayLogoUrl: null,
+        homeLogoUrl: TEAM_LOGOS[f.homeTeam] ?? null,
+        awayLogoUrl: TEAM_LOGOS[f.awayTeam] ?? null,
         homeScore: f.homeScore,
         awayScore: f.awayScore,
         status: f.status,
@@ -451,10 +517,10 @@ async function main() {
 
   // ---- National Team Window ----
   await db.insert(nationalTeamWindowsTable).values({
-    name: "September World Cup Qualifying Window",
+    name: "September International Friendlies",
     startDate: isoDateOffset(42),
     endDate: isoDateOffset(50),
-    description: "The USMNT gathers for two fixtures — a World Cup Qualifier against Panama in Saint Paul and an international friendly against Colombia in Austin.",
+    description: "With the World Cup run behind them, the USMNT regroups for two friendlies — against Panama in Saint Paul and Colombia in Austin — as the squad turns its focus toward the next cycle.",
   });
 
   console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${statRows.length} stat rows, ${matchLogRows.length} match logs, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles, ${injuryDefs.length} injuries, ${transferDefs.length} transfers.`);

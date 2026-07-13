@@ -65,6 +65,27 @@ interface AfFixture {
   };
 }
 
+// API-Football's fixtures endpoint doesn't return US broadcast info on our
+// plan, so map each league to its primary US TV/streaming home. Falls back
+// to a generic streaming-only entry for leagues not explicitly listed.
+const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingService: string }> = {
+  "Premier League": { tvNetwork: "USA Network", streamingService: "Fubo" },
+  "Championship": { tvNetwork: null, streamingService: "ESPN+" },
+  "Serie A": { tvNetwork: "CBS Sports Network", streamingService: "Paramount+" },
+  "La Liga": { tvNetwork: "ESPN Deportes", streamingService: "ESPN+" },
+  "Bundesliga": { tvNetwork: null, streamingService: "ESPN+" },
+  "Ligue 1": { tvNetwork: "beIN Sports", streamingService: "beIN Sports Connect" },
+  "Eredivisie": { tvNetwork: null, streamingService: "ESPN+" },
+  "Primeira Liga": { tvNetwork: null, streamingService: "ESPN+" },
+  "MLS": { tvNetwork: "Apple TV", streamingService: "MLS Season Pass" },
+  "UEFA Champions League": { tvNetwork: "CBS", streamingService: "Paramount+" },
+  "UEFA Europa League": { tvNetwork: null, streamingService: "Paramount+" },
+};
+
+function broadcastFor(leagueName: string): { tvNetwork: string | null; streamingService: string | null } {
+  return BROADCAST_BY_LEAGUE[leagueName] ?? { tvNetwork: null, streamingService: null };
+}
+
 const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
 const POSTPONED_STATUSES = new Set(["PST", "CANC", "ABD"]);
 
@@ -84,6 +105,8 @@ const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Inter Miami CF": "Inter Miami",
   "Olympique de Marseille": "Marseille",
   "Seattle Sounders FC": "Seattle Sounders",
+  "Norwich City": "Norwich",
+  "Como 1907": "Como",
 };
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */
@@ -100,7 +123,10 @@ async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId
       logger.warn({ club: club.name, searchTerm }, "API-Football team search returned no match");
       return null;
     }
-    await db.update(clubsTable).set({ apiFootballTeamId: match.team.id }).where(eq(clubsTable.id, club.id));
+    await db
+      .update(clubsTable)
+      .set({ apiFootballTeamId: match.team.id, logoUrl: match.team.logo })
+      .where(eq(clubsTable.id, club.id));
     return match.team.id;
   } catch (err) {
     logger.warn({ err, club: club.name, searchTerm }, "API-Football team search failed");
@@ -161,6 +187,7 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
     }
 
     for (const f of upcoming) {
+      const broadcast = broadcastFor(f.league.name);
       const values = {
         apiFootballFixtureId: f.fixture.id,
         isNationalTeam: false,
@@ -172,6 +199,8 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
         homeLogoUrl: f.teams.home.logo,
         awayLogoUrl: f.teams.away.logo,
         status: mapStatus(f.fixture.status.short),
+        tvNetwork: broadcast.tvNetwork,
+        streamingService: broadcast.streamingService,
       };
 
       const [existing] = await db
