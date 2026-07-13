@@ -96,14 +96,6 @@ function isReserveOrYouthTeam(name: string): boolean {
   return RESERVE_TEAM_PATTERN.test(name.trim());
 }
 
-// Preseason "Friendlies Clubs" fixtures are squad-rotation heavy and an
-// unreliable signal for who's actually involved. Senior full internationals
-// (category "current") in particular are typically rested for weeks after a
-// major tournament, so don't auto-tag them here — young "fringe"/"prospect"
-// players trying to break into a first team are the ones for whom these
-// friendlies are meaningfully worth tracking.
-const NON_COMPETITIVE_COMPETITIONS = new Set(["Friendlies Clubs"]);
-
 const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
 const POSTPONED_STATUSES = new Set(["PST", "CANC", "ABD"]);
 
@@ -163,7 +155,7 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
   const clubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
-  const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId, category: playersTable.category }).from(playersTable);
+  const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId }).from(playersTable);
   const playersByClub = new Map<number, typeof players>();
   for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
 
@@ -239,10 +231,7 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
 
       const clubPlayers = playersByClub.get(club.id) ?? [];
       const isReserveFixture = isReserveOrYouthTeam(f.teams.home.name) || isReserveOrYouthTeam(f.teams.away.name);
-      const isNonCompetitive = NON_COMPETITIVE_COMPETITIONS.has(f.league.name);
-      const eligiblePlayers = isReserveFixture
-        ? []
-        : clubPlayers.filter((p) => !(isNonCompetitive && p.category === "current"));
+      const eligiblePlayers = isReserveFixture ? [] : clubPlayers;
       if (eligiblePlayers.length > 0) {
         const existingLinks = await db
           .select({ playerId: fixturePlayersTable.playerId })
