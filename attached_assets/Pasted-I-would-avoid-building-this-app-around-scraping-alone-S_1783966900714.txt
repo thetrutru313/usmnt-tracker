@@ -1,0 +1,446 @@
+I would avoid building this app around scraping alone. Sports websites frequently change their HTML, many prohibit scraping in their Terms of Service, and you'll spend more time fixing scrapers than building features. A hybrid approach—official APIs + RSS feeds + a small amount of scraping where permitted—is much more reliable.
+
+## Recommended Architecture
+
+| Data Type              | Primary Source | Secondary Source  | Method                         |
+| ---------------------- | -------------- | ----------------- | ------------------------------ |
+| Fixtures               | Sportmonks     | API-Football      | API                            |
+| Results                | Sportmonks     | API-Football      | API                            |
+| Player Stats           | Sportmonks     | FBref             | API + scrape (where permitted) |
+| Injuries               | Transfermarkt  | Club websites     | Scrape/RSS                     |
+| Transfers              | Transfermarkt  | Fabrizio Romano/X | Scrape + RSS                   |
+| News                   | RSS Feeds      | Google News       | RSS                            |
+| TV Listings            | Sportmonks     | LiveSoccerTV      | API                            |
+| Player Profiles        | Transfermarkt  | Wikipedia         | Scrape/API                     |
+| National Team Schedule | U.S. Soccer    | FIFA              | RSS/API                        |
+
+Sportmonks is one of the most comprehensive football APIs, covering fixtures, player stats, transfers, TV stations, standings, and optional news in a single platform. ([Sportmonks][1])
+
+---
+
+# 1. News Sources (RSS Preferred)
+
+These require little or no scraping.
+
+### U.S. Soccer
+
+Track:
+
+* Call-ups
+* Camp rosters
+* Injury updates
+* Official announcements
+
+Priority: ⭐⭐⭐⭐⭐
+
+---
+
+### ESPN Soccer
+
+Track:
+
+* Transfer news
+* Match reports
+* Injuries
+
+Priority: ⭐⭐⭐⭐☆
+
+---
+
+### MLS Soccer
+
+Important for prospects.
+
+Track:
+
+* Homegrown signings
+* Young player features
+* Injury reports
+
+Priority: ⭐⭐⭐⭐⭐
+
+---
+
+### The Athletic
+
+Excellent long-form USMNT reporting.
+
+Track:
+
+* Tactical analysis
+* Player interviews
+* Transfer features
+
+Priority: ⭐⭐⭐⭐☆
+
+---
+
+### Goal.com
+
+Track:
+
+* Breaking transfers
+* Rumors
+* Match recaps
+
+Priority: ⭐⭐⭐☆☆
+
+---
+
+### BBC Sport Football
+
+Track:
+
+* Premier League Americans
+* Europe coverage
+
+Priority: ⭐⭐⭐⭐☆
+
+---
+
+### Yahoo Sports Soccer
+
+Track:
+
+* Aggregated football news
+
+---
+
+### Official Club Websites
+
+Examples:
+
+* AC Milan
+* Juventus
+* PSV
+* Bournemouth
+* Crystal Palace
+* Borussia Dortmund
+
+These are the fastest source for:
+
+* Injuries
+* Squad announcements
+* Starting XI
+* Contract extensions
+
+---
+
+# 2. Fixtures & TV Listings
+
+## Sportmonks (Recommended)
+
+Provides:
+
+* Fixtures
+* Live scores
+* Player lineups
+* TV broadcasters
+* Stadium
+* Referees
+* Match events
+* Standings
+* Statistics
+* Transfers (add-on)
+
+This should become your primary backend. ([Sportmonks][1])
+
+---
+
+## API-Football
+
+Good alternative.
+
+Provides:
+
+* Fixtures
+* Live scores
+* Teams
+* Players
+* Leagues
+* Statistics
+
+---
+
+## LiveSoccerTV
+
+Excellent for:
+
+* Where to watch
+* Streaming services
+* TV channels
+
+Only scrape if permitted by their Terms of Service.
+
+---
+
+# 3. Player Statistics
+
+## FBref
+
+One of the best sources.
+
+Track:
+
+* Goals
+* Assists
+* xG
+* xA
+* Progressive passes
+* Tackles
+* Minutes
+* Percentiles
+
+Refresh:
+
+Every morning.
+
+---
+
+## Understat
+
+Great for attackers.
+
+Track:
+
+* xG
+* xA
+* Shots
+* Chance creation
+
+---
+
+## Sofascore
+
+Useful for:
+
+* Player ratings
+* Heat maps
+* Match ratings
+* Live stats
+
+---
+
+## FotMob
+
+Great source for:
+
+* Match ratings
+* Fixtures
+* Lineups
+* Goal notifications
+
+---
+
+# 4. Injuries
+
+## Transfermarkt
+
+Best source.
+
+Track:
+
+* Injury type
+* Return date
+* Matches missed
+* Injury history
+
+Refresh:
+
+Every 6 hours.
+
+---
+
+## Official Club Sites
+
+Always verify injuries here before showing them as confirmed.
+
+---
+
+## Club X Accounts
+
+Monitor announcements from clubs.
+
+---
+
+# 5. Transfer Tracking
+
+## Transfermarkt
+
+Track:
+
+* Rumors
+* Confirmed transfers
+* Loans
+* Market value
+* Contract expiration
+
+---
+
+## Fabrizio Romano
+
+Track:
+
+* Here We Go
+* Rumors
+* Confirmations
+
+Use links and summaries rather than scraping social posts.
+
+---
+
+## ESPN FC
+
+Track:
+
+* Transfer news
+
+---
+
+# 6. Prospect Discovery
+
+This is where your app can differentiate itself.
+
+Monitor players born after 2005 who are eligible for the U.S.
+
+Examples:
+
+* Cavan Sullivan
+* Diego Kochen
+* Nimfasha Berchimas
+* Benjamin Cremaschi
+* Obed Vargas
+* Noel Buck
+
+Track:
+
+* Minutes played
+* Starts
+* Goals
+* Assists
+* First-team debut
+* U20/U23 appearances
+* Awards
+* Call-up rumors
+
+---
+
+Suggested sources:
+
+MLS
+
+USL
+
+Bundesliga
+
+Premier League Academy
+
+UEFA Youth League
+
+U.S. Soccer Youth Teams
+
+The Soccer Wire
+
+Top Drawer Soccer
+
+---
+
+# 7. Awards & Honors
+
+Track automatically:
+
+Player of the Match
+
+Team of the Week
+
+Player of the Month
+
+Golden Boy nominations
+
+Ballon d'Or nominations
+
+MLS Best XI
+
+League MVP
+
+Young Player awards
+
+Sources:
+
+League websites
+
+Club websites
+
+ESPN
+
+Goal
+
+---
+
+# 8. Watch Guide
+
+For each match display:
+
+Competition
+
+Kickoff
+
+TV channel
+
+Streaming service
+
+Language
+
+Country availability
+
+Useful sources:
+
+* Sportmonks (TV station coverage) ([Sportmonks][1])
+* LiveSoccerTV (where permitted)
+
+---
+
+# 9. Suggested Refresh Schedule
+
+| Data              | Frequency             |
+| ----------------- | --------------------- |
+| Breaking news     | Every 10–15 minutes   |
+| Transfers         | Every 15 minutes      |
+| Injuries          | Every hour            |
+| Fixtures          | Every hour            |
+| TV listings       | Daily                 |
+| Player stats      | Nightly after matches |
+| Market values     | Weekly                |
+| Prospect rankings | Daily                 |
+
+---
+
+# Gold Standard Data Pipeline
+
+```text
+                    RSS Feeds
+                        │
+                        ▼
+              News Ingestion Service
+                        │
+                        ▼
+               AI Summarization Layer
+                        │
+                        ▼
+                  PostgreSQL Database
+                        ▲
+                        │
+        Sportmonks/API-Football (fixtures & stats)
+                        │
+                        ▼
+          Background Sync Jobs (Cron/Inngest)
+                        │
+                        ▼
+               Next.js API + React Frontend
+```
+
+## My recommendation
+
+If you're willing to spend around **$30–$100/month**, use **Sportmonks as your primary data provider** and supplement it with RSS feeds from U.S. Soccer, MLS, ESPN, BBC Sport, and official club sites. Reserve scraping for information that isn't available through APIs or RSS (such as certain Transfermarkt pages), and only where permitted. This approach will give you a far more reliable application than relying on scraping dozens of websites. ([Sportmonks][1])
+
+[1]: https://www.sportmonks.com/football-api/?utm_source=chatgpt.com "Football API for Developers | 2,500+ Leagues | Sportmonks"

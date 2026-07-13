@@ -1,6 +1,6 @@
-# [Project name]
+# USMNT Tracker
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Tracks US Men's National Team players worldwide — news, fixtures, stats, injuries, transfers, and prospects.
 
 ## Run & Operate
 
@@ -26,19 +26,21 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Player roster, clubs, fixtures, stats, injuries, and transfers are seeded fabricated data (`scripts/src/seedUsmnt.ts`) — no live API for these yet.
+- News is live: `artifacts/api-server/src/lib/rssIngest.ts` pulls free public RSS feeds (BBC Sport, Google News searches for USMNT/ESPN) on a 15-min schedule, keeps only articles naming a tracked player or the senior men's national team, dedupes by URL, and caps inserts per run at 25 to avoid flooding the feed with noise.
+- Live fixtures/stats would need a paid provider (Sportmonks or API-Football, ~$30-100/mo) — not wired up; user has not yet approved the recurring cost. See `.agents/memory/usmnt-tracker.md` for the tradeoffs researched.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prospect rankings for USMNT players. News is real (RSS-sourced); fixtures/stats/injuries/transfers are still seeded placeholder data.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Match times on the dashboard should be shown in MST.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- After changing `artifacts/api-server/src/lib/rssIngest.ts`, restart the workflow to re-run ingestion. If you restart twice in quick succession, the old process may still be mid-insert and can leave one stale/uncleaned row behind — check for and delete duplicates if so.
 
 ## Pointers
 

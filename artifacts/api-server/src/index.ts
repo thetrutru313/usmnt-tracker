@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startRssIngestionSchedule } from "./lib/rssIngest";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,9 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
+  // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
+  // still rely on seeded data pending a paid provider decision (see replit.md).
+  startRssIngestionSchedule();
 });
