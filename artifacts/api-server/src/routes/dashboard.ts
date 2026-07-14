@@ -14,6 +14,7 @@ import {
   transfersTable,
   playerSummaryQuery,
   playerSummaryColumns,
+  computePoolTier,
 } from "../lib/queries";
 
 const router: IRouter = Router();
@@ -74,14 +75,17 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
   ]);
   const latestNews = await attachPlayersToNews(latestNewsRaw);
 
+  const withPoolTier = <T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number }>(rows: T[]) =>
+    rows.map(({ worldCupRoster, ...row }) => ({ ...row, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age: row.age }) }));
+
   const payload = {
     todaysGames,
     upcomingGames,
     latestNews,
     injuries,
     transfers,
-    topPerformers,
-    trending,
+    topPerformers: withPoolTier(topPerformers),
+    trending: withPoolTier(trending),
     recentlyReturned,
     nextWindow: nextWindowRows[0],
   };
