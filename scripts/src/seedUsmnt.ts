@@ -291,10 +291,42 @@ async function main() {
   ];
 
   // The 2026 World Cup 26-man roster is a subset of "current" category
-  // players. Musah is a full senior international (category "current") but
-  // didn't make the final 26 — see the fixture-tagging fix in
-  // apiFootballSync.ts for context on why he's tracked separately.
-  const NOT_ON_WORLD_CUP_ROSTER = new Set(["Yunus Musah"]);
+  // players. Listed explicitly (inclusion-based) rather than as an
+  // exclusion set so it's obvious at a glance who is actually on the squad.
+  // Two "current" internationals are deliberately left off:
+  //  - Yunus Musah: full senior international who didn't make the final 26
+  //    (see the fixture-tagging fix in apiFootballSync.ts for context).
+  //  - Josh Sargent: also did not make the final 26-man roster (2026-07-14
+  //    correction — he was previously miscategorized as "core" because the
+  //    old exclusion-based list only named Musah).
+  const WORLD_CUP_ROSTER_26 = new Set([
+    "Christian Pulisic",
+    "Weston McKennie",
+    "Tyler Adams",
+    "Antonee Robinson",
+    "Ricardo Pepi",
+    "Folarin Balogun",
+    "Timothy Weah",
+    "Malik Tillman",
+    "Sergiño Dest",
+    "Chris Richards",
+    "Matt Turner",
+    "Giovanni Reyna",
+    "Chris Brady",
+    "Matt Freese",
+    "Max Arfsten",
+    "Alex Freeman",
+    "Mark McKenzie",
+    "Tim Ream",
+    "Miles Robinson",
+    "Joe Scally",
+    "Auston Trusty",
+    "Sebastian Berhalter",
+    "Cristian Roldan",
+    "Brenden Aaronson",
+    "Alejandro Zendejas",
+    "Haji Wright",
+  ]);
 
   const insertedPlayers = await db
     .insert(playersTable)
@@ -311,7 +343,7 @@ async function main() {
         marketValueUsd: p.marketValueUsd,
         nationalTeamCaps: p.caps,
         nationalTeamGoals: p.goals,
-        worldCupRoster: p.category === "current" && !NOT_ON_WORLD_CUP_ROSTER.has(p.name),
+        worldCupRoster: p.category === "current" && WORLD_CUP_ROSTER_26.has(p.name),
         youthNationalTeam: p.youthNationalTeam,
         debutDate: p.debutDate,
         potentialCallUpScore: p.callUpScore,
