@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
-import { Calendar as CalendarIcon, MonitorPlay, MapPin, Shield, Star } from "lucide-react";
+import { Calendar as CalendarIcon, MonitorPlay, MapPin, Star } from "lucide-react";
 import { formatTimeMst } from "@/lib/formatMst";
 import { Link } from "wouter";
 
@@ -32,13 +32,15 @@ const POOL_TIER_STYLES: Record<PoolTier, string> = {
 /** Small tricolor icon shown before a player's name, indicating pool tier. */
 function PoolTierIcon({ tier }: { tier: PoolTier }) {
   if (tier === "core") {
-    // Crest: red shield with a small navy star cutout — this is the
-    // full-roster tier, so it gets the most "official" mark.
+    // The real USMNT crest — this is the full-roster tier, so it gets the
+    // official federation mark rather than a generic icon.
     return (
-      <span className="relative inline-flex items-center justify-center shrink-0" aria-hidden="true">
-        <Shield size={14} strokeWidth={2.5} className="text-primary fill-primary/25" />
-        <Star size={6} strokeWidth={0} className="absolute text-usmnt-blue fill-usmnt-blue" />
-      </span>
+      <img
+        src={`${import.meta.env.BASE_URL}badges/usmnt-crest.png`}
+        alt=""
+        aria-hidden="true"
+        className="w-3.5 h-3.5 object-contain shrink-0"
+      />
     );
   }
   if (tier === "inMix") {
