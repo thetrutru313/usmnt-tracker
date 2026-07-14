@@ -36,18 +36,13 @@ type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
 type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null };
 
 /**
- * Manually-verified API-Football player ids for prospects the automated
- * resolution can't confidently find on its own — either they weren't in
- * their on-file club's current squad listing, or `resolvePlayerIdBySearch`'s
- * surname + first-initial check rejected the right person because
- * API-Football's structured name fields don't match how we store the name:
- *
- * - Nickname vs. legal first name: our "Gaga Slonina" / "Tanner Tessmann"
- *   vs. API-Football's `firstname` "Nicholas" / "Francis" — the initial
- *   never matches even though it's the right player.
- * - Compound two-part surnames (common for Latino players): API-Football's
- *   `lastname` is "Zendejas Saavedra" / "Gómez Vargas" while we only store
- *   one surname word, so the exact-surname-equality check rejects them too.
+ * Manually-verified API-Football player ids, kept as a pinned fast-path for
+ * prospects that were once missed by the automated resolution — either
+ * because they weren't in their on-file club's current squad listing, or
+ * because `resolvePlayerIdBySearch` rejected the right person over a
+ * nickname-vs-legal-name or compound-surname mismatch (see that function's
+ * docs — it now handles both patterns generically, so this map is a safety
+ * net rather than the only way these resolve).
  *
  * Each id below was verified against `/players/teams?player=<id>` history
  * (club/national-team history matching the player's known bio) rather than
@@ -131,13 +126,32 @@ async function resolvePlayerIdsViaSquads(players: PlayerRow[], clubsById: Map<nu
  * "Firstname Lastname" string (e.g. "Christian Pulisic" returns zero results
  * even though "Pulisic" alone matches) — so search on the surname only.
  *
- * Common surnames are ambiguous: e.g. searching "Richards" for our "Chris
- * Richards" (USMNT defender) also returns an unrelated USA-nationality lower
- * league player with the same surname (id 102616, "Brent Anthony Richards").
- * Require BOTH an exact surname match AND a matching first-name initial
- * (plus USA nationality preference) before accepting a candidate — a wrong
- * id here would silently misattribute that player's future transfers, which
- * is worse than leaving the club unresolved for one run.
+ * Two name patterns showed up repeatedly while resolving prospects and both
+ * need handling here rather than one-off overrides, since they'll keep
+ * recurring as new prospects are added:
+ *
+ * - Compound/two-part surnames (common for Latino players): API-Football's
+ *   `lastname` carries both paternal and maternal surnames (e.g. "Zendejas
+ *   Saavedra", "Gómez Vargas") while we only store one surname word. A
+ *   candidate counts as a surname match if our surname is ANY word of their
+ *   `lastname`, not just an exact-string match.
+ * - Nickname vs. legal first name: our stored nickname (e.g. "Gaga Slonina",
+ *   "Tanner Tessmann") doesn't share an initial with API-Football's legal
+ *   `firstname` ("Nicholas", "Francis"). The first-initial check can't help
+ *   distinguish these, so it's only used as a *disambiguator* when the
+ *   surname search returns more than one candidate — if the surname match is
+ *   unique on its own, or unique once narrowed to USA-nationality
+ *   candidates, that's corroboration enough to accept it without the initial
+ *   matching.
+ *
+ * Common surnames are still ambiguous on their own: e.g. searching
+ * "Richards" for our "Chris Richards" (USMNT defender) also returns an
+ * unrelated USA-nationality lower league player with the same surname (id
+ * 102616, "Brent Anthony Richards") — the first-initial check (or, failing
+ * that, USA-nationality uniqueness) is what breaks that tie. A wrong id here
+ * would silently misattribute that player's future transfers, which is worse
+ * than leaving the club unresolved for one run, so any remaining ambiguity
+ * is left unresolved rather than guessed at.
  */
 async function resolvePlayerIdBySearch(player: { id: number; name: string }): Promise<number | null> {
   const normalized = normalizeName(player.name).split(" ");
@@ -146,9 +160,41 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string }): Pr
   if (!surname || !firstInitial) return null;
   try {
     const results = await afFetch<AfPlayerProfile[]>(`/players/profiles?search=${encodeURIComponent(surname)}`);
-    const isCandidate = (r: AfPlayerProfile) =>
-      normalizeName(r.player.lastname ?? "") === surname && normalizeName(r.player.firstname ?? "")[0] === firstInitial;
-    const match = results.find((r) => isCandidate(r) && r.player.nationality === "USA") ?? results.find(isCandidate);
+
+    const isSurnameMatch = (r: AfPlayerProfile) =>
+      normalizeName(r.player.lastname ?? "")
+        .split(" ")
+        .filter(Boolean)
+        .includes(surname);
+    const isInitialMatch = (r: AfPlayerProfile) => normalizeName(r.player.firstname ?? "")[0] === firstInitial;
+
+    const surnameCandidates = results.filter(isSurnameMatch);
+
+    // Strongest signal: surname match plus a matching first-name initial,
+    // preferring USA nationality to break ties on common surnames.
+    let match =
+      surnameCandidates.find((r) => isInitialMatch(r) && r.player.nationality === "USA") ??
+      surnameCandidates.find(isInitialMatch);
+
+    if (!match) {
+      // No first-initial match — likely a nickname vs. legal-name mismatch
+      // rather than the wrong player, since the surname search already
+      // narrowed the field. Only safe to accept without the initial check
+      // when the surname match is unambiguous.
+      const usaSurnameCandidates = surnameCandidates.filter((r) => r.player.nationality === "USA");
+      if (surnameCandidates.length === 1) {
+        match = surnameCandidates[0];
+      } else if (usaSurnameCandidates.length === 1) {
+        match = usaSurnameCandidates[0];
+      }
+      if (match) {
+        logger.info(
+          { player: player.name, matchedName: match.player.name, matchedFirstname: match.player.firstname },
+          "Matched via unambiguous surname rather than first-initial — likely a nickname vs. legal-name mismatch",
+        );
+      }
+    }
+
     if (!match) {
       logger.warn({ player: player.name }, "API-Football player search returned no confident match");
       return null;
