@@ -164,6 +164,13 @@ export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
   const rows = await db
     .select({
       fixtureId: fixturePlayersTable.fixtureId,
+      fixtureStatus: fixturesTable.status,
+      // Club this link was created for (null for curated national-team
+      // links) vs. the player's live club right now — compared below so a
+      // player who's transferred away stops showing on their old club's
+      // upcoming fixtures, the same way the Player Pool page would show them.
+      linkClubId: fixturePlayersTable.clubId,
+      currentClubId: playersTable.clubId,
       id: playersTable.id,
       name: playersTable.name,
       slug: playersTable.slug,
@@ -175,10 +182,17 @@ export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
     })
     .from(fixturePlayersTable)
     .innerJoin(playersTable, eq(fixturePlayersTable.playerId, playersTable.id))
+    .innerJoin(fixturesTable, eq(fixturePlayersTable.fixtureId, fixturesTable.id))
     .where(inArray(fixturePlayersTable.fixtureId, fixtureIds));
 
   const map = new Map<number, FeaturedPlayerRow[]>();
   for (const row of rows) {
+    // Only club-fixture links (linkClubId set) that are still scheduled can
+    // go stale this way — a fixture that's already been played should keep
+    // showing who was actually featured, and national-team links (no
+    // linkClubId) are curated separately from club membership.
+    const isStaleClubLink = row.linkClubId !== null && row.fixtureStatus === "scheduled" && row.linkClubId !== row.currentClubId;
+    if (isStaleClubLink) continue;
     const list = map.get(row.fixtureId) ?? [];
     list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl, poolTier: computePoolTier(row) });
     map.set(row.fixtureId, list);

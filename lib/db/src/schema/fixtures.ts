@@ -1,6 +1,7 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { clubsTable } from "./clubs";
 
 export const fixturesTable = pgTable("fixtures", {
   id: serial("id").primaryKey(),
@@ -36,6 +37,13 @@ export const fixturePlayersTable = pgTable("fixture_players", {
   id: serial("id").primaryKey(),
   fixtureId: integer("fixture_id").notNull().references(() => fixturesTable.id),
   playerId: integer("player_id").notNull(),
+  // Snapshot of which club this link was created for (set by the club
+  // fixtures sync; null for curated/seeded national-team links). Lets reads
+  // compare against the player's *current* club — if they've since
+  // transferred away, an upcoming fixture for their old club should stop
+  // showing them, while a fixture that's already been played should still
+  // reflect who was actually featured at the time.
+  clubId: integer("club_id").references(() => clubsTable.id),
 });
 
 export const insertFixturePlayerSchema = createInsertSchema(fixturePlayersTable).omit({ id: true });

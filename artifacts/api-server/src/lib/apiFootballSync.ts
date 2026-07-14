@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 const BASE_URL = "https://v3.football.api-sports.io";
@@ -159,7 +159,34 @@ async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId
  * curated/seeded — API-Football club fixtures are the part that changes
  * weekly and is impractical to hand-maintain.
  */
+/**
+ * Backfills `fixture_players.club_id` for legacy links created before that
+ * column existed. Matches each unstamped, non-national-team link's fixture
+ * to whichever tracked club's name equals the fixture's home or away team —
+ * that's the club this sync originally created the link for. Idempotent and
+ * safe to run on every sync so any future gaps self-heal without a manual
+ * one-off migration.
+ */
+export async function backfillLegacyFixturePlayerClubIds(): Promise<{ backfilled: number }> {
+  const result = await db.execute(sql`
+    UPDATE fixture_players fp
+    SET club_id = c.id
+    FROM fixtures f
+    JOIN clubs c ON (c.name = f.home_team OR c.name = f.away_team)
+    WHERE fp.fixture_id = f.id
+      AND f.is_national_team = false
+      AND fp.club_id IS NULL
+  `);
+  const backfilled = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+  if (backfilled > 0) {
+    logger.info({ backfilled }, "Backfilled legacy fixture_players.club_id for pre-existing club-fixture links");
+  }
+  return { backfilled };
+}
+
 export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; fixturesUpserted: number; fixturesReconciled: number; fixturesRemoved: number; failures: number }> {
+  await backfillLegacyFixturePlayerClubIds();
+
   const clubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
@@ -363,7 +390,10 @@ export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; 
         const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
         const toLink = eligiblePlayers.filter((p) => !alreadyLinked.has(p.id)).map((p) => p.id);
         if (toLink.length > 0) {
-          await db.insert(fixturePlayersTable).values(toLink.map((playerId) => ({ fixtureId, playerId })));
+          // Stamp the club this link was created for so reads can tell when
+          // a player has since transferred away — see the `clubId` comment
+          // on `fixturePlayersTable`.
+          await db.insert(fixturePlayersTable).values(toLink.map((playerId) => ({ fixtureId, playerId, clubId: club.id })));
         }
       }
       fixturesUpserted++;
