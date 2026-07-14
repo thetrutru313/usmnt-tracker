@@ -35,6 +35,49 @@ interface AfTransfersResponse {
 type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
 type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null };
 
+/**
+ * Manually-verified API-Football player ids for prospects the automated
+ * resolution can't confidently find on its own — either they weren't in
+ * their on-file club's current squad listing, or `resolvePlayerIdBySearch`'s
+ * surname + first-initial check rejected the right person because
+ * API-Football's structured name fields don't match how we store the name:
+ *
+ * - Nickname vs. legal first name: our "Gaga Slonina" / "Tanner Tessmann"
+ *   vs. API-Football's `firstname` "Nicholas" / "Francis" — the initial
+ *   never matches even though it's the right player.
+ * - Compound two-part surnames (common for Latino players): API-Football's
+ *   `lastname` is "Zendejas Saavedra" / "Gómez Vargas" while we only store
+ *   one surname word, so the exact-surname-equality check rejects them too.
+ *
+ * Each id below was verified against `/players/teams?player=<id>` history
+ * (club/national-team history matching the player's known bio) rather than
+ * trusting the search endpoint alone. Keyed by our stored player name so
+ * this doubles as a lookup for the case where the row's id gets cleared
+ * (e.g. a reseed) — checked before the squad/search resolution steps.
+ */
+export const KNOWN_PLAYER_IDS: Record<string, number> = {
+  "Yunus Musah": 162106,
+  "Diego Kochen": 383647,
+  "Gaga Slonina": 201711,
+  "Montrell Culbreath": 444961,
+  "Nimfasha Berchimas": 401644,
+  "Obed Vargas": 313383,
+  "Paxten Aaronson": 265884,
+  "Tanner Tessmann": 80752,
+  "Alejandro Zendejas": 35885,
+};
+
+/** Applies `KNOWN_PLAYER_IDS` to any unresolved player rows before other resolution steps run. */
+async function applyKnownPlayerIdOverrides(players: PlayerRow[]): Promise<void> {
+  for (const player of players) {
+    if (player.apiFootballPlayerId) continue;
+    const known = KNOWN_PLAYER_IDS[player.name];
+    if (!known) continue;
+    await db.update(playersTable).set({ apiFootballPlayerId: known }).where(eq(playersTable.id, player.id));
+    player.apiFootballPlayerId = known;
+  }
+}
+
 /** Loose name matching: lowercase, strip accents/punctuation, collapse whitespace. */
 function normalizeName(name: string): string {
   return name
@@ -141,6 +184,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
   const clubsByApiFootballId = new Map(clubs.filter((c): c is ClubRow & { apiFootballTeamId: number } => c.apiFootballTeamId != null).map((c) => [c.apiFootballTeamId, c]));
 
+  await applyKnownPlayerIdOverrides(players);
   await resolvePlayerIdsViaSquads(players, clubsById);
 
   let playersChecked = 0;
