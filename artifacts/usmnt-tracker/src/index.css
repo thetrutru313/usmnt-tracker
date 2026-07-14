@@ -28,6 +28,8 @@
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-secondary-border: var(--secondary-border);
 
+  --color-usmnt-blue: hsl(var(--usmnt-blue));
+
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-muted-border: var(--muted-border);
@@ -78,6 +80,11 @@
   --secondary: 186 100% 40%;
   --secondary-foreground: 222 47% 11%;
 
+  /* Brand navy — used alongside primary (red) for USMNT tricolor pool-tier
+     iconography (Fixtures/Player Pool tags). Constant across themes since
+     it's a fixed brand color, not a semantic UI token. */
+  --usmnt-blue: 213 100% 20%;
+
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
 
@@ -118,6 +125,8 @@
 
   --secondary: 186 100% 50%;
   --secondary-foreground: 224 50% 6%;
+
+  --usmnt-blue: 213 90% 45%;
 
   --muted: 224 40% 16%;
   --muted-foreground: 215 20% 65%;

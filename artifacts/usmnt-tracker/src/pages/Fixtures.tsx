@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
-import { Calendar as CalendarIcon, MonitorPlay, MapPin } from "lucide-react";
+import { Calendar as CalendarIcon, MonitorPlay, MapPin, Shield, Star } from "lucide-react";
 import { formatTimeMst } from "@/lib/formatMst";
 import { Link } from "wouter";
 
@@ -24,10 +24,37 @@ const POOL_TIER_LABELS: Record<PoolTier, string> = {
 };
 
 const POOL_TIER_STYLES: Record<PoolTier, string> = {
-  core: "bg-secondary/10 text-secondary border-secondary/20 hover:bg-secondary/20 hover:border-secondary/40",
-  inMix: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
+  core: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
+  inMix: "bg-primary/5 text-foreground border-border hover:bg-primary/10 hover:border-primary/30",
   prospect: "bg-muted text-muted-foreground border-border hover:bg-muted/70 hover:border-border",
 };
+
+/** Small tricolor icon shown before a player's name, indicating pool tier. */
+function PoolTierIcon({ tier }: { tier: PoolTier }) {
+  if (tier === "core") {
+    // Crest: red shield with a small navy star cutout — this is the
+    // full-roster tier, so it gets the most "official" mark.
+    return (
+      <span className="relative inline-flex items-center justify-center shrink-0" aria-hidden="true">
+        <Shield size={14} strokeWidth={2.5} className="text-primary fill-primary/25" />
+        <Star size={6} strokeWidth={0} className="absolute text-usmnt-blue fill-usmnt-blue" />
+      </span>
+    );
+  }
+  if (tier === "inMix") {
+    // Same tricolor palette as Core Squad, but no crest — a plain
+    // red/white/navy stripe signals "in the pool" without the badge weight.
+    return (
+      <span
+        className="w-1 h-3 rounded-sm shrink-0 bg-gradient-to-b from-primary via-white to-usmnt-blue"
+        aria-hidden="true"
+      />
+    );
+  }
+  // Prospect: hollow star — "not a full star yet," pairs visually with the
+  // filled star inside the Core Squad crest.
+  return <Star size={12} strokeWidth={2} className="text-amber-500 fill-none shrink-0" aria-hidden="true" />;
+}
 
 function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string[]; onPoolFilterChange: (next: string[]) => void }) {
   return (
@@ -190,9 +217,10 @@ export default function Fixtures() {
                             <Link
                               key={p.id}
                               href={`/players/${p.id}`}
-                              className={`text-xs px-2 py-1 rounded flex items-center gap-1 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
+                              className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
                               title={POOL_TIER_LABELS[p.poolTier]}
                             >
+                              <PoolTierIcon tier={p.poolTier} />
                               {p.name}
                             </Link>
                           ))}
