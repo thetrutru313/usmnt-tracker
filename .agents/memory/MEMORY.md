@@ -1,1 +1,2 @@
 - [USMNT Tracker data model](usmnt-tracker.md) — seeded sports-data app: schema/route/seed conventions and gotchas worth reusing.
+- [API-Football player search quirks](api-football-player-search.md) — search param rejects accents/multi-word names; common surnames need firstname-initial + nationality checks or you'll cache the wrong athlete.

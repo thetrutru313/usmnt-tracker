@@ -8,7 +8,7 @@ const BASE_URL = "https://v3.football.api-sports.io";
 const MIN_REQUEST_INTERVAL_MS = 7000;
 const MAX_RETRIES = 2;
 
-function apiKey(): string {
+export function apiKey(): string {
   const key = process.env["API_FOOTBALL_KEY"];
   if (!key) throw new Error("API_FOOTBALL_KEY is not set");
   return key;
@@ -26,7 +26,7 @@ async function throttle(): Promise<void> {
   lastRequestAt = Date.now();
 }
 
-async function afFetch<T>(path: string, attempt = 0): Promise<T> {
+export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
   await throttle();
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "x-apisports-key": apiKey() },
@@ -109,7 +109,7 @@ function mapStatus(short: string): string {
 // API-Football's search matches on short/informal names, not full official
 // names — "AS Monaco" returns nothing but "Monaco" does. Override the search
 // term for clubs where the official name in our DB doesn't match.
-const SEARCH_TERM_OVERRIDES: Record<string, string> = {
+export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "AS Monaco": "Monaco",
   "FC Barcelona": "Barcelona",
   "Inter Miami CF": "Inter Miami",
@@ -118,6 +118,13 @@ const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Norwich City": "Norwich",
   "Como 1907": "Como",
   "Bayern Munich": "Bayern Munchen",
+  "Charlotte FC": "Charlotte",
+  "San Diego FC": "San Diego",
+  "Parma Calcio 1913": "Parma",
+  // API-Football's search param rejects accented characters outright ("The
+  // Search field may only contain alpha-numeric characters and spaces").
+  "Atlético Madrid": "Atletico Madrid",
+  "Lyngby Boldklub": "Lyngby",
 };
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */

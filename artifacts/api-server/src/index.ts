@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
 import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
+import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
 // intentionally not started — the user upgraded API-Football instead, which
 // is now live. See replit.md and .agents/memory/usmnt-tracker.md.
@@ -37,4 +38,9 @@ app.listen(port, (err) => {
   // API-Football (hourly). Skips itself if API_FOOTBALL_KEY isn't set.
   // National-team fixtures stay seeded/curated.
   startApiFootballSyncSchedule();
+
+  // Keeps each player's club assignment current by checking API-Football's
+  // transfer history daily, instead of relying on one-off manual audits.
+  // Skips itself if API_FOOTBALL_KEY isn't set.
+  startPlayerClubSyncSchedule();
 });

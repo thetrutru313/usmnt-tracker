@@ -10,6 +10,10 @@ export const playersTable = pgTable("players", {
   position: text("position").notNull(),
   category: text("category").notNull(), // current | fringe | prospect
   clubId: integer("club_id").notNull().references(() => clubsTable.id),
+  // Cached API-Football player id (resolved once via player search, then
+  // reused) — lets the club sync look up transfer history without
+  // re-searching by name every run. Null until the sync has resolved it.
+  apiFootballPlayerId: integer("api_football_player_id"),
   photoUrl: text("photo_url"),
   age: integer("age").notNull(),
   contractUntil: date("contract_until", { mode: "string" }),

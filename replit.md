@@ -29,6 +29,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 - Player roster, clubs, fixtures, stats, injuries, and transfers are seeded fabricated data (`scripts/src/seedUsmnt.ts`) — no live API for these yet.
 - News is live: `artifacts/api-server/src/lib/rssIngest.ts` pulls free public RSS feeds (BBC Sport, Google News searches for USMNT/ESPN) on a 15-min schedule, keeps only articles naming a tracked player or the senior men's national team, dedupes by URL, and caps inserts per run at 25 to avoid flooding the feed with noise.
 - Club fixtures are now live via API-Football (`artifacts/api-server/src/lib/apiFootballSync.ts`, hourly sync, started from `index.ts`). National-team fixtures/windows stay curated/seeded (out of scope for the sync, lower churn). A Sportmonks sync also exists (`sportmonksSync.ts`) but is unused/not started — see Gotchas.
+- Player club assignments are kept current automatically via `artifacts/api-server/src/lib/playerClubSync.ts` (daily, started from `index.ts`): resolves each player's API-Football id (via their on-file club's squad list, or a name search fallback), checks their transfer history, and updates `clubId` + inserts a confirmed `transfers` row when they've moved to a club we already track. A move to an untracked club is logged and the last-known club is kept rather than guessing.
 
 ## Product
 
