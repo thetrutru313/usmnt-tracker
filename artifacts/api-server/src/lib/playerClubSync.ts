@@ -208,7 +208,15 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
       const now = Date.now();
       const latest = [...transfers]
         .filter((t) => t.date && new Date(t.date).getTime() <= now)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        .sort((a, b) => {
+          const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          // API-Football sometimes reports the same move twice with the same
+          // date, once with a resolvable team id and once with it null —
+          // prefer the resolvable duplicate so a real move to a club we
+          // already track isn't skipped just because of record ordering.
+          return (a.teams.in.id == null ? 1 : 0) - (b.teams.in.id == null ? 1 : 0);
+        })[0];
       if (!latest) continue;
 
       const currentClub = clubsById.get(player.clubId);

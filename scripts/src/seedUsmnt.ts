@@ -81,6 +81,13 @@ async function main() {
     "Hajduk Split": "https://media.api-sports.io/football/teams/608.png",
     Benfica: "https://media.api-sports.io/football/teams/211.png",
     "Bayer Leverkusen": "https://media.api-sports.io/football/teams/168.png",
+    // Added 2026-07-14 after auditing syncPlayerClubs "not tracked" warnings —
+    // real transfer destinations the live sync kept skipping because the
+    // club wasn't seeded yet (see playerClubSync.ts comment above this list).
+    Lyon: "https://media.api-sports.io/football/teams/80.png",
+    "Lyngby Boldklub": "https://media.api-sports.io/football/teams/625.png",
+    "Real Monarchs": "https://media.api-sports.io/football/teams/4012.png",
+    "Benfica B": "https://media.api-sports.io/football/teams/229.png",
     // Not found in API-Football's DB (too new / too small a league) — logoUrl
     // will fall back to null for clubs whose name isn't a key here. This
     // includes "Bayern Munich II" (Regionalliga Bayern reserve side) — API-
@@ -135,6 +142,12 @@ async function main() {
     { name: "Benfica", league: "Primeira Liga", country: "Portugal" },
     { name: "Bayer Leverkusen", league: "Bundesliga", country: "Germany" },
     { name: "Bayern Munich II", league: "Regionalliga Bayern", country: "Germany" },
+    // Added 2026-07-14: real transfer destinations the live sync flagged as
+    // untracked (see TEAM_LOGOS comment above for the audit context).
+    { name: "Lyon", league: "Ligue 1", country: "France" },
+    { name: "Lyngby Boldklub", league: "Danish Superliga", country: "Denmark" },
+    { name: "Real Monarchs", league: "MLS Next Pro", country: "USA" },
+    { name: "Benfica B", league: "Liga Portugal 2", country: "Portugal" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
