@@ -69,45 +69,52 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
     <Card className="overflow-hidden hover:border-primary/50 transition-colors">
       <div className="flex flex-col md:flex-row">
         {/* Status / Time block */}
-        <div className="md:w-32 bg-muted/30 p-3 md:p-4 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
+        <div className="md:w-32 bg-muted/30 p-2 md:p-3 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
           {fixture.status === "live" ? (
-            <div className="flex flex-col items-center">
-              {showDate && (
-                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
+            showDate ? (
+              <div className="flex items-center justify-between w-full gap-2">
+                <span className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
                   {formatDate(fixture.kickoff)}
                 </span>
-              )}
-              <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-2 py-0.5">
-                LIVE
-              </Badge>
-              <span className="text-xs font-mono font-bold text-destructive mt-1">
-                {fixture.homeScore} - {fixture.awayScore}
-              </span>
-            </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Badge variant="destructive" className="animate-pulse rounded-sm px-1 py-0 text-[9px]">LIVE</Badge>
+                  <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore}-{fixture.awayScore}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-2 py-0.5">LIVE</Badge>
+                <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore} - {fixture.awayScore}</span>
+              </div>
+            )
           ) : fixture.status === "finished" ? (
-            <div className="flex flex-col items-center">
-              {showDate && (
-                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
+            showDate ? (
+              <div className="flex items-center justify-between w-full gap-2">
+                <span className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
                   {formatDate(fixture.kickoff)}
                 </span>
-              )}
-              <span className="text-[10px] text-muted-foreground font-mono uppercase mb-1">FT</span>
-              <span className="text-base md:text-lg font-mono font-bold">
-                {fixture.homeScore} - {fixture.awayScore}
-              </span>
-            </div>
+                <span className="text-xs font-mono font-bold shrink-0">
+                  FT {fixture.homeScore}–{fixture.awayScore}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] text-muted-foreground font-mono uppercase mb-1">FT</span>
+                <span className="text-base md:text-lg font-mono font-bold">{fixture.homeScore} - {fixture.awayScore}</span>
+              </div>
+            )
           ) : fixture.status === "postponed" ? (
             <Badge variant="outline" className="text-[10px] border-destructive text-destructive">
               POSTPONED
             </Badge>
           ) : (
-            <div className="flex flex-col items-center">
+            <div className={`flex w-full ${showDate ? "items-center justify-between gap-2" : "items-center justify-center"}`}>
               {showDate && (
-                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
+                <span className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
                   {formatDate(fixture.kickoff)}
                 </span>
               )}
-              <span className="text-xs md:text-sm text-muted-foreground font-mono">{formatTime(fixture.kickoff)}</span>
+              <span className="text-xs text-muted-foreground font-mono shrink-0">{formatTime(fixture.kickoff)}</span>
             </div>
           )}
         </div>
