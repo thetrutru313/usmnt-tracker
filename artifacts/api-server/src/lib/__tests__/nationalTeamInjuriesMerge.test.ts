@@ -782,3 +782,198 @@ describe("syncPlayerStatsAndInjuries — club-side injury fetch failure", () => 
     expect(countInjuryInserts()).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 7: Match-log sync failure resilience
+//
+// syncClubMatchLogs wraps two API calls in separate try/catch blocks:
+//  a) /fixtures?team= — on failure, returns an empty map immediately (so
+//     the per-player loop in the caller still runs for season stats and
+//     injury episodes).
+//  b) /fixtures/players?fixture= — on failure, `continue`s to the next
+//     fixture so other fixtures in the same club run still produce logs.
+//
+// These tests guard against regressions that make either catch block
+// propagate the error upward (which would abort the entire club entry in the
+// outer try/catch and silence the season-stats + injuries work).
+// ---------------------------------------------------------------------------
+
+/** Count db.insert(tPlayerStats).values() calls since last clearAllMocks(). */
+function countPlayerStatsInserts(): number {
+  let count = 0;
+  for (let i = 0; i < mockDb.insert.mock.calls.length; i++) {
+    const [tableArg] = mockDb.insert.mock.calls[i];
+    if (tableArg !== tPlayerStats) continue;
+    const chain = mockDb.insert.mock.results[i]?.value as { values: ReturnType<typeof vi.fn> } | undefined;
+    if (!chain?.values) continue;
+    count += chain.values.mock.calls.length;
+  }
+  return count;
+}
+
+/** Count db.insert(tMatchLogs).values() calls since last clearAllMocks(). */
+function countMatchLogInserts(): number {
+  let count = 0;
+  for (let i = 0; i < mockDb.insert.mock.calls.length; i++) {
+    const [tableArg] = mockDb.insert.mock.calls[i];
+    if (tableArg !== tMatchLogs) continue;
+    const chain = mockDb.insert.mock.results[i]?.value as { values: ReturnType<typeof vi.fn> } | undefined;
+    if (!chain?.values) continue;
+    count += chain.values.mock.calls.length;
+  }
+  return count;
+}
+
+// Minimal API-Football season-stats response for one player/club/season —
+// enough for aggregateSeasonBlocks to produce a non-null AggregatedSeasonStats
+// and for upsertStatsRow to write a "season" row.
+const SEASON_STATS_API_RESPONSE = [
+  {
+    player: { id: PLAYER_API_ID, birth: { date: "2000-01-01" } },
+    statistics: [
+      {
+        team: { id: TEAM_ID, name: "Test Club FC" },
+        league: { name: "MLS", season: 2026 },
+        games: { minutes: 900, lineups: 10, position: "M", rating: "7.2" },
+        goals: { total: 5, assists: 3, conceded: null, saves: null },
+        shots: { total: 20 },
+        passes: { total: 100, key: 15, accuracy: "80" },
+        tackles: { total: 30, interceptions: 10 },
+        duels: { total: 60, won: 35 },
+      },
+    ],
+  },
+];
+
+// Two finished fixtures for Test Club FC (TEAM_ID). FIXTURE_A appears first,
+// FIXTURE_B second — used in the fixture-players failure test.
+const FIXTURE_A = {
+  fixture: { id: 3001, date: "2026-06-01T15:00:00Z", status: { short: "FT" } },
+  league: { name: "MLS" },
+  teams: { home: { id: TEAM_ID, name: "Test Club FC" }, away: { id: 999, name: "Opponent FC" } },
+  goals: { home: 2, away: 1 },
+};
+const FIXTURE_B = {
+  fixture: { id: 3002, date: "2026-06-08T15:00:00Z", status: { short: "FT" } },
+  league: { name: "MLS" },
+  teams: { home: { id: 999, name: "Opponent FC" }, away: { id: TEAM_ID, name: "Test Club FC" } },
+  goals: { home: 0, away: 3 },
+};
+
+// Fixture-players response for FIXTURE_B — our player played 90 minutes.
+const FIXTURE_B_PLAYERS = [
+  {
+    team: { id: TEAM_ID, name: "Test Club FC" },
+    players: [
+      {
+        player: { id: PLAYER_API_ID, name: "Test Player" },
+        statistics: [{ games: { minutes: 90, rating: "7.5", position: "M" }, goals: { total: 1, assists: 0 } }],
+      },
+    ],
+  },
+];
+
+describe("syncPlayerStatsAndInjuries — match-log sync failure resilience", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveTeamId.mockResolvedValue(TEAM_ID);
+    mockEnsurePlayerApiFootballIds.mockResolvedValue(undefined);
+  });
+
+  it("/fixtures?team= throws → season stats are still written for players at that club", async () => {
+    // syncClubMatchLogs catches the fixtures failure and returns an empty map.
+    // The per-player processing loop in syncPlayerStatsAndInjuries must still
+    // run: season stats (via fetchSeasonStats) must be written even though the
+    // match-log map is empty.
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/fixtures?team=")) throw new Error("Simulated fixtures-list fetch failure");
+      if (path.startsWith("/players?id=")) return SEASON_STATS_API_RESPONSE;
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [];
+      if (path.includes("/injuries?team=")) return [];
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // At least one "season" stats row must have been inserted despite the
+    // fixtures fetch failing — the player loop must not have been skipped.
+    expect(countPlayerStatsInserts()).toBeGreaterThan(0);
+  });
+
+  it("/fixtures?team= throws → injury episodes are still written for players at that club", async () => {
+    // Same fixtures-fetch failure scenario, but this time we verify the injury
+    // path: syncClubInjuries runs after the player loop and must not be
+    // skipped just because match logs came back empty.
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/fixtures?team=")) throw new Error("Simulated fixtures-list fetch failure");
+      if (path.startsWith("/players?id=")) return [];
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [NATIONAL_TEAM_ENTRY];
+      if (path.includes("/injuries?team=")) return [];
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // The national-team injury entry must still have been written as one episode —
+    // the fixtures fetch failure must not have prevented syncClubInjuries from running.
+    expect(countInjuryInserts()).toBe(1);
+  });
+
+  it("/fixtures?team= throws → sync resolves without propagating an exception", async () => {
+    // Confirm the error is fully contained — the outer club loop's try/catch
+    // must not be reached by an exception from syncClubMatchLogs.
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/fixtures?team=")) throw new Error("Simulated fixtures-list fetch failure");
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+  });
+
+  it("/fixtures/players?fixture= throws for one fixture → other fixtures still produce match-log rows", async () => {
+    // FIXTURE_A's players fetch throws; FIXTURE_B's succeeds and has our player.
+    // The `continue` inside the fixture loop must skip only FIXTURE_A, leaving
+    // FIXTURE_B's log to be written normally.
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/fixtures?team=")) return [FIXTURE_A, FIXTURE_B];
+      if (path === `/fixtures/players?fixture=${FIXTURE_A.fixture.id}`) {
+        throw new Error("Simulated fixture-players fetch failure for FIXTURE_A");
+      }
+      if (path === `/fixtures/players?fixture=${FIXTURE_B.fixture.id}`) return FIXTURE_B_PLAYERS;
+      if (path.startsWith("/players?id=")) return [];
+      if (path.includes("/injuries?team=")) return [];
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // FIXTURE_B produced a match log for our player — at least one insert must
+    // have reached the matchLogsTable even though FIXTURE_A's fetch failed.
+    expect(countMatchLogInserts()).toBeGreaterThan(0);
+  });
+
+  it("/fixtures/players?fixture= throws for one fixture → sync resolves without propagating an exception", async () => {
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/fixtures?team=")) return [FIXTURE_A, FIXTURE_B];
+      if (path === `/fixtures/players?fixture=${FIXTURE_A.fixture.id}`) {
+        throw new Error("Simulated fixture-players fetch failure for FIXTURE_A");
+      }
+      if (path === `/fixtures/players?fixture=${FIXTURE_B.fixture.id}`) return FIXTURE_B_PLAYERS;
+      if (path.startsWith("/players?id=")) return [];
+      if (path.includes("/injuries?team=")) return [];
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+  });
+});
