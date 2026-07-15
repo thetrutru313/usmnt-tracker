@@ -373,6 +373,65 @@ describe("syncPlayerStatsAndInjuries — double-sync does not accumulate injury 
     expect(countInjuryInserts()).toBe(1);
   });
 
+  it("season-boundary: 2024 and 2025 both return an entry for the same player + reason, >45 days apart → two separate episodes", async () => {
+    // This is the integration-level guard for the season-boundary regression.
+    // groupInjuryEpisodes has a unit test for this split, but a regression in
+    // the dedup Set or the nationalTeamEntries accumulation loop inside
+    // syncClubInjuries could silently merge the two episodes even if the unit
+    // test still passes.
+    //
+    // seasonYearCandidates() = [2026, 2025, 2024] at test-run time (today = 2026).
+    // We return a "Hamstring Injury" entry from Aug 2024 when season=2024,
+    // and a different "Hamstring Injury" entry from Sep 2025 when season=2025.
+    // The gap (~13 months) is well above the 45-day merge threshold, so
+    // groupInjuryEpisodes must produce exactly 2 episodes and the sync must
+    // write exactly 2 injury rows.
+    setupDbMocks();
+
+    const SEASON_2024_ENTRY: InjuryEntry = makeEntry({
+      playerId: PLAYER_API_ID,
+      fixtureId: 301,
+      fixtureDate: "2024-08-20T15:00:00Z",
+      reason: "Hamstring Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+    const SEASON_2025_ENTRY: InjuryEntry = makeEntry({
+      playerId: PLAYER_API_ID,
+      fixtureId: 302,
+      fixtureDate: "2025-09-10T15:00:00Z",
+      reason: "Hamstring Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) {
+        if (path.includes("&season=2024")) return [SEASON_2024_ENTRY];
+        if (path.includes("&season=2025")) return [SEASON_2025_ENTRY];
+        return []; // season=2026 — no current-season data for this player
+      }
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) return []; // no club-side entries
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    await syncPlayerStatsAndInjuries(0);
+
+    // Two season-boundary episodes: one starting 2024-08-20, one starting 2025-09-10.
+    // They must NOT be merged — the >45-day gap must force two separate inserts.
+    expect(countInjuryInserts()).toBe(2);
+
+    const rows = collectInjuryInsertPayloads();
+    expect(rows).toHaveLength(2);
+    // Each episode covers exactly one missed match.
+    for (const row of rows) {
+      expect(row.matchesMissed).toBe(1);
+    }
+    // Verify start dates to confirm the episodes were not merged.
+    const startDates = rows.map((r) => r.startDate as string).sort();
+    expect(startDates[0]).toBe("2024-08-20");
+    expect(startDates[1]).toBe("2025-09-10");
+  });
+
   it("two distinct fixtures (club + national-team, same reason, ≤ 45 days apart) → merged into one episode", async () => {
     setupDbMocks();
     const CLUB_ENTRY: InjuryEntry = makeEntry({
