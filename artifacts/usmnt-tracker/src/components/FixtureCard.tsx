@@ -72,6 +72,11 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
         <div className="md:w-32 bg-muted/30 p-3 md:p-4 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
           {fixture.status === "live" ? (
             <div className="flex flex-col items-center">
+              {showDate && (
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                  {formatDate(fixture.kickoff)}
+                </span>
+              )}
               <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-2 py-0.5">
                 LIVE
               </Badge>
@@ -81,6 +86,11 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
             </div>
           ) : fixture.status === "finished" ? (
             <div className="flex flex-col items-center">
+              {showDate && (
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                  {formatDate(fixture.kickoff)}
+                </span>
+              )}
               <span className="text-[10px] text-muted-foreground font-mono uppercase mb-1">FT</span>
               <span className="text-base md:text-lg font-mono font-bold">
                 {fixture.homeScore} - {fixture.awayScore}
