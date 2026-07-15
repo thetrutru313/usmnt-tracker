@@ -19,6 +19,7 @@ import type {
   DashboardSummary,
   ErrorResponse,
   Fixture,
+  GetPlayerParams,
   HealthStatus,
   Injury,
   ListFixturesParams,
@@ -224,20 +225,29 @@ export function useListPlayers<TData = Awaited<ReturnType<typeof listPlayers>>, 
 
 
 
-export const getGetPlayerUrl = (id: number,) => {
+export const getGetPlayerUrl = (id: number,
+    params?: GetPlayerParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/players/${id}`
+  return stringifiedParams.length > 0 ? `/api/players/${id}?${stringifiedParams}` : `/api/players/${id}`
 }
 
 /**
  * @summary Get a player's full profile
  */
-export const getPlayer = async (id: number, options?: RequestInit): Promise<PlayerProfile> => {
+export const getPlayer = async (id: number,
+    params?: GetPlayerParams, options?: RequestInit): Promise<PlayerProfile> => {
 
-  return customFetch<PlayerProfile>(getGetPlayerUrl(id),
+  return customFetch<PlayerProfile>(getGetPlayerUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -250,23 +260,25 @@ export const getPlayer = async (id: number, options?: RequestInit): Promise<Play
 
 
 
-export const getGetPlayerQueryKey = (id: number,) => {
+export const getGetPlayerQueryKey = (id: number,
+    params?: GetPlayerParams,) => {
     return [
-    `/api/players/${id}`
+    `/api/players/${id}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetPlayerQueryOptions = <TData = Awaited<ReturnType<typeof getPlayer>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetPlayerQueryOptions = <TData = Awaited<ReturnType<typeof getPlayer>>, TError = ErrorType<ErrorResponse>>(id: number,
+    params?: GetPlayerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetPlayerQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetPlayerQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlayer>>> = ({ signal }) => getPlayer(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlayer>>> = ({ signal }) => getPlayer(id,params, { signal, ...requestOptions });
 
 
 
@@ -284,11 +296,12 @@ export type GetPlayerQueryError = ErrorType<ErrorResponse>
  */
 
 export function useGetPlayer<TData = Awaited<ReturnType<typeof getPlayer>>, TError = ErrorType<ErrorResponse>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number,
+    params?: GetPlayerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetPlayerQueryOptions(id,options)
+  const queryOptions = getGetPlayerQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

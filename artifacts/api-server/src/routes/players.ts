@@ -3,12 +3,15 @@ import {
   ListPlayersQueryParams,
   ListPlayersResponse,
   GetPlayerParams,
+  GetPlayerQueryParams,
   GetPlayerResponse,
 } from "@workspace/api-zod";
 import {
   listPlayers,
   getPlayerById,
   getStatsForPlayer,
+  getClubSeasonStats,
+  getAvailableClubSeasons,
   getMatchLogForPlayer,
   getInjuriesForPlayer,
   getTransfersForPlayer,
@@ -40,12 +43,18 @@ router.get("/players", async (req, res): Promise<void> => {
 });
 
 router.get("/players/:id", async (req, res): Promise<void> => {
-  const parsed = GetPlayerParams.safeParse(req.params);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const parsedParams = GetPlayerParams.safeParse(req.params);
+  const parsedQuery = GetPlayerQueryParams.safeParse(req.query);
+  if (!parsedParams.success) {
+    res.status(400).json({ error: parsedParams.error.message });
     return;
   }
-  const { id } = parsed.data;
+  if (!parsedQuery.success) {
+    res.status(400).json({ error: parsedQuery.error.message });
+    return;
+  }
+  const { id } = parsedParams.data;
+  const { season } = parsedQuery.data;
 
   const player = await getPlayerById(id);
   if (!player) {
@@ -53,10 +62,13 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [seasonStats, last5Stats, previousSeasonStats, matchLog, injuries, transfers] = await Promise.all([
+  const [seasonStats, last5Stats, previousSeasonStats, clubSeasonStats, availableClubSeasons, nationalTeamStats, matchLog, injuries, transfers] = await Promise.all([
     getStatsForPlayer(id, "season"),
     getStatsForPlayer(id, "last5"),
     getStatsForPlayer(id, "previous_season"),
+    getClubSeasonStats(id, season),
+    getAvailableClubSeasons(id),
+    getStatsForPlayer(id, "national_team"),
     getMatchLogForPlayer(id, 10),
     getInjuriesForPlayer(id),
     getTransfersForPlayer(id),
@@ -123,6 +135,9 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     seasonStats: seasonStats ?? emptyStats,
     last5Stats: last5Stats ?? emptyStats,
     previousSeasonStats: previousSeasonStats ?? emptyStats,
+    clubSeasonStats: clubSeasonStats ?? emptyStats,
+    availableClubSeasons,
+    nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: "Current Cycle" },
     matchLog,
     injuries,
     transfers,

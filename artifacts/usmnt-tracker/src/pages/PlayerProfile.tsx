@@ -1,22 +1,33 @@
 import { useGetPlayer } from "@workspace/api-client-react";
 import { useParams } from "wouter";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, TrendingUp, Calendar, Info, Clock, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, TrendingUp, Calendar, Info, Clock, AlertTriangle, Shield } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { formatKickoffMst } from "@/lib/formatMst";
 
+const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
+
+/** "2025" -> "2025/2026" — the season-selector display format the rest of the club-soccer calendar uses. */
+function formatSeasonLabel(season: string): string {
+  const year = parseInt(season, 10);
+  if (Number.isNaN(year)) return season;
+  return `${year}/${year + 1}`;
+}
+
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const playerId = parseInt(id || "0", 10);
-  
+  const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
+
   // The generated hook's `query` option type omits `Partial<>`, so a bare
   // `{ enabled }` object doesn't structurally satisfy it even though the
   // underlying react-query call accepts it fine (queryKey/queryFn are filled
   // in by the generated `getGetPlayerQueryOptions` merge).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: player, isLoading, error } = useGetPlayer(playerId, {
+  const { data: player, isLoading, error } = useGetPlayer(playerId, selectedSeason ? { season: selectedSeason } : undefined, {
     query: { enabled: !!playerId } as any
   });
 
@@ -114,36 +125,88 @@ export default function PlayerProfile() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-6 lg:col-span-2">
-          {/* Season Stats */}
+          {/* Club Season Stats */}
           <Card>
             <CardHeader className="pb-4 border-b">
               <CardTitle className="text-lg uppercase tracking-tight flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Activity size={18} className="text-primary" />
-                  Season Performance
+                  Club Season
                 </div>
-                <span className="text-sm font-mono text-muted-foreground">{player.seasonStats.season}</span>
+                {player.availableClubSeasons.length > 0 ? (
+                  <select
+                    value={player.clubSeasonStats.season}
+                    onChange={(e) => setSelectedSeason(e.target.value)}
+                    className="text-sm font-mono text-muted-foreground bg-background border border-border rounded px-2 py-1 cursor-pointer hover:text-foreground transition-colors"
+                    aria-label="Select season"
+                  >
+                    {player.availableClubSeasons.map(season => (
+                      <option key={season} value={season}>{formatSeasonLabel(season)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm font-mono text-muted-foreground">N/A</span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
                 <div className="p-4 flex flex-col justify-center items-center text-center">
                   <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Minutes / Starts</span>
-                  <span className="text-xl font-bold data-value">{player.seasonStats.minutes} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.starts}</span></span>
+                  <span className="text-xl font-bold data-value">{player.clubSeasonStats.minutes} <span className="text-sm text-muted-foreground font-normal">/ {player.clubSeasonStats.starts}</span></span>
                 </div>
                 <div className="p-4 flex flex-col justify-center items-center text-center">
                   <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Goals / Assists</span>
-                  <span className="text-xl font-bold data-value">{player.seasonStats.goals} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.assists}</span></span>
+                  <span className="text-xl font-bold data-value">{player.clubSeasonStats.goals} <span className="text-sm text-muted-foreground font-normal">/ {player.clubSeasonStats.assists}</span></span>
                 </div>
                 <div className="p-4 flex flex-col justify-center items-center text-center">
                   <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Avg Rating</span>
-                  <span className="text-xl font-bold data-value text-secondary">{player.seasonStats.avgRating != null ? player.seasonStats.avgRating.toFixed(2) : '–'}</span>
+                  <span className="text-xl font-bold data-value text-secondary">{player.clubSeasonStats.avgRating != null ? player.clubSeasonStats.avgRating.toFixed(2) : '–'}</span>
                 </div>
                 <div className="p-4 flex flex-col justify-center items-center text-center">
                   <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Shots / Key Passes</span>
-                  <span className="text-xl font-bold data-value">{player.seasonStats.shots} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.keyPasses}</span></span>
+                  <span className="text-xl font-bold data-value">{player.clubSeasonStats.shots} <span className="text-sm text-muted-foreground font-normal">/ {player.clubSeasonStats.keyPasses}</span></span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* USMNT Cycle Stats */}
+          <Card>
+            <CardHeader className="pb-4 border-b">
+              <CardTitle className="text-lg uppercase tracking-tight flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src={USMNT_CREST_URL} alt="" aria-hidden="true" className="w-[18px] h-[18px] object-contain" />
+                  USMNT Cycle
+                </div>
+                <span className="text-sm font-mono text-muted-foreground">World Cup 2026</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {player.nationalTeamStats.minutes > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
+                  <div className="p-4 flex flex-col justify-center items-center text-center">
+                    <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Minutes / Starts</span>
+                    <span className="text-xl font-bold data-value">{player.nationalTeamStats.minutes} <span className="text-sm text-muted-foreground font-normal">/ {player.nationalTeamStats.starts}</span></span>
+                  </div>
+                  <div className="p-4 flex flex-col justify-center items-center text-center">
+                    <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Goals / Assists</span>
+                    <span className="text-xl font-bold data-value">{player.nationalTeamStats.goals} <span className="text-sm text-muted-foreground font-normal">/ {player.nationalTeamStats.assists}</span></span>
+                  </div>
+                  <div className="p-4 flex flex-col justify-center items-center text-center">
+                    <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Avg Rating</span>
+                    <span className="text-xl font-bold data-value text-secondary">{player.nationalTeamStats.avgRating != null ? player.nationalTeamStats.avgRating.toFixed(2) : '–'}</span>
+                  </div>
+                  <div className="p-4 flex flex-col justify-center items-center text-center">
+                    <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Caps this cycle</span>
+                    <span className="text-xl font-bold data-value">{player.nationalTeamStats.starts}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  No USMNT appearances synced for this cycle yet.
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -157,6 +220,7 @@ export default function PlayerProfile() {
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-border text-xs uppercase font-mono text-muted-foreground tracking-wider">
+                      <th className="pb-2 font-medium"></th>
                       <th className="pb-2 font-medium">Date</th>
                       <th className="pb-2 font-medium">Opponent</th>
                       <th className="pb-2 font-medium">Comp</th>
@@ -168,6 +232,15 @@ export default function PlayerProfile() {
                   <tbody className="divide-y divide-border">
                     {player.matchLog.slice(0, 5).map(match => (
                       <tr key={match.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="py-3 pr-2">
+                          {match.isNationalTeam ? (
+                            <img src={USMNT_CREST_URL} alt="USMNT" title="USMNT" className="w-5 h-5 object-contain" />
+                          ) : player.clubLogoUrl ? (
+                            <img src={player.clubLogoUrl} alt={player.clubName} title={player.clubName} className="w-5 h-5 object-contain" />
+                          ) : (
+                            <Shield size={16} className="text-muted-foreground" />
+                          )}
+                        </td>
                         <td className="py-3 text-muted-foreground font-mono">{format(new Date(match.date), "MMM d")}</td>
                         <td className="py-3 font-medium flex items-center gap-2">
                           <span className={match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}>{match.result}</span>

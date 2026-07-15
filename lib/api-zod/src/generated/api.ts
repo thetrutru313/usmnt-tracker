@@ -55,6 +55,10 @@ export const GetPlayerParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const GetPlayerQueryParams = zod.object({
+  "season": zod.coerce.string().optional().describe('Season year (e.g. \"2025\") to show club-season stats for. Defaults to the most recent season with synced data.')
+})
+
 export const GetPlayerResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -125,6 +129,39 @@ export const GetPlayerResponse = zod.object({
   "savePct": zod.number().nullable(),
   "avgRating": zod.number().nullable()
 }),
+  "clubSeasonStats": zod.object({
+  "season": zod.string(),
+  "minutes": zod.number(),
+  "starts": zod.number(),
+  "goals": zod.number(),
+  "assists": zod.number(),
+  "shots": zod.number(),
+  "keyPasses": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
+  "tackles": zod.number(),
+  "interceptions": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
+  "savePct": zod.number().nullable(),
+  "avgRating": zod.number().nullable()
+}),
+  "availableClubSeasons": zod.array(zod.string()),
+  "nationalTeamStats": zod.object({
+  "season": zod.string(),
+  "minutes": zod.number(),
+  "starts": zod.number(),
+  "goals": zod.number(),
+  "assists": zod.number(),
+  "shots": zod.number(),
+  "keyPasses": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
+  "tackles": zod.number(),
+  "interceptions": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
+  "savePct": zod.number().nullable(),
+  "avgRating": zod.number().nullable()
+}),
   "matchLog": zod.array(zod.object({
   "id": zod.number(),
   "date": zod.coerce.date(),
@@ -134,7 +171,8 @@ export const GetPlayerResponse = zod.object({
   "minutes": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "rating": zod.number().nullable()
+  "rating": zod.number().nullable(),
+  "isNationalTeam": zod.boolean()
 })),
   "injuries": zod.array(zod.object({
   "id": zod.number(),

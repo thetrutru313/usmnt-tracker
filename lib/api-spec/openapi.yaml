@@ -83,6 +83,12 @@ paths:
           required: true
           schema:
             type: integer
+        - name: season
+          in: query
+          required: false
+          description: Season year (e.g. "2025") to show club-season stats for. Defaults to the most recent season with synced data.
+          schema:
+            type: string
       responses:
         "200":
           description: Player profile
@@ -362,7 +368,7 @@ components:
 
     MatchLog:
       type: object
-      required: [id, date, opponent, competition, result, minutes, goals, assists, rating]
+      required: [id, date, opponent, competition, result, minutes, goals, assists, rating, isNationalTeam]
       properties:
         id: { type: integer }
         date: { type: string, format: date }
@@ -374,6 +380,9 @@ components:
         assists: { type: integer }
         # Nullable: API-Football sometimes has no rating for a very brief cameo.
         rating: { type: ["number", "null"] }
+        # True for a USMNT national-team appearance, false for a club match —
+        # used to pick which crest (club logo vs. USMNT crest) a row renders with.
+        isNationalTeam: { type: boolean }
 
     PlayerInjurySummary:
       type: object
@@ -433,6 +442,9 @@ components:
         - seasonStats
         - last5Stats
         - previousSeasonStats
+        - clubSeasonStats
+        - availableClubSeasons
+        - nationalTeamStats
         - matchLog
         - injuries
         - transfers
@@ -467,6 +479,22 @@ components:
         last5Stats:
           $ref: "#/components/schemas/PlayerStats"
         previousSeasonStats:
+          $ref: "#/components/schemas/PlayerStats"
+        # Club-season stats for the selected `season` query param, or the
+        # most recent season with data if none was given. Distinct from
+        # `seasonStats`/`previousSeasonStats` (which always reflect the
+        # latest two seasons) — this backs the season-year selector.
+        clubSeasonStats:
+          $ref: "#/components/schemas/PlayerStats"
+        # Every season year this player has club stats for, most recent
+        # first (e.g. ["2026", "2025", "2024"]) — populates the selector.
+        availableClubSeasons:
+          type: array
+          items: { type: string }
+        # USMNT national-team stats aggregated from this player's synced
+        # national-team match logs (current cycle). Zero/null fields when
+        # the player has no USMNT appearances synced this cycle.
+        nationalTeamStats:
           $ref: "#/components/schemas/PlayerStats"
         matchLog:
           type: array

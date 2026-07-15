@@ -104,7 +104,7 @@ export async function getPlayerById(id: number) {
   return row;
 }
 
-export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season") {
+export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "national_team") {
   const [row] = await db
     .select()
     .from(playerStatsTable)
@@ -112,6 +112,41 @@ export async function getStatsForPlayer(playerId: number, periodType: "season" |
     .orderBy(desc(playerStatsTable.createdAt))
     .limit(1);
   return row;
+}
+
+/** Every season year (e.g. "2025", "2026") this player has real club-season stats for, most recent first — powers the club-season selector on the player profile. */
+export async function getAvailableClubSeasons(playerId: number) {
+  const rows = await db
+    .select({ season: playerStatsTable.season })
+    .from(playerStatsTable)
+    .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all")))
+    .orderBy(desc(playerStatsTable.season));
+  return rows.map((r) => r.season);
+}
+
+/**
+ * Club-season stats for a specific season year if given (and it exists),
+ * otherwise the most recent season with data. Falls back to the plain
+ * "season" row (kept for rankings/dashboard compatibility) if no
+ * "season_all" history rows exist yet for this player.
+ */
+export async function getClubSeasonStats(playerId: number, season?: string) {
+  if (season) {
+    const [row] = await db
+      .select()
+      .from(playerStatsTable)
+      .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, season)))
+      .limit(1);
+    if (row) return row;
+  }
+  const [latest] = await db
+    .select()
+    .from(playerStatsTable)
+    .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all")))
+    .orderBy(desc(playerStatsTable.season))
+    .limit(1);
+  if (latest) return latest;
+  return getStatsForPlayer(playerId, "season");
 }
 
 export async function getMatchLogForPlayer(playerId: number, limit = 10) {

@@ -117,6 +117,7 @@ export interface MatchLog {
   assists: number;
   /** @nullable */
   rating: number | null;
+  isNationalTeam: boolean;
 }
 
 export interface PlayerInjurySummary {
@@ -267,6 +268,9 @@ export interface PlayerProfile {
   seasonStats: PlayerStats;
   last5Stats: PlayerStats;
   previousSeasonStats: PlayerStats;
+  clubSeasonStats: PlayerStats;
+  availableClubSeasons: string[];
+  nationalTeamStats: PlayerStats;
   matchLog: MatchLog[];
   injuries: PlayerInjurySummary[];
   transfers: PlayerTransferSummary[];
@@ -373,6 +377,13 @@ export type ListPlayersParams = {
 category?: PlayerCategory;
 position?: string;
 search?: string;
+};
+
+export type GetPlayerParams = {
+/**
+ * Season year (e.g. "2025") to show club-season stats for. Defaults to the most recent season with synced data.
+ */
+season?: string;
 };
 
 export type ListFixturesParams = {

@@ -48,7 +48,7 @@ export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
 }
 
 interface AfTeamSearchResult {
-  team: { id: number; name: string; logo: string | null };
+  team: { id: number; name: string; logo: string | null; national?: boolean };
 }
 
 interface AfFixture {
@@ -127,6 +127,33 @@ export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Atlético Madrid": "Atletico Madrid",
   "Lyngby Boldklub": "Lyngby",
 };
+
+let usmntTeamId: number | null = null;
+
+/**
+ * Finds (and caches in-memory) the USMNT senior men's national team's
+ * API-Football team id. Searches for "USA" and takes the result flagged
+ * `national: true` — API-Football represents national teams as regular
+ * teams, and a plain name search also returns MLS clubs and USMNT youth/
+ * women's sides, so the `national` flag is the only reliable way to pick
+ * the senior men's side out of that list.
+ */
+export async function resolveUsmntTeamId(): Promise<number | null> {
+  if (usmntTeamId) return usmntTeamId;
+  try {
+    const results = await afFetch<AfTeamSearchResult[]>(`/teams?search=USA`);
+    const match = results.find((r) => r.team.national === true && r.team.name === "USA");
+    if (!match) {
+      logger.warn("API-Football team search found no senior USMNT national team match");
+      return null;
+    }
+    usmntTeamId = match.team.id;
+    return usmntTeamId;
+  } catch (err) {
+    logger.warn({ err }, "API-Football USMNT team search failed");
+    return null;
+  }
+}
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */
 export async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId: number | null }): Promise<number | null> {

@@ -61,6 +61,22 @@ Player stats, match logs, and injuries must reflect only real, currently-fetchab
 
 **How to apply:** any per-entity sync loop (by player, by club, by stat-period) must clear that entity's existing rows unconditionally, before branching on whether fresh data was actually fetched — including on early-return paths (failed lookups, unresolved external ids, empty API responses). Insert-if-fresh must never be allowed to skip the clear step.
 
+## Per-player stats table: delete scope must match the row's uniqueness key
+
+`player_stats` rows are unique per `(playerId, periodType)` for the single-row period types (`season`, `previous_season`, `last5`, `national_team`) — the `season` *column* on those rows is just a display label, not part of the key, and it can change value between runs (e.g. the year rolls over). A history-style period type (`season_all`) is the exception: one row per `(playerId, periodType, season)`, replaced as a full set each run.
+
+**Why:** scoping a single-row period's delete-before-insert by `(playerId, periodType, season)` instead of just `(playerId, periodType)` silently leaves the previous run's row behind as a stale duplicate the moment the season label changes — easy to introduce by copy-pasting the history-style delete logic onto the single-row upsert helper.
+
+**How to apply:** before changing the delete/upsert helper for any `player_stats` period type, check whether that periodType is single-row-per-player or a real history — only history types should filter their delete by `season`.
+
+## orval codegen: path+query param name collision
+
+The first OpenAPI operation with both a path param and a query param triggers an orval bug: `generated/types/<operationId>Params.ts` (the plain-TS mirror, not the zod file) gets generated under the *path*-param's name but contains the *query*-param shape, colliding with the correctly-named zod-file export of the same name when both are re-exported from `lib/api-zod/src/index.ts`.
+
+**Why:** produces a confusing `TS2308: Module has already exported a member named 'X'` pointing at `generated/api`, when the real duplicate is in `generated/types`.
+
+**How to apply:** since app code only ever imports the zod objects (never the plain-TS mirrors) from `@workspace/api-zod`, the fix is to stop re-exporting `./generated/types` from `lib/api-zod/src/index.ts` (keep only `./generated/api`) — cheaper than fighting orval config. Re-verify no consumer imports plain types before doing this on a fresh occurrence.
+
 ## Player-pool completeness audits
 
 When asked to audit the Player Pool for missing eligible players, the durable criteria are: (1) ≥1 senior cap, (2) any youth national team (U-15–U-23) appearance, (3) US-eligible, under-20, and a current club starter. Cross-reference against the real official World Cup/senior roster plus a reputable U-21 prospects ranking (e.g. ESPN) rather than trying to enumerate the whole real-world pool from scratch — bounds the work while staying evidence-based. Always resolve real API-Football team IDs/logos for any new club before writing seed rows (some very new/small clubs, e.g. a 2025 MLS expansion side, genuinely aren't in API-Football's DB — leave `logoUrl` null rather than guessing).

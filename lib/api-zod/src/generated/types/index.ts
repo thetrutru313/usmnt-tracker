@@ -13,6 +13,7 @@ export * from './featuredPlayer';
 export * from './fixture';
 export * from './fixtureFeaturedPlayer';
 export * from './fixtureStatus';
+export * from './getPlayerParams';
 export * from './healthStatus';
 export * from './injury';
 export * from './injuryStatus';

@@ -17,4 +17,5 @@ export interface MatchLog {
   assists: number;
   /** @nullable */
   rating: number | null;
+  isNationalTeam: boolean;
 }

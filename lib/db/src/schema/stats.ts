@@ -1,9 +1,12 @@
-import { doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { playersTable } from "./players";
 
-// One row per player per (season, periodType). periodType: "season" | "last5" | "previous_season"
+// One row per player per (season, periodType). periodType: "season" | "last5" |
+// "previous_season" | "season_all" (one row per historical season year, used
+// to power a club-season selector — see playerStatsSync.ts) | "national_team"
+// (aggregated from this player's synced USMNT match logs, current cycle).
 //
 // All fields here are sourced from API-Football's live sync (see
 // playerStatsSync.ts) — nothing is fabricated. API-Football does not report
@@ -61,6 +64,11 @@ export const matchLogsTable = pgTable("match_logs", {
   conceded: integer("conceded"),
   // Nullable: API-Football sometimes has no rating for a very brief cameo.
   rating: doublePrecision("rating"),
+  // True for a USMNT national-team appearance (World Cup qualifiers, Nations
+  // League, friendlies), false for a club match. Lets one merged, date-sorted
+  // match history distinguish which crest/context each row belongs to
+  // without guessing from the competition name text.
+  isNationalTeam: boolean("is_national_team").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
