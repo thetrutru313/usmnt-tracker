@@ -562,3 +562,53 @@ describe("mid-season transfer — computeCallUpScore differs meaningfully by min
     expect(score).toBe(29);
   });
 });
+
+// ---------------------------------------------------------------------------
+// performanceTrend reset — score must move in lockstep with the trend badge
+//
+// When a player's form badge resets from "on_fire" to "steady" (e.g. after a
+// transfer with no new-club match logs yet), computeCallUpScore must reflect
+// the steady (+0) bonus immediately — it must not carry forward the on_fire
+// (+20) inflation from the previous compute cycle.
+//
+// Baseline (neutral player, seasonMinutes=1350 → fraction=0.5 → 0 pts):
+//   on_fire  → 40 + 20 = 60
+//   steady   → 40 +  0 = 40   (20 points lower — the full +20 bonus is gone)
+//   ice_cold → 40 − 18 = 22   (18 points lower than steady; 38 lower than on_fire)
+// ---------------------------------------------------------------------------
+describe("computeCallUpScore — trend reset resets the score in lockstep", () => {
+  it("on_fire trend produces a score of 60 (base 40 + form bonus 20)", () => {
+    // All other signals held neutral so the form bonus is the only variable.
+    const score = computeCallUpScore(neutralPlayer(), "on_fire", 1350, null, false);
+    expect(score).toBe(60);
+  });
+
+  it("steady trend produces a score of 40 — exactly 20 lower than on_fire", () => {
+    // Resetting performanceTrend from on_fire to steady must drop the score by
+    // the full +20 on_fire bonus; the score must not stay inflated at 60.
+    const onFireScore = computeCallUpScore(neutralPlayer(), "on_fire", 1350, null, false)!;
+    const steadyScore = computeCallUpScore(neutralPlayer(), "steady", 1350, null, false)!;
+    expect(steadyScore).toBe(40);
+    expect(onFireScore - steadyScore).toBe(20);
+  });
+
+  it("ice_cold trend produces a score of 22 — exactly 18 lower than steady", () => {
+    // After a further drop (e.g. continued poor form), the score must reflect
+    // the ice_cold penalty (−18) relative to the neutral steady baseline.
+    const steadyScore = computeCallUpScore(neutralPlayer(), "steady", 1350, null, false)!;
+    const iceColdScore = computeCallUpScore(neutralPlayer(), "ice_cold", 1350, null, false)!;
+    expect(iceColdScore).toBe(22);
+    expect(steadyScore - iceColdScore).toBe(18);
+  });
+
+  it("score progression across all five tiers is strictly monotonic", () => {
+    // Each tier must score strictly more than the next lower tier, with no ties,
+    // so a trend change always produces a visible score change in the UI.
+    const scores = ["on_fire", "rising", "steady", "falling", "ice_cold"].map(
+      (trend) => computeCallUpScore(neutralPlayer(), trend, 1350, null, false)!,
+    );
+    for (let i = 0; i < scores.length - 1; i++) {
+      expect(scores[i]).toBeGreaterThan(scores[i + 1]);
+    }
+  });
+});
