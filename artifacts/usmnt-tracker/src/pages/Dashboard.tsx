@@ -84,10 +84,10 @@ export default function Dashboard() {
                       {STATUS_LABELS[nextEvent.status]}
                     </span>
                   </div>
-                  <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
+                  <h1 className="text-2xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
                     {nextEvent.name}
                   </h1>
-                  <p className="text-muted-foreground max-w-xl text-lg">
+                  <p className="text-muted-foreground max-w-xl text-sm md:text-lg">
                     {nextEvent.description}
                   </p>
                 </div>
