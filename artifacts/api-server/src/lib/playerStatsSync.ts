@@ -13,7 +13,7 @@ import { ensurePlayerApiFootballIds } from "./playerClubSync";
 // ---------------------------------------------------------------------------
 
 type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
-type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null };
+type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number };
 
 // --- API-Football response shapes (only the fields we use) ---------------
 
@@ -469,7 +469,7 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<P
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
   const players: PlayerRow[] = await db
-    .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId })
+    .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId, age: playersTable.age })
     .from(playersTable);
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
 

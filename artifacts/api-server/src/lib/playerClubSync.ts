@@ -14,7 +14,7 @@ interface AfSquadResponse {
 }
 
 interface AfPlayerProfile {
-  player: { id: number; name: string; firstname: string; lastname: string; nationality: string };
+  player: { id: number; name: string; firstname: string; lastname: string; nationality: string; birth: { date: string | null } };
 }
 
 interface AfTransfer {
@@ -33,7 +33,7 @@ interface AfTransfersResponse {
 }
 
 type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
-type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null };
+type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number };
 
 /**
  * Manually-verified API-Football player ids, kept as a pinned fast-path for
@@ -60,14 +60,27 @@ export const KNOWN_PLAYER_IDS: Record<string, number> = {
   "Paxten Aaronson": 265884,
   "Tanner Tessmann": 80752,
   "Alejandro Zendejas": 35885,
+  // Verified 2026-07-15 against /players/squads?team=1599 (Philadelphia
+  // Union's current squad) after `resolvePlayerIdBySearch` mismatched him to
+  // id 427770 — "Cori Michelle Sullivan," an unrelated USWNT player who also
+  // indexes as "C. Sullivan" (same surname + first initial + USA
+  // nationality, which is all the search fallback checked). That wrong id
+  // was surfacing as his photo showing a different, unrelated person.
+  "Cavan Sullivan": 462853,
 };
 
-/** Applies `KNOWN_PLAYER_IDS` to any unresolved player rows before other resolution steps run. */
+/**
+ * Applies `KNOWN_PLAYER_IDS` to player rows before other resolution steps
+ * run. Enforces the pinned id even when a row already has a *different*
+ * `apiFootballPlayerId` set — some of these entries exist specifically to
+ * correct a previously-resolved wrong id (e.g. Cavan Sullivan was
+ * auto-matched to an unrelated player), so leaving already-set ids alone
+ * would never actually fix them.
+ */
 async function applyKnownPlayerIdOverrides(players: PlayerRow[]): Promise<void> {
   for (const player of players) {
-    if (player.apiFootballPlayerId) continue;
     const known = KNOWN_PLAYER_IDS[player.name];
-    if (!known) continue;
+    if (!known || player.apiFootballPlayerId === known) continue;
     await db.update(playersTable).set({ apiFootballPlayerId: known }).where(eq(playersTable.id, player.id));
     player.apiFootballPlayerId = known;
   }
@@ -152,8 +165,26 @@ async function resolvePlayerIdsViaSquads(players: PlayerRow[], clubsById: Map<nu
  * would silently misattribute that player's future transfers, which is worse
  * than leaving the club unresolved for one run, so any remaining ambiguity
  * is left unresolved rather than guessed at.
+ *
+ * Surname + first-initial + USA-nationality still isn't always enough,
+ * though: our "Cavan Sullivan" (a teenage MLS prospect) was once matched to
+ * id 427770, "Cori Michelle Sullivan" — an unrelated USWNT player who also
+ * indexes as "C. Sullivan" and is USA-nationality. Neither of those checks
+ * catches a same-initial, same-surname person who is an entirely different
+ * age (and gender). When our on-file `age` is known, candidates whose
+ * API-Football birth date implies an age more than 6 years off are dropped
+ * before the initial/nationality tie-break runs, so this class of mismatch
+ * fails safe (unresolved) rather than confidently picking the wrong person.
  */
-async function resolvePlayerIdBySearch(player: { id: number; name: string }): Promise<number | null> {
+function ageFromBirthDate(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const birth = new Date(dateStr);
+  if (Number.isNaN(birth.getTime())) return null;
+  const ageMs = Date.now() - birth.getTime();
+  return Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+async function resolvePlayerIdBySearch(player: { id: number; name: string; age?: number }): Promise<number | null> {
   const normalized = normalizeName(player.name).split(" ");
   const surname = normalized.at(-1);
   const firstInitial = normalized[0]?.[0];
@@ -167,8 +198,22 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string }): Pr
         .filter(Boolean)
         .includes(surname);
     const isInitialMatch = (r: AfPlayerProfile) => normalizeName(r.player.firstname ?? "")[0] === firstInitial;
+    const isAgeConsistent = (r: AfPlayerProfile) => {
+      if (player.age == null) return true; // no on-file age to check against — don't reject on this alone
+      const candidateAge = ageFromBirthDate(r.player.birth?.date);
+      if (candidateAge == null) return true; // API-Football didn't report a birth date — can't check, don't reject
+      return Math.abs(candidateAge - player.age) <= 6;
+    };
 
-    const surnameCandidates = results.filter(isSurnameMatch);
+    const rejectedForAge = results.filter((r) => isSurnameMatch(r) && !isAgeConsistent(r));
+    if (rejectedForAge.length > 0) {
+      logger.info(
+        { player: player.name, onFileAge: player.age, rejected: rejectedForAge.map((r) => ({ id: r.player.id, name: r.player.name, birth: r.player.birth?.date })) },
+        "Rejected surname-matching candidate(s) whose age is inconsistent with our on-file player",
+      );
+    }
+
+    const surnameCandidates = results.filter((r) => isSurnameMatch(r) && isAgeConsistent(r));
 
     // Strongest signal: surname match plus a matching first-name initial,
     // preferring USA nationality to break ties on common surnames.
@@ -257,6 +302,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
       name: playersTable.name,
       clubId: playersTable.clubId,
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
+      age: playersTable.age,
     })
     .from(playersTable);
   const clubs: ClubRow[] = await db
