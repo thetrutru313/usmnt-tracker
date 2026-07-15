@@ -251,7 +251,7 @@ export default function PlayerProfile() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="w-full text-xs sm:text-sm text-left">
                   <thead>
                     <tr className="border-b border-border text-xs uppercase font-mono text-muted-foreground tracking-wider">
                       <th className="pb-2 font-medium hidden sm:table-cell"></th>
@@ -278,7 +278,7 @@ export default function PlayerProfile() {
                             <Shield size={16} className="text-muted-foreground" />
                           )}
                         </td>
-                        <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">{format(new Date(match.date), "MMM d")}</td>
+                        <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">{format(new Date(match.date), "M/d")}</td>
                         <td className="py-2 font-medium">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
