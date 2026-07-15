@@ -176,7 +176,7 @@ async function resolvePlayerIdsViaSquads(players: PlayerRow[], clubsById: Map<nu
  * before the initial/nationality tie-break runs, so this class of mismatch
  * fails safe (unresolved) rather than confidently picking the wrong person.
  */
-function ageFromBirthDate(dateStr: string | null | undefined): number | null {
+export function ageFromBirthDate(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
   const birth = new Date(dateStr);
   if (Number.isNaN(birth.getTime())) return null;

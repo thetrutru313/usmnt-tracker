@@ -2,7 +2,7 @@ import { db, clubsTable, playersTable, playerStatsTable, matchLogsTable, injurie
 import { eq, and, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveTeamId, FINISHED_STATUSES } from "./apiFootballSync";
-import { ensurePlayerApiFootballIds } from "./playerClubSync";
+import { ensurePlayerApiFootballIds, ageFromBirthDate } from "./playerClubSync";
 
 // ---------------------------------------------------------------------------
 // This module replaces the old seed's fabricated player_stats/match_logs/
@@ -46,8 +46,20 @@ interface AfSeasonStatBlock {
 }
 
 interface AfPlayerSeasonResponse {
-  player: { id: number };
+  player: { id: number; birth: { date: string | null } };
   statistics: AfSeasonStatBlock[];
+}
+
+// API-Football reports one statistics block per competition/team a player
+// appeared for in a given season — this includes preseason exhibition
+// friendlies ("Friendlies Clubs") and, for internationals, their national
+// team's own friendlies under a completely different `team`. Neither
+// belongs in "club season" totals: friendlies aren't official competitive
+// stats, and national-team appearances are tracked separately (see
+// usmntSync.ts) and would otherwise double up here under the wrong label.
+const FRIENDLY_LEAGUE_PATTERN = /friendl/i;
+function isFriendlyLeague(leagueName: string): boolean {
+  return FRIENDLY_LEAGUE_PATTERN.test(leagueName);
 }
 
 interface AfInjuryEntry {
@@ -205,7 +217,16 @@ export interface AggregatedSeasonStats {
   avgRating: number | null;
 }
 
-function aggregateSeasonBlocks(blocks: AfSeasonStatBlock[]): AggregatedSeasonStats | null {
+/**
+ * Aggregates a player's season statistics blocks into club-season totals,
+ * scoped to their actual club: blocks for friendly/exhibition competitions
+ * (preseason "Friendlies Clubs", national-team "Friendlies") are dropped,
+ * and — as a second, independent safeguard — any block whose `team` isn't
+ * the player's on-file club is dropped too, so a national-team appearance
+ * can never contribute to a "club season" row regardless of league name.
+ */
+function aggregateSeasonBlocks(allBlocks: AfSeasonStatBlock[], clubTeamId: number | null): AggregatedSeasonStats | null {
+  const blocks = allBlocks.filter((b) => !isFriendlyLeague(b.league.name) && (clubTeamId == null || b.team.id === clubTeamId));
   if (blocks.length === 0) return null;
 
   let minutes = 0;
@@ -272,13 +293,14 @@ function aggregateSeasonBlocks(blocks: AfSeasonStatBlock[]): AggregatedSeasonSta
   };
 }
 
-async function fetchSeasonStats(apiFootballPlayerId: number, season: number): Promise<AfSeasonStatBlock[]> {
+/** Also returns the player's birth date from the same response — no extra API call needed to keep `age` live (see `syncPlayerStatsAndInjuries`). */
+async function fetchSeasonStats(apiFootballPlayerId: number, season: number): Promise<{ statistics: AfSeasonStatBlock[]; birthDate: string | null }> {
   try {
     const [data] = await afFetch<AfPlayerSeasonResponse[]>(`/players?id=${apiFootballPlayerId}&season=${season}`);
-    return data?.statistics ?? [];
+    return { statistics: data?.statistics ?? [], birthDate: data?.player.birth.date ?? null };
   } catch (err) {
     logger.warn({ err, apiFootballPlayerId, season }, "API-Football player season-stats fetch failed");
-    return [];
+    return { statistics: [], birthDate: null };
   }
 }
 
@@ -544,11 +566,22 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<P
         // for why). Whichever candidates actually returned real data, the
         // most recent becomes "season" and the next-most-recent "previous_season".
         const seasonYears = seasonYearCandidates();
+        const clubTeamId = await resolveTeamId(club);
         const blocksByYear = await Promise.all(seasonYears.map((y) => fetchSeasonStats(player.apiFootballPlayerId!, y)));
         const withData = seasonYears
-          .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i]) }))
+          .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, clubTeamId) }))
           .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
           .sort((a, b) => b.year - a.year);
+
+        // Keep `age` live from the same responses (no extra API call) —
+        // seed data otherwise freezes a player's age at whatever it was when
+        // added and it silently drifts stale as real birthdays pass.
+        const birthDate = blocksByYear.map((b) => b.birthDate).find((d): d is string => d != null) ?? null;
+        const liveAge = ageFromBirthDate(birthDate);
+        if (liveAge != null && liveAge !== player.age) {
+          await db.update(playersTable).set({ age: liveAge }).where(eq(playersTable.id, player.id));
+          player.age = liveAge;
+        }
 
         const [current, previous] = withData;
         if (current) {

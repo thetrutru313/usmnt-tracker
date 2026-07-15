@@ -47,6 +47,22 @@ export function cycleForDate(dateStr: string): string {
   return `${last.year + Math.max(yearsAhead, 4)} World Cup`;
 }
 
+// Cycle totals need every finished fixture within the current World Cup
+// cycle, not just a handful of recent ones — the "2026 World Cup" cycle
+// alone (started December 2022) has already produced 60 finished USMNT
+// fixtures. A small window silently undercounts caps/goals/minutes for any
+// player who has played more than that window's worth of matches. This is
+// only used for the expensive per-fixture crawl (triggered rarely, when a
+// new match is detected), not the cheap polling check below. 99 is
+// API-Football's hard ceiling for the `last` fixtures param (100+ is
+// rejected outright), and comfortably covers the current cycle's 60 games.
+const CYCLE_TOTAL_FIXTURES_WINDOW = 99;
+
+// The stored match_logs rows (used for "recent match history" display) stay
+// capped at a small, browsable number — cycle *totals* are aggregated from
+// the full fetched set below, independently of this display cap.
+const RECENT_MATCH_LOG_DISPLAY_CAP = 10;
+
 /** Every USMNT fixture id currently recorded in our match logs, regardless of which player it's attached to — used to detect "has anything new finished". */
 async function getSyncedFixtureIds(): Promise<Set<number>> {
   const rows = await db
@@ -132,11 +148,12 @@ async function fetchUsmntMatchLogs(allPlayers: PlayerRow[], fixturesToCheck: num
     }
   }
 
-  // Most-recent-first, capped at 10 per player — enough to cover the current
-  // cycle's matches so far without a deep historical backfill.
-  for (const [playerId, logs] of logsByPlayer) {
+  // Most-recent-first. Intentionally NOT capped here — callers decide
+  // separately how much of this to persist for display (see
+  // RECENT_MATCH_LOG_DISPLAY_CAP) versus how much to aggregate into cycle
+  // totals (the full list, so totals aren't undercounted).
+  for (const [, logs] of logsByPlayer) {
     logs.sort((a, b) => (a.date < b.date ? 1 : -1));
-    logsByPlayer.set(playerId, logs.slice(0, 10));
   }
   return { logsByPlayer, finishedFixtureIds };
 }
@@ -210,16 +227,21 @@ export async function syncUsmntStats(fixturesToCheck = 20): Promise<UsmntSyncRes
     .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId })
     .from(playersTable);
 
-  const { logsByPlayer } = await fetchUsmntMatchLogs(players, fixturesToCheck);
+  // The cheap poll above only needs a small recent window to detect "did
+  // anything finish" — but once we know a full crawl is warranted, fetch a
+  // window wide enough to cover the whole current cycle so totals are
+  // complete, not just however many fixtures the poll happened to check.
+  const { logsByPlayer } = await fetchUsmntMatchLogs(players, CYCLE_TOTAL_FIXTURES_WINDOW);
 
   let playersWithMatchLogs = 0;
   let cyclesWritten = 0;
   for (const player of players) {
     const logs = logsByPlayer.get(player.id) ?? [];
+    const logsForDisplay = logs.slice(0, RECENT_MATCH_LOG_DISPLAY_CAP);
     await db.delete(matchLogsTable).where(and(eq(matchLogsTable.playerId, player.id), eq(matchLogsTable.isNationalTeam, true)));
-    if (logs.length > 0) {
+    if (logsForDisplay.length > 0) {
       await db.insert(matchLogsTable).values(
-        logs.map((l) => ({
+        logsForDisplay.map((l) => ({
           playerId: player.id,
           apiFootballFixtureId: l.apiFootballFixtureId,
           date: l.date,
