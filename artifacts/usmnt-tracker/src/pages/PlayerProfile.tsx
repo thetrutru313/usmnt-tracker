@@ -3,7 +3,7 @@ import { useParams } from "wouter";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -30,7 +30,7 @@ export default function PlayerProfile() {
   // underlying react-query call accepts it fine (queryKey/queryFn are filled
   // in by the generated `getGetPlayerQueryOptions` merge).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: player, isLoading, error } = useGetPlayer(playerId, {
+  const { data: player, isLoading, isFetching, error } = useGetPlayer(playerId, {
     ...(selectedSeason ? { season: selectedSeason } : {}),
     ...(selectedCycle ? { cycle: selectedCycle } : {}),
   }, {
@@ -348,8 +348,9 @@ export default function PlayerProfile() {
                   <Activity size={16} className="text-muted-foreground" />
                   Form Breakdown
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground normal-case tracking-normal">
-                  {formatSeasonLabel(player.clubSeasonStats.season)}
+                <span className="text-[10px] font-mono text-muted-foreground normal-case tracking-normal flex items-center gap-1">
+                  {isFetching && <Loader2 size={10} className="animate-spin" />}
+                  {formatSeasonLabel(selectedSeason ?? player.clubSeasonStats.season)}
                 </span>
               </CardTitle>
               {player.performanceTrend && (
@@ -358,7 +359,12 @@ export default function PlayerProfile() {
                 </div>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
+              {isFetching && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-b-xl bg-background/60 backdrop-blur-[1px]">
+                  <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                </div>
+              )}
               {player.last5Stats.minutes >= 270 && player.last5Stats.avgRating != null && player.seasonStats.avgRating != null ? (
                 (() => {
                   const last5Avg = player.last5Stats.avgRating!;
