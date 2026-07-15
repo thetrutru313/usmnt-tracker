@@ -540,7 +540,7 @@ async function replaceSeasonHistoryRows(playerId: number, entries: { year: numbe
  * but hasn't missed a match yet". The `hasFixturelessEntry` flag on the episode
  * lets callers produce the right status text.
  */
-function groupInjuryEpisodes(
+export function groupInjuryEpisodes(
   entries: AfInjuryEntry[],
   today: string,
 ): { reason: string; start: string; end: string; matches: number; hasFixturelessEntry: boolean }[] {
