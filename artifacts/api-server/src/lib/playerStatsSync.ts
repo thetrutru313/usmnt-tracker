@@ -13,7 +13,16 @@ import { ensurePlayerApiFootballIds, ageFromBirthDate } from "./playerClubSync";
 // ---------------------------------------------------------------------------
 
 type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
-type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number };
+type PlayerRow = {
+  id: number;
+  name: string;
+  clubId: number;
+  apiFootballPlayerId: number | null;
+  age?: number;
+  category?: string | null;
+  nationalTeamCaps?: number | null;
+  marketValueUsd?: number | null;
+};
 
 // --- API-Football response shapes (only the fields we use) ---------------
 
@@ -369,6 +378,84 @@ export function computeFormTier(
   return { trend, trending: trend === "on_fire" || trend === "rising" };
 }
 
+/**
+ * Computes a 0–100 integer "call-up score" for a player based on all live
+ * signals that are available after each daily sync cycle.  The score is most
+ * meaningful for fringe and prospect players competing for a squad spot; core
+ * veterans with 30+ caps already have their place secured and receive `null`.
+ *
+ * Signals (all additive from a base of 40):
+ *   • Form tier        –18 → +20
+ *   • Playing time     –15 → +15  (season minutes / 2 700 min ≈ 30 full games)
+ *   • Age              –10 → +10  (youth bonus / veteran penalty)
+ *   • Caps             –5  → +5   (emerging players get a slight boost)
+ *   • Last-5 avg rating –8 → +8   (bracketed on 6.0 / 6.5 / 7.0 / 7.5)
+ *   • Market value     0   → +8   (log-scale, soft signal)
+ *   • Active injury    –15         (if player is currently ruled out)
+ *
+ * Result is clamped to [0, 100].
+ */
+export function computeCallUpScore(
+  player: { category?: string | null; nationalTeamCaps?: number | null; marketValueUsd?: number | null; age?: number | null },
+  performanceTrend: string,
+  seasonMinutes: number | null,
+  last5AvgRating: number | null,
+  hasActiveInjury: boolean,
+): number | null {
+  // Established core players aren't competing for spots — score not applicable.
+  if (player.category === "current" && (player.nationalTeamCaps ?? 0) >= 30) return null;
+
+  let score = 40;
+
+  // Form tier
+  const formBonus: Record<string, number> = { on_fire: 20, rising: 12, steady: 0, falling: -10, ice_cold: -18 };
+  score += formBonus[performanceTrend] ?? 0;
+
+  // Playing time — how much of a full season has the player contributed?
+  if (seasonMinutes != null) {
+    const fraction = Math.min(seasonMinutes / 2700, 1.0);
+    score += Math.round((fraction - 0.5) * 30); // −15 → +15
+  }
+
+  // Age bonus/penalty
+  const age = player.age ?? 26;
+  if (age < 20) score += 10;
+  else if (age < 23) score += 6;
+  else if (age < 26) score += 2;
+  else if (age < 29) score += 0;
+  else if (age < 32) score -= 5;
+  else score -= 10;
+
+  // Caps — some senior experience helps; too many means the slot is less contested
+  const caps = player.nationalTeamCaps ?? 0;
+  if (caps === 0) score += 0;
+  else if (caps <= 10) score += 5;
+  else if (caps <= 20) score += 3;
+  else if (caps <= 30) score += 0;
+  else score -= 5;
+
+  // Last-5 avg rating
+  if (last5AvgRating != null) {
+    if (last5AvgRating > 7.5) score += 8;
+    else if (last5AvgRating > 7.0) score += 4;
+    else if (last5AvgRating > 6.5) score += 0;
+    else if (last5AvgRating > 6.0) score -= 4;
+    else score -= 8;
+  }
+
+  // Market value — soft signal, log-scale, capped at +8
+  const mv = player.marketValueUsd;
+  if (mv && mv > 0) {
+    // $1 M → 0 pts, $5 M → +2.8, $10 M → +4, $30 M → +6, $100 M → +8
+    score += Math.min(Math.round(Math.log10(mv / 1_000_000) * 4), 8);
+  }
+
+  // Active injury penalty
+  if (hasActiveInjury) score -= 15;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 /** Clears a period's stats row entirely — used when this run has no fresh data for that period, so a stale row from a prior run/seed never lingers. */
 async function deleteStatsRow(playerId: number, periodType: PeriodType): Promise<void> {
   await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, periodType)));
@@ -531,7 +618,16 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
   const players: PlayerRow[] = await db
-    .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId, age: playersTable.age })
+    .select({
+      id: playersTable.id,
+      name: playersTable.name,
+      clubId: playersTable.clubId,
+      apiFootballPlayerId: playersTable.apiFootballPlayerId,
+      age: playersTable.age,
+      category: playersTable.category,
+      nationalTeamCaps: playersTable.nationalTeamCaps,
+      marketValueUsd: playersTable.marketValueUsd,
+    })
     .from(playersTable);
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
 
@@ -675,6 +771,57 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
   // USMNT national-team match logs + cycle stats now sync independently on
   // their own schedule — see usmntSync.ts — rather than as the last step of
   // this per-club loop.
+
+  // --- Post-loop: recompute potentialCallUpScore for every player -----------
+  // All injuries and stats are fully written at this point, so the score
+  // reflects the freshest possible data from this sync cycle. We do this as a
+  // separate pass rather than mid-loop so that (a) active-injury data is
+  // committed before we read it, and (b) one batch read covers all players
+  // instead of per-player queries inside the hot path.
+  try {
+    const [allLast5, allSeason, activeInjuries, freshPlayers] = await Promise.all([
+      db
+        .select({ playerId: playerStatsTable.playerId, avgRating: playerStatsTable.avgRating })
+        .from(playerStatsTable)
+        .where(eq(playerStatsTable.periodType, "last5")),
+      db
+        .select({ playerId: playerStatsTable.playerId, minutes: playerStatsTable.minutes })
+        .from(playerStatsTable)
+        .where(eq(playerStatsTable.periodType, "season")),
+      db
+        .select({ playerId: injuriesTable.playerId })
+        .from(injuriesTable)
+        .where(eq(injuriesTable.status, "active")),
+      db
+        .select({
+          id: playersTable.id,
+          category: playersTable.category,
+          nationalTeamCaps: playersTable.nationalTeamCaps,
+          marketValueUsd: playersTable.marketValueUsd,
+          age: playersTable.age,
+          performanceTrend: playersTable.performanceTrend,
+        })
+        .from(playersTable),
+    ]);
+
+    const last5RatingByPlayer = new Map(allLast5.map((r) => [r.playerId, r.avgRating]));
+    const seasonMinByPlayer = new Map(allSeason.map((r) => [r.playerId, r.minutes]));
+    const activeInjurySet = new Set(activeInjuries.map((r) => r.playerId));
+
+    for (const p of freshPlayers) {
+      const score = computeCallUpScore(
+        p,
+        p.performanceTrend ?? "steady",
+        seasonMinByPlayer.get(p.id) ?? null,
+        last5RatingByPlayer.get(p.id) ?? null,
+        activeInjurySet.has(p.id),
+      );
+      await db.update(playersTable).set({ potentialCallUpScore: score }).where(eq(playersTable.id, p.id));
+    }
+    logger.info({ players: freshPlayers.length }, "Call-up scores recomputed from live data");
+  } catch (err) {
+    logger.warn({ err }, "Call-up score recomputation failed — scores from previous run retained");
+  }
 
   logger.info(
     { clubsProcessed, playersWithMatchLogs, playersWithSeasonStats, injuriesWritten, failures },
