@@ -63,7 +63,7 @@ Player stats, match logs, and injuries must reflect only real, currently-fetchab
 
 ## Per-player stats table: delete scope must match the row's uniqueness key
 
-`player_stats` rows are unique per `(playerId, periodType)` for the single-row period types (`season`, `previous_season`, `last5`, `national_team`) — the `season` *column* on those rows is just a display label, not part of the key, and it can change value between runs (e.g. the year rolls over). A history-style period type (`season_all`) is the exception: one row per `(playerId, periodType, season)`, replaced as a full set each run.
+`player_stats` rows are unique per `(playerId, periodType)` for the single-row period types (`season`, `previous_season`, `last5`) — the `season` *column* on those rows is just a display label, not part of the key, and it can change value between runs (e.g. the year rolls over). History-style period types (`season_all` for club seasons, `national_team_cycle` for USMNT World Cup cycles) are the exception: one row per `(playerId, periodType, season)` where `season` holds the year/cycle label, replaced as a full set each run.
 
 **Why:** scoping a single-row period's delete-before-insert by `(playerId, periodType, season)` instead of just `(playerId, periodType)` silently leaves the previous run's row behind as a stale duplicate the moment the season label changes — easy to introduce by copy-pasting the history-style delete logic onto the single-row upsert helper.
 
@@ -76,6 +76,14 @@ The first OpenAPI operation with both a path param and a query param triggers an
 **Why:** produces a confusing `TS2308: Module has already exported a member named 'X'` pointing at `generated/api`, when the real duplicate is in `generated/types`.
 
 **How to apply:** since app code only ever imports the zod objects (never the plain-TS mirrors) from `@workspace/api-zod`, the fix is to stop re-exporting `./generated/types` from `lib/api-zod/src/index.ts` (keep only `./generated/api`) — cheaper than fighting orval config. Re-verify no consumer imports plain types before doing this on a fresh occurrence.
+
+## USMNT stats sync runs independently of the club sync
+
+National-team match logs/cycle stats sync on their own schedule (`usmntSync.ts`, hourly), separate from the club sync's 50-club crawl (`playerStatsSync.ts`, daily, ~1hr to complete). World Cup cycle labels are derived from match date vs. known/estimated tournament end-date cutoffs, not stored as static config.
+
+**Why:** national-team games are rare relative to club fixtures, so tying USMNT sync to "whichever step happens last in the club crawl" meant new World Cup roster call-ups showed zero stats for up to an hour after kickoff. There's no webhook/push for match completion on API-Football — only polling — so the fix is a cheap poll (compare freshly-fetched finished fixture ids against what's already in `match_logs`) that only pays for the expensive per-fixture lineup fetch when something genuinely new happened.
+
+**How to apply:** all three schedules (`apiFootballSync.ts` fixtures, `playerStatsSync.ts` club stats, `usmntSync.ts` USMNT stats) call the same `afFetch` against one shared per-minute rate limit and all fire immediately on server boot — expect a burst of "Too many requests" warnings in the first minute or two after every restart; each sync degrades gracefully (skips and logs, retries next scheduled run) rather than corrupting data, so this is noisy but not broken. See task backlog for the follow-up to stagger/throttle these against each other.
 
 ## Player-pool completeness audits
 

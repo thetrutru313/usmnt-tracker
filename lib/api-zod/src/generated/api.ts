@@ -56,7 +56,8 @@ export const GetPlayerParams = zod.object({
 })
 
 export const GetPlayerQueryParams = zod.object({
-  "season": zod.coerce.string().optional().describe('Season year (e.g. \"2025\") to show club-season stats for. Defaults to the most recent season with synced data.')
+  "season": zod.coerce.string().optional().describe('Season year (e.g. \"2025\") to show club-season stats for. Defaults to the most recent season with synced data.'),
+  "cycle": zod.coerce.string().optional().describe('World Cup cycle label (e.g. \"2026 World Cup\") to show USMNT stats for. Defaults to the most recent cycle with synced data.')
 })
 
 export const GetPlayerResponse = zod.object({
@@ -162,6 +163,7 @@ export const GetPlayerResponse = zod.object({
   "savePct": zod.number().nullable(),
   "avgRating": zod.number().nullable()
 }),
+  "availableCycles": zod.array(zod.string()),
   "matchLog": zod.array(zod.object({
   "id": zod.number(),
   "date": zod.coerce.date(),

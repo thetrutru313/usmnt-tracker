@@ -104,7 +104,7 @@ export async function getPlayerById(id: number) {
   return row;
 }
 
-export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "national_team") {
+export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season") {
   const [row] = await db
     .select()
     .from(playerStatsTable)
@@ -147,6 +147,39 @@ export async function getClubSeasonStats(playerId: number, season?: string) {
     .limit(1);
   if (latest) return latest;
   return getStatsForPlayer(playerId, "season");
+}
+
+/** Every World Cup cycle (e.g. "2026 World Cup") this player has real USMNT stats for, most recent first — powers the USMNT-cycle selector on the player profile. */
+export async function getAvailableNationalTeamCycles(playerId: number) {
+  const rows = await db
+    .select({ season: playerStatsTable.season })
+    .from(playerStatsTable)
+    .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "national_team_cycle")))
+    .orderBy(desc(playerStatsTable.season));
+  return rows.map((r) => r.season);
+}
+
+/**
+ * USMNT cycle stats for a specific cycle label if given (and it exists),
+ * otherwise the most recent cycle with data. Returns undefined if this
+ * player has no synced national-team cycle stats at all yet.
+ */
+export async function getNationalTeamCycleStats(playerId: number, cycle?: string) {
+  if (cycle) {
+    const [row] = await db
+      .select()
+      .from(playerStatsTable)
+      .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "national_team_cycle"), eq(playerStatsTable.season, cycle)))
+      .limit(1);
+    if (row) return row;
+  }
+  const [latest] = await db
+    .select()
+    .from(playerStatsTable)
+    .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "national_team_cycle")))
+    .orderBy(desc(playerStatsTable.season))
+    .limit(1);
+  return latest;
 }
 
 export async function getMatchLogForPlayer(playerId: number, limit = 10) {

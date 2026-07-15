@@ -1,7 +1,7 @@
 import { db, clubsTable, playersTable, playerStatsTable, matchLogsTable, injuriesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { logger } from "./logger";
-import { afFetch, resolveTeamId, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
+import { afFetch, resolveTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import { ensurePlayerApiFootballIds } from "./playerClubSync";
 
 // ---------------------------------------------------------------------------
@@ -17,19 +17,19 @@ type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId
 
 // --- API-Football response shapes (only the fields we use) ---------------
 
-interface AfFixtureListItem {
+export interface AfFixtureListItem {
   fixture: { id: number; date: string; status: { short: string } };
   league: { name: string };
   teams: { home: { id: number; name: string }; away: { id: number; name: string } };
   goals: { home: number | null; away: number | null };
 }
 
-interface AfFixturePlayerStatBlock {
+export interface AfFixturePlayerStatBlock {
   games: { minutes: number | null; rating: string | null; position: string | null };
   goals: { total: number | null; assists: number | null };
 }
 
-interface AfFixturePlayersTeam {
+export interface AfFixturePlayersTeam {
   team: { id: number; name: string };
   players: { player: { id: number; name: string }; statistics: AfFixturePlayerStatBlock[] }[];
 }
@@ -76,11 +76,11 @@ function seasonYearCandidates(): number[] {
   return [year, year - 1, year - 2];
 }
 
-function toNum(v: number | null | undefined): number {
+export function toNum(v: number | null | undefined): number {
   return v ?? 0;
 }
 
-function toRating(v: string | null | undefined): number | null {
+export function toRating(v: string | null | undefined): number | null {
   if (v == null) return null;
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
@@ -88,7 +88,7 @@ function toRating(v: string | null | undefined): number | null {
 
 // --- Match logs -------------------------------------------------------------
 
-interface RealMatchLog {
+export interface RealMatchLog {
   apiFootballFixtureId: number;
   date: string;
   opponent: string;
@@ -188,94 +188,9 @@ async function syncClubMatchLogs(
   return result;
 }
 
-/**
- * Syncs the USMNT senior men's national team's recent finished fixtures
- * (World Cup qualifiers, Nations League, friendlies) and, for whichever
- * tracked players actually appeared (minutes > 0), their per-match stats —
- * the same real-data-only approach as `syncClubMatchLogs`, just scoped to
- * the national team instead of a club. Runs once per full sync (not once per
- * club) since it's a single team's fixture list shared across every tracked
- * player who got called in.
- */
-async function syncUsmntMatchLogs(allPlayers: PlayerRow[], fixturesToCheck: number): Promise<Map<number, RealMatchLog[]>> {
-  const result = new Map<number, RealMatchLog[]>();
-  const teamId = await resolveUsmntTeamId();
-  if (!teamId) return result;
-
-  const resolvedPlayers = allPlayers.filter((p) => p.apiFootballPlayerId);
-  if (resolvedPlayers.length === 0) return result;
-  const byApiId = new Map(resolvedPlayers.map((p) => [p.apiFootballPlayerId as number, p]));
-
-  let fixtures: AfFixtureListItem[];
-  try {
-    fixtures = await afFetch<AfFixtureListItem[]>(`/fixtures?team=${teamId}&last=${fixturesToCheck}`);
-  } catch (err) {
-    logger.warn({ err }, "API-Football USMNT recent-fixtures fetch failed — skipping national-team match-log sync");
-    return result;
-  }
-
-  const finished = fixtures.filter((f) => FINISHED_STATUSES.has(f.fixture.status.short));
-
-  for (const f of finished) {
-    let teams: AfFixturePlayersTeam[];
-    try {
-      teams = await afFetch<AfFixturePlayersTeam[]>(`/fixtures/players?fixture=${f.fixture.id}`);
-    } catch (err) {
-      logger.warn({ err, fixtureId: f.fixture.id }, "API-Football USMNT fixture-players fetch failed — skipping this match");
-      continue;
-    }
-
-    const usmntBlock = teams.find((t) => t.team.id === teamId);
-    if (!usmntBlock) continue;
-
-    const isHome = f.teams.home.id === teamId;
-    const opponent = isHome ? f.teams.away.name : f.teams.home.name;
-    const conceded = isHome ? f.goals.away : f.goals.home;
-    const ourGoals = isHome ? f.goals.home : f.goals.away;
-    const theirGoals = isHome ? f.goals.away : f.goals.home;
-    const outcome =
-      ourGoals == null || theirGoals == null ? "" : ourGoals > theirGoals ? "W" : ourGoals < theirGoals ? "L" : "D";
-    const scoreLine = ourGoals != null && theirGoals != null ? `${outcome} ${ourGoals}-${theirGoals}` : "";
-
-    for (const entry of usmntBlock.players) {
-      const player = byApiId.get(entry.player.id);
-      if (!player) continue;
-      const stats = entry.statistics[0];
-      const minutes = stats?.games.minutes;
-      if (!minutes || minutes <= 0) continue; // did not actually appear — no fabricated row
-
-      const log: RealMatchLog = {
-        apiFootballFixtureId: f.fixture.id,
-        date: f.fixture.date.slice(0, 10),
-        opponent,
-        competition: f.league.name,
-        result: scoreLine,
-        minutes,
-        goals: toNum(stats?.goals.total),
-        assists: toNum(stats?.goals.assists),
-        conceded: conceded ?? null,
-        rating: toRating(stats?.games.rating),
-        isNationalTeam: true,
-      };
-      const existing = result.get(player.id) ?? [];
-      existing.push(log);
-      result.set(player.id, existing);
-    }
-  }
-
-  // Most-recent-first, capped at 10 per player — more than the 5 kept for
-  // club matches since these feed the USMNT-cycle stat aggregation, not just
-  // the merged recent-matches display.
-  for (const [playerId, logs] of result) {
-    logs.sort((a, b) => (a.date < b.date ? 1 : -1));
-    result.set(playerId, logs.slice(0, 10));
-  }
-  return result;
-}
-
 // --- Season stats ------------------------------------------------------------
 
-interface AggregatedSeasonStats {
+export interface AggregatedSeasonStats {
   minutes: number;
   starts: number;
   goals: number;
@@ -367,7 +282,7 @@ async function fetchSeasonStats(apiFootballPlayerId: number, season: number): Pr
   }
 }
 
-function aggregateFromMatchLogs(logs: RealMatchLog[]): AggregatedSeasonStats | null {
+export function aggregateFromMatchLogs(logs: RealMatchLog[]): AggregatedSeasonStats | null {
   if (logs.length === 0) return null;
   const minutes = logs.reduce((s, l) => s + l.minutes, 0);
   const goals = logs.reduce((s, l) => s + l.goals, 0);
@@ -390,7 +305,7 @@ function aggregateFromMatchLogs(logs: RealMatchLog[]): AggregatedSeasonStats | n
   };
 }
 
-type PeriodType = "season" | "last5" | "previous_season" | "season_all" | "national_team";
+type PeriodType = "season" | "last5" | "previous_season" | "season_all";
 
 /** Clears a period's stats row entirely — used when this run has no fresh data for that period, so a stale row from a prior run/seed never lingers. */
 async function deleteStatsRow(playerId: number, periodType: PeriodType): Promise<void> {
@@ -399,10 +314,10 @@ async function deleteStatsRow(playerId: number, periodType: PeriodType): Promise
 
 async function upsertStatsRow(playerId: number, periodType: PeriodType, season: string, stats: AggregatedSeasonStats, cleanSheets: number | null): Promise<void> {
   // Delete scoped only by periodType (not season) — "season"/"previous_season"/
-  // "last5"/"national_team" each keep exactly one row per player, and the
-  // season *label* for that row can shift between runs (e.g. the year rolls
-  // over), so filtering the delete by the new label too would leave the old
-  // row behind as a stale duplicate.
+  // "last5" each keep exactly one row per player, and the season *label* for
+  // that row can shift between runs (e.g. the year rolls over), so filtering
+  // the delete by the new label too would leave the old row behind as a
+  // stale duplicate.
   await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, periodType)));
   await db.insert(playerStatsTable).values({
     playerId,
@@ -662,41 +577,9 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<P
     }
   }
 
-  // USMNT national-team match logs + cycle stats — one shared fixture list
-  // for every tracked player, run once per full sync rather than per club.
-  try {
-    const usmntLogsByPlayer = await syncUsmntMatchLogs(players, 20);
-    for (const player of players) {
-      const logs = usmntLogsByPlayer.get(player.id) ?? [];
-      await db.delete(matchLogsTable).where(and(eq(matchLogsTable.playerId, player.id), eq(matchLogsTable.isNationalTeam, true)));
-      if (logs.length > 0) {
-        await db.insert(matchLogsTable).values(
-          logs.map((l) => ({
-            playerId: player.id,
-            apiFootballFixtureId: l.apiFootballFixtureId,
-            date: l.date,
-            opponent: l.opponent,
-            competition: l.competition,
-            result: l.result,
-            minutes: l.minutes,
-            goals: l.goals,
-            assists: l.assists,
-            conceded: l.conceded,
-            rating: l.rating,
-            isNationalTeam: true,
-          })),
-        );
-      }
-      const cycleAgg = aggregateFromMatchLogs(logs);
-      if (cycleAgg) {
-        await upsertStatsRow(player.id, "national_team", "Current Cycle", cycleAgg, null);
-      } else {
-        await deleteStatsRow(player.id, "national_team");
-      }
-    }
-  } catch (err) {
-    logger.warn({ err }, "USMNT national-team match-log/stats sync failed");
-  }
+  // USMNT national-team match logs + cycle stats now sync independently on
+  // their own schedule — see usmntSync.ts — rather than as the last step of
+  // this per-club loop.
 
   logger.info(
     { clubsProcessed, playersWithMatchLogs, playersWithSeasonStats, injuriesWritten, failures },

@@ -12,6 +12,8 @@ import {
   getStatsForPlayer,
   getClubSeasonStats,
   getAvailableClubSeasons,
+  getNationalTeamCycleStats,
+  getAvailableNationalTeamCycles,
   getMatchLogForPlayer,
   getInjuriesForPlayer,
   getTransfersForPlayer,
@@ -54,7 +56,7 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     return;
   }
   const { id } = parsedParams.data;
-  const { season } = parsedQuery.data;
+  const { season, cycle } = parsedQuery.data;
 
   const player = await getPlayerById(id);
   if (!player) {
@@ -62,13 +64,14 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [seasonStats, last5Stats, previousSeasonStats, clubSeasonStats, availableClubSeasons, nationalTeamStats, matchLog, injuries, transfers] = await Promise.all([
+  const [seasonStats, last5Stats, previousSeasonStats, clubSeasonStats, availableClubSeasons, nationalTeamStats, availableCycles, matchLog, injuries, transfers] = await Promise.all([
     getStatsForPlayer(id, "season"),
     getStatsForPlayer(id, "last5"),
     getStatsForPlayer(id, "previous_season"),
     getClubSeasonStats(id, season),
     getAvailableClubSeasons(id),
-    getStatsForPlayer(id, "national_team"),
+    getNationalTeamCycleStats(id, cycle),
+    getAvailableNationalTeamCycles(id),
     getMatchLogForPlayer(id, 10),
     getInjuriesForPlayer(id),
     getTransfersForPlayer(id),
@@ -137,7 +140,8 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     previousSeasonStats: previousSeasonStats ?? emptyStats,
     clubSeasonStats: clubSeasonStats ?? emptyStats,
     availableClubSeasons,
-    nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: "Current Cycle" },
+    nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: availableCycles[0] ?? "2026 World Cup" },
+    availableCycles,
     matchLog,
     injuries,
     transfers,

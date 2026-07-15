@@ -89,6 +89,12 @@ paths:
           description: Season year (e.g. "2025") to show club-season stats for. Defaults to the most recent season with synced data.
           schema:
             type: string
+        - name: cycle
+          in: query
+          required: false
+          description: World Cup cycle label (e.g. "2026 World Cup") to show USMNT stats for. Defaults to the most recent cycle with synced data.
+          schema:
+            type: string
       responses:
         "200":
           description: Player profile
@@ -445,6 +451,7 @@ components:
         - clubSeasonStats
         - availableClubSeasons
         - nationalTeamStats
+        - availableCycles
         - matchLog
         - injuries
         - transfers
@@ -496,6 +503,12 @@ components:
         # the player has no USMNT appearances synced this cycle.
         nationalTeamStats:
           $ref: "#/components/schemas/PlayerStats"
+        # Every World Cup cycle this player has USMNT stats for, most recent
+        # first (e.g. ["2026 World Cup", "2022 World Cup"]) — populates the
+        # USMNT-cycle selector, mirroring `availableClubSeasons`.
+        availableCycles:
+          type: array
+          items: { type: string }
         matchLog:
           type: array
           items:

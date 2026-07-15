@@ -5,6 +5,7 @@ import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
+import { startUsmntStatsSyncSchedule } from "./lib/usmntSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
 // intentionally not started — the user upgraded API-Football instead, which
 // is now live. See replit.md and .agents/memory/usmnt-tracker.md.
@@ -46,15 +47,25 @@ app.listen(port, (err) => {
   // Skips itself if API_FOOTBALL_KEY isn't set.
   startPlayerClubSyncSchedule();
 
-  // Live-syncs real season stats, match logs (last 5 finished matches per
-  // club), and injuries from API-Football, replacing the old seed's
+  // Live-syncs real club season stats, match logs (last 5 finished matches
+  // per club), and injuries from API-Football, replacing the old seed's
   // fabricated data entirely. Runs daily — see playerStatsSync.ts for the
   // call-volume/rate-limit reasoning. Skips itself if API_FOOTBALL_KEY isn't set.
+  // USMNT (national-team) match logs/stats sync separately below, on their
+  // own faster schedule.
   startPlayerStatsSyncSchedule();
 
-  // Syncs senior USMNT caps/goals from Wikidata daily. Separate from the
-  // club-stats pipeline above since API-Football doesn't reliably cover
-  // international career totals — see nationalTeamSync.ts for why Wikidata
-  // was chosen over ESPN's site API. No API key needed.
+  // Polls the USMNT's own recent fixtures hourly — much cheaper and more
+  // frequent than the club sync above, since new national-team results
+  // shouldn't have to wait behind an hour-long 50-club crawl to show up.
+  // Only pays for the expensive per-fixture lineup/stats resync when a new
+  // finished match is actually detected. See usmntSync.ts. Skips itself if
+  // API_FOOTBALL_KEY isn't set.
+  startUsmntStatsSyncSchedule();
+
+  // Syncs senior USMNT caps/goals from Wikidata daily. Separate from both
+  // pipelines above since API-Football doesn't reliably cover international
+  // career totals — see nationalTeamSync.ts for why Wikidata was chosen over
+  // ESPN's site API. No API key needed.
   startNationalTeamSyncSchedule();
 });

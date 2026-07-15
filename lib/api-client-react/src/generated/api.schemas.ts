@@ -271,6 +271,7 @@ export interface PlayerProfile {
   clubSeasonStats: PlayerStats;
   availableClubSeasons: string[];
   nationalTeamStats: PlayerStats;
+  availableCycles: string[];
   matchLog: MatchLog[];
   injuries: PlayerInjurySummary[];
   transfers: PlayerTransferSummary[];
@@ -384,6 +385,10 @@ export type GetPlayerParams = {
  * Season year (e.g. "2025") to show club-season stats for. Defaults to the most recent season with synced data.
  */
 season?: string;
+/**
+ * World Cup cycle label (e.g. "2026 World Cup") to show USMNT stats for. Defaults to the most recent cycle with synced data.
+ */
+cycle?: string;
 };
 
 export type ListFixturesParams = {

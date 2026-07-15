@@ -21,13 +21,17 @@ export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const playerId = parseInt(id || "0", 10);
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
 
   // The generated hook's `query` option type omits `Partial<>`, so a bare
   // `{ enabled }` object doesn't structurally satisfy it even though the
   // underlying react-query call accepts it fine (queryKey/queryFn are filled
   // in by the generated `getGetPlayerQueryOptions` merge).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: player, isLoading, error } = useGetPlayer(playerId, selectedSeason ? { season: selectedSeason } : undefined, {
+  const { data: player, isLoading, error } = useGetPlayer(playerId, {
+    ...(selectedSeason ? { season: selectedSeason } : {}),
+    ...(selectedCycle ? { cycle: selectedCycle } : {}),
+  }, {
     query: { enabled: !!playerId } as any
   });
 
@@ -179,7 +183,20 @@ export default function PlayerProfile() {
                   <img src={USMNT_CREST_URL} alt="" aria-hidden="true" className="w-[18px] h-[18px] object-contain" />
                   USMNT Cycle
                 </div>
-                <span className="text-sm font-mono text-muted-foreground">World Cup 2026</span>
+                {player.availableCycles.length > 0 ? (
+                  <select
+                    value={player.nationalTeamStats.season}
+                    onChange={(e) => setSelectedCycle(e.target.value)}
+                    className="text-sm font-mono text-muted-foreground bg-background border border-border rounded px-2 py-1 cursor-pointer hover:text-foreground transition-colors"
+                    aria-label="Select World Cup cycle"
+                  >
+                    {player.availableCycles.map(cycle => (
+                      <option key={cycle} value={cycle}>{cycle}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm font-mono text-muted-foreground">{player.nationalTeamStats.season}</span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">

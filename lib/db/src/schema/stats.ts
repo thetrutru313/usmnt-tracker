@@ -5,8 +5,10 @@ import { playersTable } from "./players";
 
 // One row per player per (season, periodType). periodType: "season" | "last5" |
 // "previous_season" | "season_all" (one row per historical season year, used
-// to power a club-season selector — see playerStatsSync.ts) | "national_team"
-// (aggregated from this player's synced USMNT match logs, current cycle).
+// to power a club-season selector — see playerStatsSync.ts) |
+// "national_team_cycle" (one row per World Cup cycle, e.g. "2026 World Cup",
+// aggregated from this player's synced USMNT match logs for that cycle — see
+// usmntSync.ts; the `season` column holds the cycle label here).
 //
 // All fields here are sourced from API-Football's live sync (see
 // playerStatsSync.ts) — nothing is fabricated. API-Football does not report
@@ -69,6 +71,10 @@ export const matchLogsTable = pgTable("match_logs", {
   // match history distinguish which crest/context each row belongs to
   // without guessing from the competition name text.
   isNationalTeam: boolean("is_national_team").notNull().default(false),
+  // World Cup cycle this match belongs to (e.g. "2026 World Cup"), derived
+  // from the match date — see usmntSync.ts. Null for club matches, where the
+  // concept doesn't apply.
+  cycle: text("cycle"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
