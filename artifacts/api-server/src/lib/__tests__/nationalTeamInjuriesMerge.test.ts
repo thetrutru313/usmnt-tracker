@@ -653,3 +653,73 @@ describe("syncPlayerStatsAndInjuries — national-team season fetch failures", (
     expect(countInjuryInserts()).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 6: Club-side injury fetch failure — graceful degradation
+//
+// The per-club /injuries?team=<clubTeamId> calls inside syncClubInjuries are
+// each wrapped in a try/catch per season. These tests confirm:
+//  a) when the club-side fetch throws but the national-team fetch succeeds,
+//     the national-team entries still produce episodes for that player — the
+//     club fetch failure must not silently drop or wipe those rows.
+//  b) when both the club-side AND national-team fetches throw, sync completes
+//     without propagating an exception and writes zero injury episodes.
+// ---------------------------------------------------------------------------
+
+describe("syncPlayerStatsAndInjuries — club-side injury fetch failure", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveTeamId.mockResolvedValue(TEAM_ID);
+    mockEnsurePlayerApiFootballIds.mockResolvedValue(undefined);
+  });
+
+  it("club-side fetch throws, national-team fetch succeeds — national-team entry still produces one episode", async () => {
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [NATIONAL_TEAM_ENTRY];
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) throw new Error("Simulated club injuries fetch failure");
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    // Must not throw — resolves to a stats summary object
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // The national-team entry must still be written as an episode despite the
+    // club-side fetch failing — the club failure must not swallow NT entries.
+    expect(countInjuryInserts()).toBe(1);
+    const [row] = collectInjuryInsertPayloads();
+    expect(row.matchesMissed).toBe(1);
+  });
+
+  it("club-side fetch throws — sync resolves without throwing", async () => {
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [NATIONAL_TEAM_ENTRY];
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) throw new Error("Simulated club injuries fetch failure");
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+  });
+
+  it("both club-side and national-team fetches throw — sync completes, no episodes written, no exception propagates", async () => {
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) throw new Error("Simulated NT fetch failure");
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) throw new Error("Simulated club injuries fetch failure");
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    // Must not throw
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // With no entries from either feed, no injury episodes should be written
+    expect(countInjuryInserts()).toBe(0);
+  });
+});
