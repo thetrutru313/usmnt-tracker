@@ -133,9 +133,7 @@ export default function Rankings() {
                     </Link>
                     <div className="text-xs text-muted-foreground truncate">{player.clubName}</div>
                   </div>
-                  {/* Note: In a real app we'd display actual minutes here if the API returned it in this specific endpoint, 
-                      but since we only get PlayerSummary[], we'll show their category to fill the space. */}
-                  <div className="text-xs font-mono font-medium text-muted-foreground uppercase">{player.position}</div>
+                  <FormBadge trend={player.performanceTrend} showEmoji={false} className="mt-0 h-4 text-[9px]" />
                 </div>
               ))}
             </div>
@@ -161,12 +159,15 @@ export default function Rankings() {
                     </Link>
                     <div className="text-xs text-muted-foreground truncate">{player.clubName} • Age {player.age}</div>
                   </div>
-                  {player.potentialCallUpScore && (
-                    <div className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded text-[10px] font-mono font-bold">
-                      <TrendingUp size={10} className="text-green-500" />
-                      {player.potentialCallUpScore}%
-                    </div>
-                  )}
+                  <div className="flex flex-col items-end gap-1">
+                    <FormBadge trend={player.performanceTrend} showEmoji={false} className="mt-0 h-4 text-[9px]" />
+                    {player.potentialCallUpScore && (
+                      <div className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                        <TrendingUp size={10} className="text-green-500" />
+                        {player.potentialCallUpScore}%
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
