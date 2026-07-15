@@ -127,7 +127,7 @@ export default function Players() {
                       <span className="font-bold data-value text-sm">{player.age}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Caps</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">National Team Caps</span>
                       <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
                     </div>
                     <div className="flex flex-col items-end">
