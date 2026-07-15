@@ -64,10 +64,11 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [seasonStats, last5Stats, previousSeasonStats, clubSeasonStats, availableClubSeasons, nationalTeamStats, availableCycles, matchLog, injuries, transfers] = await Promise.all([
+  const [seasonStats, last5Stats, previousSeasonStats, previous5Stats, clubSeasonStats, availableClubSeasons, nationalTeamStats, availableCycles, matchLog, injuries, transfers] = await Promise.all([
     getStatsForPlayer(id, "season"),
     getStatsForPlayer(id, "last5"),
     getStatsForPlayer(id, "previous_season"),
+    getStatsForPlayer(id, "previous5"),
     getClubSeasonStats(id, season),
     getAvailableClubSeasons(id),
     getNationalTeamCycleStats(id, cycle),
@@ -138,6 +139,7 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     seasonStats: seasonStats ?? emptyStats,
     last5Stats: last5Stats ?? emptyStats,
     previousSeasonStats: previousSeasonStats ?? emptyStats,
+    previous5Stats: previous5Stats ?? null,
     clubSeasonStats: clubSeasonStats ?? emptyStats,
     availableClubSeasons,
     nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: availableCycles[0] ?? "2026 World Cup" },

@@ -272,6 +272,8 @@ export interface PlayerProfile {
   seasonStats: PlayerStats;
   last5Stats: PlayerStats;
   previousSeasonStats: PlayerStats;
+  /** @nullable */
+  previous5Stats: PlayerStats | null;
   clubSeasonStats: PlayerStats;
   availableClubSeasons: string[];
   nationalTeamStats: PlayerStats;

@@ -104,7 +104,7 @@ export async function getPlayerById(id: number) {
   return row;
 }
 
-export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season") {
+export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "previous5") {
   const [row] = await db
     .select()
     .from(playerStatsTable)

@@ -130,6 +130,22 @@ export const GetPlayerResponse = zod.object({
   "savePct": zod.number().nullable(),
   "avgRating": zod.number().nullable()
 }),
+  "previous5Stats": zod.object({
+  "season": zod.string(),
+  "minutes": zod.number(),
+  "starts": zod.number(),
+  "goals": zod.number(),
+  "assists": zod.number(),
+  "shots": zod.number(),
+  "keyPasses": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
+  "tackles": zod.number(),
+  "interceptions": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
+  "savePct": zod.number().nullable(),
+  "avgRating": zod.number().nullable()
+}).nullable(),
   "clubSeasonStats": zod.object({
   "season": zod.string(),
   "minutes": zod.number(),

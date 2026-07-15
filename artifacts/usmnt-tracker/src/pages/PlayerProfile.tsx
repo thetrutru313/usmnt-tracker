@@ -361,6 +361,13 @@ export default function PlayerProfile() {
                   const delta = last5Avg - seasonAvg;
                   const deltaPositive = delta > 0.005;
                   const deltaNegative = delta < -0.005;
+
+                  const prev5Avg = player.previous5Stats?.avgRating ?? null;
+                  const hasPrev5 = prev5Avg != null && (player.previous5Stats?.minutes ?? 0) > 0;
+                  const trendDelta = hasPrev5 ? last5Avg - prev5Avg! : null;
+                  const trendPositive = trendDelta != null && trendDelta > 0.005;
+                  const trendNegative = trendDelta != null && trendDelta < -0.005;
+
                   return (
                     <div className="space-y-3">
                       <div className="flex justify-between items-center text-sm">
@@ -378,6 +385,21 @@ export default function PlayerProfile() {
                           {deltaPositive ? "+" : ""}{delta.toFixed(2)}
                         </span>
                       </div>
+                      {hasPrev5 && (
+                        <>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Prior-5 avg rating</span>
+                            <span className="font-medium">{prev5Avg!.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm pt-2 border-t border-border">
+                            <span className="text-muted-foreground">vs prior 5 games</span>
+                            <span className={`font-bold flex items-center gap-1 ${trendPositive ? 'text-green-500' : trendNegative ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {trendPositive ? <TrendingUp size={14} /> : trendNegative ? <TrendingDown size={14} /> : <Minus size={14} />}
+                              {trendPositive ? "+" : ""}{trendDelta!.toFixed(2)}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })()
