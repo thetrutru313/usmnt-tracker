@@ -717,6 +717,12 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
           // stats, so any prior season/previous_season rows are stale.
           await deleteStatsRow(player.id, "season");
           await deleteStatsRow(player.id, "previous_season");
+          // Form tier: no season baseline available, but compute from match
+          // logs alone so the trend field isn't left stale from a prior run.
+          // When there are no logs either, computeFormTier returns "steady"/
+          // false — which is the correct reset for a player with no fresh data.
+          const { trend, trending } = computeFormTier(last5, prev5, null);
+          await db.update(playersTable).set({ performanceTrend: trend, trending }).where(eq(playersTable.id, player.id));
           continue;
         }
 
