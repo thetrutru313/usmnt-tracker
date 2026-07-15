@@ -46,6 +46,7 @@ export interface PlayerProfile {
   seasonStats: PlayerStats;
   last5Stats: PlayerStats;
   previousSeasonStats: PlayerStats;
+  previous5Stats: PlayerStats | null;
   clubSeasonStats: PlayerStats;
   availableClubSeasons: string[];
   nationalTeamStats: PlayerStats;

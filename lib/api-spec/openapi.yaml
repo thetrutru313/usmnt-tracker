@@ -448,6 +448,7 @@ components:
         - seasonStats
         - last5Stats
         - previousSeasonStats
+        - previous5Stats
         - clubSeasonStats
         - availableClubSeasons
         - nationalTeamStats
@@ -487,6 +488,13 @@ components:
           $ref: "#/components/schemas/PlayerStats"
         previousSeasonStats:
           $ref: "#/components/schemas/PlayerStats"
+        # Stats for the 5 club matches prior to the current last-5 window,
+        # used to show a prior-5 trend row on the player profile. Null when
+        # there is insufficient history.
+        previous5Stats:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/PlayerStats"
         # Club-season stats for the selected `season` query param, or the
         # most recent season with data if none was given. Distinct from
         # `seasonStats`/`previousSeasonStats` (which always reflect the
