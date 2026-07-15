@@ -18,12 +18,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let lastRequestAt = 0;
+// Tracks the earliest time the *next* request is allowed to fire. This is a
+// simple reservation queue rather than a "check-then-sleep-then-stamp" gate:
+// the three sync schedules (club fixtures, club stats, USMNT) run on
+// independent timers and can each call afFetch concurrently, and a single
+// sync can itself fan out concurrent calls (e.g. Promise.all across season
+// years). If throttle() read `nextSlotAt`, awaited a sleep, and only *then*
+// updated it, every concurrent caller would read the same stale value,
+// compute the same wait, and fire together the moment they all wake up —
+// which is exactly the burst that was tripping API-Football's per-minute
+// limit. Reserving the slot synchronously (no await between the read and the
+// write) means each concurrent caller gets a strictly later slot before any
+// of them starts sleeping, so the actual network calls stay spaced out.
+let nextSlotAt = 0;
 
 async function throttle(): Promise<void> {
-  const wait = lastRequestAt + MIN_REQUEST_INTERVAL_MS - Date.now();
+  const mySlot = Math.max(nextSlotAt, Date.now());
+  nextSlotAt = mySlot + MIN_REQUEST_INTERVAL_MS;
+  const wait = mySlot - Date.now();
   if (wait > 0) await sleep(wait);
-  lastRequestAt = Date.now();
 }
 
 export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
