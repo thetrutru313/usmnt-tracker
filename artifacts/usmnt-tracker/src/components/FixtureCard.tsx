@@ -69,7 +69,7 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
     <Card className="overflow-hidden hover:border-primary/50 transition-colors">
       <div className="flex flex-col md:flex-row">
         {/* Status / Time block */}
-        <div className="md:w-32 bg-muted/30 p-4 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
+        <div className="md:w-32 bg-muted/30 p-3 md:p-4 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
           {fixture.status === "live" ? (
             <div className="flex flex-col items-center">
               <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-2 py-0.5">
@@ -82,7 +82,7 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
           ) : fixture.status === "finished" ? (
             <div className="flex flex-col items-center">
               <span className="text-[10px] text-muted-foreground font-mono uppercase mb-1">FT</span>
-              <span className="text-lg font-mono font-bold">
+              <span className="text-base md:text-lg font-mono font-bold">
                 {fixture.homeScore} - {fixture.awayScore}
               </span>
             </div>
@@ -92,7 +92,7 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             </Badge>
           ) : (
             <div className="flex flex-col items-center">
-              <span className="text-lg font-bold data-value">{formatTimeMst(fixture.kickoff)}</span>
+              <span className="text-base md:text-lg font-bold data-value">{formatTimeMst(fixture.kickoff)}</span>
             </div>
           )}
         </div>
