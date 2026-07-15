@@ -573,10 +573,14 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
     logger.warn("API_FOOTBALL_KEY not set — skipping live fixtures sync, using seeded fixtures only");
     return;
   }
-  syncApiFootballFixtures().catch((err) => logger.error({ err }, "Initial API-Football sync failed"));
-  intervalHandle = setInterval(() => {
-    syncApiFootballFixtures().catch((err) => logger.error({ err }, "Scheduled API-Football sync failed"));
-  }, intervalMs);
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+  const COOLDOWN = 50 * 60 * 1000; // 50 min — skip startup re-run if already ran this hour
+  const run = async () => {
+    if (!(await claimSyncRun("fixtures", COOLDOWN))) return;
+    syncApiFootballFixtures().catch((err) => logger.error({ err }, "API-Football fixtures sync failed"));
+  };
+  run();
+  intervalHandle = setInterval(run, intervalMs);
 }
 
 export function stopApiFootballSyncSchedule(): void {

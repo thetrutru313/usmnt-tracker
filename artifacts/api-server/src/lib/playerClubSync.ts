@@ -400,10 +400,14 @@ export function startPlayerClubSyncSchedule(intervalMs = 24 * 60 * 60 * 1000): v
     logger.warn("API_FOOTBALL_KEY not set — skipping player-club sync, using seeded club assignments only");
     return;
   }
-  syncPlayerClubs().catch((err) => logger.error({ err }, "Initial player-club sync failed"));
-  intervalHandle = setInterval(() => {
-    syncPlayerClubs().catch((err) => logger.error({ err }, "Scheduled player-club sync failed"));
-  }, intervalMs);
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+  const COOLDOWN = 23 * 60 * 60 * 1000;
+  const run = async () => {
+    if (!(await claimSyncRun("playerClub", COOLDOWN))) return;
+    syncPlayerClubs().catch((err) => logger.error({ err }, "Player-club sync failed"));
+  };
+  run();
+  intervalHandle = setInterval(run, intervalMs);
 }
 
 export function stopPlayerClubSyncSchedule(): void {

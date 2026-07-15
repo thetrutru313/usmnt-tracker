@@ -296,10 +296,14 @@ let intervalHandle: NodeJS.Timeout | null = null;
 
 /** Runs the sync immediately, then daily — no API key needed, Wikipedia's API is public. */
 export function startNationalTeamSyncSchedule(intervalMs = 24 * 60 * 60 * 1000): void {
-  syncNationalTeamCapsAndGoals().catch((err) => logger.error({ err }, "Initial national-team caps/goals sync failed"));
-  intervalHandle = setInterval(() => {
-    syncNationalTeamCapsAndGoals().catch((err) => logger.error({ err }, "Scheduled national-team caps/goals sync failed"));
-  }, intervalMs);
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+  const COOLDOWN = 23 * 60 * 60 * 1000;
+  const run = async () => {
+    if (!(await claimSyncRun("nationalTeamCaps", COOLDOWN))) return;
+    syncNationalTeamCapsAndGoals().catch((err) => logger.error({ err }, "National-team caps/goals sync failed"));
+  };
+  run();
+  intervalHandle = setInterval(run, intervalMs);
 }
 
 export function stopNationalTeamSyncSchedule(): void {

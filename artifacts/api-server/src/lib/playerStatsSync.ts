@@ -952,10 +952,17 @@ export function startPlayerStatsSyncSchedule(
     logger.warn("API_FOOTBALL_KEY not set — skipping live player-stats sync, no season stats/match logs/injuries will be available");
     return;
   }
-  const run = () =>
-    syncPlayerStatsAndInjuries()
-      .then(() => afterSync?.())
-      .catch((err) => logger.error({ err }, "Player-stats sync (or post-sync) failed"));
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+  const COOLDOWN = 23 * 60 * 60 * 1000; // 23 h — skip startup re-run if already ran today
+  const run = async () => {
+    if (!(await claimSyncRun("playerStats", COOLDOWN))) return;
+    try {
+      await syncPlayerStatsAndInjuries();
+      await afterSync?.();
+    } catch (err) {
+      logger.error({ err }, "Player-stats sync (or post-sync) failed");
+    }
+  };
   run();
   intervalHandle = setInterval(run, intervalMs);
 }

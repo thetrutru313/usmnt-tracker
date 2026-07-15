@@ -289,10 +289,14 @@ export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
     logger.warn("API_FOOTBALL_KEY not set — skipping USMNT stats sync, no national-team match logs/cycle stats will be available");
     return;
   }
-  syncUsmntStats().catch((err) => logger.error({ err }, "Initial USMNT stats sync failed"));
-  intervalHandle = setInterval(() => {
-    syncUsmntStats().catch((err) => logger.error({ err }, "Scheduled USMNT stats sync failed"));
-  }, intervalMs);
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+  const COOLDOWN = 50 * 60 * 1000;
+  const run = async () => {
+    if (!(await claimSyncRun("usmntStats", COOLDOWN))) return;
+    syncUsmntStats().catch((err) => logger.error({ err }, "USMNT stats sync failed"));
+  };
+  run();
+  intervalHandle = setInterval(run, intervalMs);
 }
 
 export function stopUsmntStatsSyncSchedule(): void {
