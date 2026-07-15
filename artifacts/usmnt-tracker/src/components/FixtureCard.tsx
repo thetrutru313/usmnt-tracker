@@ -113,7 +113,7 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             Logos sit in fixed-size slots directly flanking the VS badge so
             they stay at the same position regardless of team name length.
           */}
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2">
             <span className="flex-1 font-bold text-lg text-right leading-snug">{fixture.homeTeam}</span>
             <div className="w-7 h-7 shrink-0 flex items-center justify-center">
               {fixture.homeLogoUrl && (
@@ -130,23 +130,6 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             </div>
             <span className="flex-1 font-bold text-lg leading-snug">{fixture.awayTeam}</span>
           </div>
-
-          {/* USMNT Players involved */}
-          {fixture.featuredPlayers.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-3 border-t border-border/50">
-              {fixture.featuredPlayers.map((p) => (
-                <Link
-                  key={p.id}
-                  href={`/players/${p.id}`}
-                  className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
-                  title={POOL_TIER_LABELS[p.poolTier]}
-                >
-                  <PoolTierIcon tier={p.poolTier} />
-                  {p.name}
-                </Link>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Broadcast Info */}
@@ -185,6 +168,23 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
           )}
         </div>
       </div>
+
+      {/* Full-width player footer — outside the 3-col row so tags span the whole card */}
+      {fixture.featuredPlayers.length > 0 && (
+        <div className="border-t border-border px-4 py-3 flex flex-wrap gap-2">
+          {fixture.featuredPlayers.map((p) => (
+            <Link
+              key={p.id}
+              href={`/players/${p.id}`}
+              className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
+              title={POOL_TIER_LABELS[p.poolTier]}
+            >
+              <PoolTierIcon tier={p.poolTier} />
+              {p.name}
+            </Link>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
