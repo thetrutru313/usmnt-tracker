@@ -88,6 +88,28 @@ describe("groupInjuryEpisodes — club + national-team entry deduplication", () 
     expect(episodes[1].matches).toBe(1);
   });
 
+  it("same reason, dates spanning a season boundary (Aug 2024 → Sep 2025, >45 days) → two separate episodes, not one merged", () => {
+    // seasonYearCandidates() fetches 3 consecutive years and merges all results
+    // before calling groupInjuryEpisodes. A recurring injury with the same reason
+    // string (e.g. "Hamstring Injury") that appears in two different seasons must
+    // never be collapsed into a single episode just because the reason strings match —
+    // the >45-day gap between fixtures must always force a new episode regardless of
+    // which season each entry was fetched under.
+    const entries: InjuryEntry[] = [
+      makeEntry({ fixtureId: 301, fixtureDate: "2024-08-20T15:00:00Z", reason: "Hamstring Injury" }),
+      makeEntry({ fixtureId: 302, fixtureDate: "2025-09-10T15:00:00Z", reason: "Hamstring Injury" }),
+    ];
+    const episodes = groupInjuryEpisodes(entries as Parameters<typeof groupInjuryEpisodes>[0], TODAY);
+    expect(episodes).toHaveLength(2);
+    expect(episodes[0].reason).toBe("Hamstring Injury");
+    expect(episodes[0].matches).toBe(1);
+    expect(episodes[1].reason).toBe("Hamstring Injury");
+    expect(episodes[1].matches).toBe(1);
+    // Season boundary: first episode belongs to 2024, second to 2025
+    expect(episodes[0].start).toBe("2024-08-20");
+    expect(episodes[1].start).toBe("2025-09-10");
+  });
+
   it("fixtures with different reasons → two separate episodes even if dates are close", () => {
     const entries: InjuryEntry[] = [
       makeEntry({ fixtureId: 101, fixtureDate: "2026-03-10T15:00:00Z", reason: "Hamstring Injury" }),
