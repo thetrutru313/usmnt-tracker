@@ -208,6 +208,22 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string }): Pr
 }
 
 /**
+ * Resolves API-Football ids for every player missing one, mutating each
+ * row's `apiFootballPlayerId` in place (and persisting it) as it goes —
+ * shared by the player-club sync and the player-stats/match-log/injuries
+ * sync so both reuse the same known-id overrides, squad-lookup, and
+ * name-search fallback rather than re-resolving independently.
+ */
+export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById: Map<number, ClubRow>): Promise<void> {
+  await applyKnownPlayerIdOverrides(players);
+  await resolvePlayerIdsViaSquads(players, clubsById);
+  for (const player of players) {
+    if (player.apiFootballPlayerId) continue;
+    player.apiFootballPlayerId = await resolvePlayerIdBySearch(player);
+  }
+}
+
+/**
  * Keeps each tracked player's club current by checking API-Football's
  * transfer history for their most recent move. Only clubs already tracked in
  * our `clubs` table (i.e. previously resolved by the fixtures sync) are
@@ -230,18 +246,14 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
   const clubsByApiFootballId = new Map(clubs.filter((c): c is ClubRow & { apiFootballTeamId: number } => c.apiFootballTeamId != null).map((c) => [c.apiFootballTeamId, c]));
 
-  await applyKnownPlayerIdOverrides(players);
-  await resolvePlayerIdsViaSquads(players, clubsById);
+  await ensurePlayerApiFootballIds(players, clubsById);
 
   let playersChecked = 0;
   let clubsUpdated = 0;
   let failures = 0;
 
   for (const player of players) {
-    let apiFootballPlayerId = player.apiFootballPlayerId;
-    if (!apiFootballPlayerId) {
-      apiFootballPlayerId = await resolvePlayerIdBySearch(player);
-    }
+    const apiFootballPlayerId = player.apiFootballPlayerId;
     if (!apiFootballPlayerId) {
       failures++;
       continue;

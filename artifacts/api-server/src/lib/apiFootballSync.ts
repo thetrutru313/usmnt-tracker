@@ -97,7 +97,7 @@ function isReserveOrYouthTeam(name: string): boolean {
   return RESERVE_TEAM_PATTERN.test(name.trim());
 }
 
-const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
+export const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
 const POSTPONED_STATUSES = new Set(["PST", "CANC", "ABD"]);
 
 function mapStatus(short: string): string {
@@ -129,7 +129,7 @@ export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
 };
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */
-async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId: number | null }): Promise<number | null> {
+export async function resolveTeamId(club: { id: number; name: string; apiFootballTeamId: number | null }): Promise<number | null> {
   if (club.apiFootballTeamId) return club.apiFootballTeamId;
 
   const searchTerm = SEARCH_TERM_OVERRIDES[club.name] ?? club.name;

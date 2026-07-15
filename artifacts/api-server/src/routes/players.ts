@@ -98,25 +98,24 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     recentNews = await attachPlayersToNews(rows);
   }
 
+  // Used only when we have no synced stats row for this player/period at
+  // all (e.g. never resolved to an API-Football id yet). Percentage/rating
+  // fields are null rather than a fabricated 0 — the UI shows "—" for these.
   const emptyStats = {
     season: "N/A",
     minutes: 0,
     starts: 0,
     goals: 0,
     assists: 0,
-    xg: 0,
-    xa: 0,
     shots: 0,
     keyPasses: 0,
-    passCompletionPct: 0,
-    progressivePasses: 0,
-    progressiveCarries: 0,
+    passCompletionPct: null,
     tackles: 0,
     interceptions: 0,
-    duelsWonPct: 0,
-    cleanSheets: 0,
+    duelsWonPct: null,
+    cleanSheets: null,
     savePct: null,
-    avgRating: 0,
+    avgRating: null,
   };
 
   const profile = {

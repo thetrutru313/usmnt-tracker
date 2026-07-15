@@ -83,19 +83,15 @@ export const GetPlayerResponse = zod.object({
   "starts": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "xg": zod.number(),
-  "xa": zod.number(),
   "shots": zod.number(),
   "keyPasses": zod.number(),
-  "passCompletionPct": zod.number(),
-  "progressivePasses": zod.number(),
-  "progressiveCarries": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
   "tackles": zod.number(),
   "interceptions": zod.number(),
-  "duelsWonPct": zod.number(),
-  "cleanSheets": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
   "savePct": zod.number().nullable(),
-  "avgRating": zod.number()
+  "avgRating": zod.number().nullable()
 }),
   "last5Stats": zod.object({
   "season": zod.string(),
@@ -103,19 +99,15 @@ export const GetPlayerResponse = zod.object({
   "starts": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "xg": zod.number(),
-  "xa": zod.number(),
   "shots": zod.number(),
   "keyPasses": zod.number(),
-  "passCompletionPct": zod.number(),
-  "progressivePasses": zod.number(),
-  "progressiveCarries": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
   "tackles": zod.number(),
   "interceptions": zod.number(),
-  "duelsWonPct": zod.number(),
-  "cleanSheets": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
   "savePct": zod.number().nullable(),
-  "avgRating": zod.number()
+  "avgRating": zod.number().nullable()
 }),
   "previousSeasonStats": zod.object({
   "season": zod.string(),
@@ -123,19 +115,15 @@ export const GetPlayerResponse = zod.object({
   "starts": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "xg": zod.number(),
-  "xa": zod.number(),
   "shots": zod.number(),
   "keyPasses": zod.number(),
-  "passCompletionPct": zod.number(),
-  "progressivePasses": zod.number(),
-  "progressiveCarries": zod.number(),
+  "passCompletionPct": zod.number().nullable(),
   "tackles": zod.number(),
   "interceptions": zod.number(),
-  "duelsWonPct": zod.number(),
-  "cleanSheets": zod.number(),
+  "duelsWonPct": zod.number().nullable(),
+  "cleanSheets": zod.number().nullable(),
   "savePct": zod.number().nullable(),
-  "avgRating": zod.number()
+  "avgRating": zod.number().nullable()
 }),
   "matchLog": zod.array(zod.object({
   "id": zod.number(),
@@ -146,7 +134,7 @@ export const GetPlayerResponse = zod.object({
   "minutes": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number().nullable()
 })),
   "injuries": zod.array(zod.object({
   "id": zod.number(),
@@ -549,7 +537,7 @@ export const GetRankingsResponse = zod.object({
   "minutes": zod.number(),
   "goals": zod.number(),
   "assists": zod.number(),
-  "rating": zod.number(),
+  "rating": zod.number().nullable(),
   "player": zod.object({
   "id": zod.number(),
   "name": zod.string(),

@@ -16,6 +16,7 @@ export interface MatchLogWithPlayer {
   minutes: number;
   goals: number;
   assists: number;
-  rating: number;
+  /** @nullable */
+  rating: number | null;
   player: FeaturedPlayer;
 }

@@ -11,8 +11,13 @@ export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const playerId = parseInt(id || "0", 10);
   
+  // The generated hook's `query` option type omits `Partial<>`, so a bare
+  // `{ enabled }` object doesn't structurally satisfy it even though the
+  // underlying react-query call accepts it fine (queryKey/queryFn are filled
+  // in by the generated `getGetPlayerQueryOptions` merge).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: player, isLoading, error } = useGetPlayer(playerId, {
-    query: { enabled: !!playerId }
+    query: { enabled: !!playerId } as any
   });
 
   if (isLoading) {
@@ -132,11 +137,11 @@ export default function PlayerProfile() {
                 </div>
                 <div className="p-4 flex flex-col justify-center items-center text-center">
                   <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Avg Rating</span>
-                  <span className="text-xl font-bold data-value text-secondary">{player.seasonStats.avgRating.toFixed(2)}</span>
+                  <span className="text-xl font-bold data-value text-secondary">{player.seasonStats.avgRating != null ? player.seasonStats.avgRating.toFixed(2) : '–'}</span>
                 </div>
                 <div className="p-4 flex flex-col justify-center items-center text-center">
-                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">xG / xA</span>
-                  <span className="text-xl font-bold data-value">{player.seasonStats.xg.toFixed(2)} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.xa.toFixed(2)}</span></span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Shots / Key Passes</span>
+                  <span className="text-xl font-bold data-value">{player.seasonStats.shots} <span className="text-sm text-muted-foreground font-normal">/ {player.seasonStats.keyPasses}</span></span>
                 </div>
               </div>
             </CardContent>
@@ -176,9 +181,13 @@ export default function PlayerProfile() {
                           {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
                         </td>
                         <td className="py-3 text-right font-bold data-value">
-                          <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
-                            {match.rating.toFixed(1)}
-                          </span>
+                          {match.rating != null ? (
+                            <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
+                              {match.rating.toFixed(1)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">–</span>
+                          )}
                         </td>
                       </tr>
                     ))}

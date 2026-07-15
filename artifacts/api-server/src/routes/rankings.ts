@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetRankingsResponse } from "@workspace/api-zod";
 import { db, playersTable, clubsTable } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import {
   playerStatsTable,
   matchLogsTable,
@@ -23,7 +23,7 @@ router.get("/rankings", async (_req, res): Promise<void> => {
         .from(playerStatsTable)
         .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
         .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-        .where(eq(playerStatsTable.periodType, "last5"))
+        .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
         .orderBy(desc(playerStatsTable.avgRating))
         .limit(8),
       db
@@ -47,6 +47,10 @@ router.get("/rankings", async (_req, res): Promise<void> => {
         })
         .from(matchLogsTable)
         .innerJoin(playersTable, eq(matchLogsTable.playerId, playersTable.id))
+        // Only real, rated appearances can be a "best performance" — brief
+        // cameos with no API-Football rating are excluded rather than sorted
+        // to the top by a null-as-highest ordering quirk.
+        .where(isNotNull(matchLogsTable.rating))
         .orderBy(desc(matchLogsTable.rating))
         .limit(8),
       db

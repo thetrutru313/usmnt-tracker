@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { db, nationalTeamWindowsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt } from "drizzle-orm";
 import {
   fixturesTable,
   newsArticlesTable,
@@ -56,7 +56,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .from(playerStatsTable)
       .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
       .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(eq(playerStatsTable.periodType, "last5"))
+      .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
       .orderBy(desc(playerStatsTable.avgRating))
       .limit(5),
     playerSummaryQuery().where(eq(playersTable.trending, true)).limit(6),

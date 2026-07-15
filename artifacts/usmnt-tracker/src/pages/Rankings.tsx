@@ -76,7 +76,7 @@ export default function Rankings() {
                       </div>
                     </div>
                     <div className="text-3xl font-bold font-mono text-secondary">
-                      {match.rating.toFixed(1)}
+                      {match.rating != null ? match.rating.toFixed(1) : "–"}
                     </div>
                   </div>
                 </div>

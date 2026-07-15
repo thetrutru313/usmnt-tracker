@@ -2,13 +2,10 @@ import { db } from "@workspace/db";
 import {
   clubsTable,
   playersTable,
-  playerStatsTable,
-  matchLogsTable,
   fixturesTable,
   fixturePlayersTable,
   newsArticlesTable,
   newsArticlePlayersTable,
-  injuriesTable,
   transfersTable,
   nationalTeamWindowsTable,
 } from "@workspace/db";
@@ -370,173 +367,12 @@ async function main() {
   const playerIdBySlug = new Map(insertedPlayers.map((p) => [p.slug, p.id]));
   const playerByName = new Map(playerDefs.map((p, i) => [p.name, insertedPlayers[i]]));
 
-  // ---- Player Stats (season, last5, previous_season) ----
-  type StatProfile = {
-    minutes: number;
-    starts: number;
-    goals: number;
-    assists: number;
-    xg: number;
-    xa: number;
-    shots: number;
-    keyPasses: number;
-    passCompletionPct: number;
-    progressivePasses: number;
-    progressiveCarries: number;
-    tackles: number;
-    interceptions: number;
-    duelsWonPct: number;
-    cleanSheets: number;
-    savePct: number | null;
-    avgRating: number;
-  };
-
-  function scale(profile: StatProfile, factor: number): StatProfile {
-    return {
-      minutes: Math.round(profile.minutes * factor),
-      starts: Math.max(0, Math.round(profile.starts * factor)),
-      goals: Math.max(0, Math.round(profile.goals * factor)),
-      assists: Math.max(0, Math.round(profile.assists * factor)),
-      xg: Math.round(profile.xg * factor * 10) / 10,
-      xa: Math.round(profile.xa * factor * 10) / 10,
-      shots: Math.round(profile.shots * factor),
-      keyPasses: Math.round(profile.keyPasses * factor),
-      passCompletionPct: profile.passCompletionPct,
-      progressivePasses: Math.round(profile.progressivePasses * factor),
-      progressiveCarries: Math.round(profile.progressiveCarries * factor),
-      tackles: Math.round(profile.tackles * factor),
-      interceptions: Math.round(profile.interceptions * factor),
-      duelsWonPct: profile.duelsWonPct,
-      cleanSheets: Math.round(profile.cleanSheets * factor),
-      savePct: profile.savePct,
-      avgRating: profile.avgRating,
-    };
-  }
-
-  const seasonProfiles: Record<string, StatProfile> = {
-    "Christian Pulisic": { minutes: 2450, starts: 27, goals: 14, assists: 9, xg: 12.1, xa: 7.8, shots: 78, keyPasses: 54, passCompletionPct: 82.4, progressivePasses: 96, progressiveCarries: 112, tackles: 22, interceptions: 14, duelsWonPct: 51.2, cleanSheets: 0, savePct: null, avgRating: 7.4 },
-    "Weston McKennie": { minutes: 2280, starts: 26, goals: 7, assists: 4, xg: 5.2, xa: 3.6, shots: 41, keyPasses: 22, passCompletionPct: 86.1, progressivePasses: 128, progressiveCarries: 64, tackles: 48, interceptions: 26, duelsWonPct: 58.4, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Tyler Adams": { minutes: 1580, starts: 18, goals: 0, assists: 2, xg: 0.6, xa: 1.4, shots: 9, keyPasses: 14, passCompletionPct: 89.7, progressivePasses: 142, progressiveCarries: 38, tackles: 68, interceptions: 44, duelsWonPct: 62.1, cleanSheets: 0, savePct: null, avgRating: 7.1 },
-    "Antonee Robinson": { minutes: 2610, starts: 29, goals: 2, assists: 6, xg: 1.4, xa: 4.9, shots: 24, keyPasses: 38, passCompletionPct: 80.5, progressivePasses: 118, progressiveCarries: 96, tackles: 52, interceptions: 34, duelsWonPct: 55.6, cleanSheets: 0, savePct: null, avgRating: 7.0 },
-    "Yunus Musah": { minutes: 2140, starts: 24, goals: 1, assists: 3, xg: 1.1, xa: 2.4, shots: 18, keyPasses: 19, passCompletionPct: 90.2, progressivePasses: 108, progressiveCarries: 122, tackles: 44, interceptions: 22, duelsWonPct: 56.8, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Ricardo Pepi": { minutes: 2380, starts: 27, goals: 18, assists: 5, xg: 15.4, xa: 3.9, shots: 92, keyPasses: 21, passCompletionPct: 76.9, progressivePasses: 38, progressiveCarries: 44, tackles: 8, interceptions: 6, duelsWonPct: 48.9, cleanSheets: 0, savePct: null, avgRating: 7.5 },
-    "Folarin Balogun": { minutes: 1720, starts: 19, goals: 9, assists: 2, xg: 9.8, xa: 1.6, shots: 61, keyPasses: 14, passCompletionPct: 74.2, progressivePasses: 22, progressiveCarries: 34, tackles: 6, interceptions: 4, duelsWonPct: 46.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Timothy Weah": { minutes: 1980, starts: 22, goals: 5, assists: 4, xg: 4.6, xa: 3.2, shots: 38, keyPasses: 26, passCompletionPct: 79.8, progressivePasses: 64, progressiveCarries: 58, tackles: 24, interceptions: 12, duelsWonPct: 52.3, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Malik Tillman": { minutes: 2560, starts: 28, goals: 12, assists: 11, xg: 10.9, xa: 8.7, shots: 71, keyPasses: 62, passCompletionPct: 81.6, progressivePasses: 88, progressiveCarries: 104, tackles: 18, interceptions: 10, duelsWonPct: 49.8, cleanSheets: 0, savePct: null, avgRating: 7.6 },
-    "Sergiño Dest": { minutes: 1340, starts: 15, goals: 1, assists: 3, xg: 1.0, xa: 2.6, shots: 16, keyPasses: 22, passCompletionPct: 82.1, progressivePasses: 62, progressiveCarries: 58, tackles: 26, interceptions: 16, duelsWonPct: 53.4, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Chris Richards": { minutes: 2670, starts: 29, goals: 1, assists: 1, xg: 1.2, xa: 0.6, shots: 14, keyPasses: 6, passCompletionPct: 88.9, progressivePasses: 74, progressiveCarries: 22, tackles: 42, interceptions: 58, duelsWonPct: 64.7, cleanSheets: 9, savePct: null, avgRating: 6.9 },
-    "Matt Turner": { minutes: 900, starts: 10, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 68.4, progressivePasses: 4, progressiveCarries: 0, tackles: 0, interceptions: 2, duelsWonPct: 0, cleanSheets: 3, savePct: 71.2, avgRating: 6.6 },
-    "Giovanni Reyna": { minutes: 980, starts: 10, goals: 3, assists: 3, xg: 2.8, xa: 2.2, shots: 26, keyPasses: 18, passCompletionPct: 83.5, progressivePasses: 42, progressiveCarries: 48, tackles: 10, interceptions: 6, duelsWonPct: 47.2, cleanSheets: 0, savePct: null, avgRating: 6.7 },
-    "Josh Sargent": { minutes: 2210, starts: 25, goals: 11, assists: 4, xg: 9.6, xa: 3.4, shots: 58, keyPasses: 20, passCompletionPct: 75.1, progressivePasses: 28, progressiveCarries: 30, tackles: 12, interceptions: 8, duelsWonPct: 54.9, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Paxten Aaronson": { minutes: 860, starts: 8, goals: 2, assists: 3, xg: 1.9, xa: 2.4, shots: 20, keyPasses: 16, passCompletionPct: 84.7, progressivePasses: 36, progressiveCarries: 40, tackles: 10, interceptions: 6, duelsWonPct: 50.1, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Aidan Morris": { minutes: 1620, starts: 18, goals: 0, assists: 1, xg: 0.4, xa: 0.9, shots: 8, keyPasses: 10, passCompletionPct: 87.3, progressivePasses: 92, progressiveCarries: 24, tackles: 56, interceptions: 34, duelsWonPct: 59.6, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Djordje Mihailovic": { minutes: 2320, starts: 26, goals: 6, assists: 10, xg: 5.4, xa: 8.9, shots: 44, keyPasses: 58, passCompletionPct: 83.0, progressivePasses: 76, progressiveCarries: 66, tackles: 20, interceptions: 12, duelsWonPct: 48.6, cleanSheets: 0, savePct: null, avgRating: 7.2 },
-    "Tanner Tessmann": { minutes: 1740, starts: 19, goals: 1, assists: 2, xg: 0.8, xa: 1.6, shots: 12, keyPasses: 12, passCompletionPct: 88.1, progressivePasses: 84, progressiveCarries: 20, tackles: 50, interceptions: 30, duelsWonPct: 57.9, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Cavan Sullivan": { minutes: 620, starts: 4, goals: 3, assists: 2, xg: 2.6, xa: 1.8, shots: 18, keyPasses: 10, passCompletionPct: 71.4, progressivePasses: 14, progressiveCarries: 26, tackles: 4, interceptions: 2, duelsWonPct: 42.3, cleanSheets: 0, savePct: null, avgRating: 6.7 },
-    "Diego Kochen": { minutes: 270, starts: 3, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 65.2, progressivePasses: 2, progressiveCarries: 0, tackles: 0, interceptions: 1, duelsWonPct: 0, cleanSheets: 1, savePct: 68.8, avgRating: 6.5 },
-    "Benjamin Cremaschi": { minutes: 1980, starts: 22, goals: 4, assists: 8, xg: 3.6, xa: 6.9, shots: 30, keyPasses: 46, passCompletionPct: 86.8, progressivePasses: 94, progressiveCarries: 42, tackles: 24, interceptions: 16, duelsWonPct: 49.4, cleanSheets: 0, savePct: null, avgRating: 7.1 },
-    "Noel Buck": { minutes: 540, starts: 5, goals: 0, assists: 1, xg: 0.3, xa: 0.7, shots: 6, keyPasses: 6, passCompletionPct: 82.6, progressivePasses: 22, progressiveCarries: 10, tackles: 16, interceptions: 10, duelsWonPct: 52.8, cleanSheets: 0, savePct: null, avgRating: 6.6 },
-    "Obed Vargas": { minutes: 1640, starts: 17, goals: 1, assists: 2, xg: 0.9, xa: 1.4, shots: 14, keyPasses: 14, passCompletionPct: 85.4, progressivePasses: 70, progressiveCarries: 34, tackles: 46, interceptions: 24, duelsWonPct: 55.1, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Nimfasha Berchimas": { minutes: 980, starts: 10, goals: 0, assists: 0, xg: 0.1, xa: 0.2, shots: 3, keyPasses: 4, passCompletionPct: 84.9, progressivePasses: 32, progressiveCarries: 8, tackles: 22, interceptions: 20, duelsWonPct: 58.2, cleanSheets: 4, savePct: null, avgRating: 6.7 },
-    "Mathis Albert": { minutes: 640, starts: 6, goals: 4, assists: 3, xg: 3.4, xa: 2.6, shots: 22, keyPasses: 16, passCompletionPct: 78.6, progressivePasses: 30, progressiveCarries: 48, tackles: 6, interceptions: 3, duelsWonPct: 44.8, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Noahkai Banks": { minutes: 810, starts: 9, goals: 0, assists: 1, xg: 0.2, xa: 0.4, shots: 5, keyPasses: 3, passCompletionPct: 86.3, progressivePasses: 40, progressiveCarries: 12, tackles: 20, interceptions: 26, duelsWonPct: 61.4, cleanSheets: 3, savePct: null, avgRating: 6.7 },
-    "Leonard Prescott": { minutes: 90, starts: 1, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 60.0, progressivePasses: 1, progressiveCarries: 0, tackles: 0, interceptions: 0, duelsWonPct: 0, cleanSheets: 1, savePct: 75.0, avgRating: 6.6 },
-    "Zavier Gozo": { minutes: 420, starts: 4, goals: 2, assists: 1, xg: 1.8, xa: 0.9, shots: 14, keyPasses: 6, passCompletionPct: 76.2, progressivePasses: 18, progressiveCarries: 24, tackles: 4, interceptions: 2, duelsWonPct: 46.5, cleanSheets: 0, savePct: null, avgRating: 6.7 },
-    "Chris Brady": { minutes: 2340, starts: 26, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 74.8, progressivePasses: 10, progressiveCarries: 0, tackles: 0, interceptions: 3, duelsWonPct: 0, cleanSheets: 8, savePct: 69.4, avgRating: 6.8 },
-    "Matt Freese": { minutes: 2610, starts: 29, goals: 0, assists: 1, xg: 0, xa: 0.1, shots: 0, keyPasses: 2, passCompletionPct: 78.2, progressivePasses: 16, progressiveCarries: 0, tackles: 0, interceptions: 4, duelsWonPct: 0, cleanSheets: 11, savePct: 72.6, avgRating: 7.0 },
-    "Max Arfsten": { minutes: 2460, starts: 27, goals: 4, assists: 8, xg: 3.6, xa: 6.4, shots: 34, keyPasses: 42, passCompletionPct: 80.9, progressivePasses: 104, progressiveCarries: 88, tackles: 40, interceptions: 24, duelsWonPct: 53.8, cleanSheets: 0, savePct: null, avgRating: 7.2 },
-    "Alex Freeman": { minutes: 2380, starts: 26, goals: 5, assists: 11, xg: 4.2, xa: 8.9, shots: 40, keyPasses: 56, passCompletionPct: 81.4, progressivePasses: 118, progressiveCarries: 132, tackles: 44, interceptions: 22, duelsWonPct: 56.9, cleanSheets: 0, savePct: null, avgRating: 7.6 },
-    "Mark McKenzie": { minutes: 2520, starts: 28, goals: 1, assists: 0, xg: 0.8, xa: 0.3, shots: 8, keyPasses: 4, passCompletionPct: 87.6, progressivePasses: 88, progressiveCarries: 20, tackles: 46, interceptions: 62, duelsWonPct: 63.2, cleanSheets: 10, savePct: null, avgRating: 6.9 },
-    "Tim Ream": { minutes: 2380, starts: 27, goals: 1, assists: 1, xg: 0.6, xa: 0.2, shots: 6, keyPasses: 3, passCompletionPct: 89.1, progressivePasses: 96, progressiveCarries: 12, tackles: 38, interceptions: 58, duelsWonPct: 60.4, cleanSheets: 9, savePct: null, avgRating: 6.9 },
-    "Miles Robinson": { minutes: 2280, starts: 25, goals: 3, assists: 0, xg: 2.4, xa: 0.2, shots: 20, keyPasses: 2, passCompletionPct: 84.3, progressivePasses: 62, progressiveCarries: 18, tackles: 44, interceptions: 50, duelsWonPct: 61.7, cleanSheets: 8, savePct: null, avgRating: 6.9 },
-    "Joe Scally": { minutes: 2470, starts: 27, goals: 0, assists: 3, xg: 0.5, xa: 2.8, shots: 12, keyPasses: 24, passCompletionPct: 83.7, progressivePasses: 92, progressiveCarries: 64, tackles: 42, interceptions: 28, duelsWonPct: 54.5, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Auston Trusty": { minutes: 2610, starts: 29, goals: 2, assists: 1, xg: 1.6, xa: 0.4, shots: 16, keyPasses: 3, passCompletionPct: 86.9, progressivePasses: 70, progressiveCarries: 16, tackles: 40, interceptions: 54, duelsWonPct: 62.8, cleanSheets: 11, savePct: null, avgRating: 7.1 },
-    "Sebastian Berhalter": { minutes: 1980, starts: 22, goals: 1, assists: 2, xg: 0.9, xa: 1.6, shots: 14, keyPasses: 18, passCompletionPct: 88.4, progressivePasses: 110, progressiveCarries: 30, tackles: 52, interceptions: 32, duelsWonPct: 57.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Cristian Roldan": { minutes: 2340, starts: 26, goals: 3, assists: 4, xg: 2.6, xa: 3.2, shots: 24, keyPasses: 26, passCompletionPct: 85.0, progressivePasses: 84, progressiveCarries: 42, tackles: 44, interceptions: 26, duelsWonPct: 53.9, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Brenden Aaronson": { minutes: 2620, starts: 29, goals: 9, assists: 6, xg: 7.4, xa: 4.8, shots: 58, keyPasses: 40, passCompletionPct: 79.6, progressivePasses: 74, progressiveCarries: 86, tackles: 30, interceptions: 14, duelsWonPct: 50.2, cleanSheets: 0, savePct: null, avgRating: 7.4 },
-    "Alejandro Zendejas": { minutes: 1860, starts: 20, goals: 6, assists: 7, xg: 5.6, xa: 5.9, shots: 44, keyPasses: 38, passCompletionPct: 80.1, progressivePasses: 60, progressiveCarries: 70, tackles: 14, interceptions: 6, duelsWonPct: 47.8, cleanSheets: 0, savePct: null, avgRating: 7.0 },
-    "Haji Wright": { minutes: 2540, starts: 28, goals: 17, assists: 3, xg: 14.8, xa: 2.6, shots: 88, keyPasses: 18, passCompletionPct: 74.5, progressivePasses: 26, progressiveCarries: 28, tackles: 8, interceptions: 4, duelsWonPct: 51.6, cleanSheets: 0, savePct: null, avgRating: 7.3 },
-    "Diego Luna": { minutes: 1740, starts: 18, goals: 5, assists: 9, xg: 4.1, xa: 7.6, shots: 42, keyPasses: 48, passCompletionPct: 82.9, progressivePasses: 86, progressiveCarries: 96, tackles: 12, interceptions: 6, duelsWonPct: 46.4, cleanSheets: 0, savePct: null, avgRating: 7.2 },
-    "Gaga Slonina": { minutes: 990, starts: 11, goals: 0, assists: 0, xg: 0, xa: 0, shots: 0, keyPasses: 0, passCompletionPct: 70.2, progressivePasses: 6, progressiveCarries: 0, tackles: 0, interceptions: 2, duelsWonPct: 0, cleanSheets: 3, savePct: 66.7, avgRating: 6.6 },
-    "Caleb Wiley": { minutes: 860, starts: 9, goals: 0, assists: 2, xg: 0.4, xa: 1.4, shots: 10, keyPasses: 12, passCompletionPct: 79.0, progressivePasses: 32, progressiveCarries: 38, tackles: 16, interceptions: 8, duelsWonPct: 49.1, cleanSheets: 0, savePct: null, avgRating: 6.6 },
-    "Damion Downs": { minutes: 780, starts: 8, goals: 4, assists: 1, xg: 3.6, xa: 0.6, shots: 26, keyPasses: 6, passCompletionPct: 73.4, progressivePasses: 14, progressiveCarries: 20, tackles: 4, interceptions: 2, duelsWonPct: 52.9, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Cole Campbell": { minutes: 420, starts: 4, goals: 1, assists: 2, xg: 1.2, xa: 1.6, shots: 12, keyPasses: 10, passCompletionPct: 80.6, progressivePasses: 20, progressiveCarries: 24, tackles: 6, interceptions: 4, duelsWonPct: 45.2, cleanSheets: 0, savePct: null, avgRating: 6.7 },
-    "Bajung Darboe": { minutes: 610, starts: 6, goals: 3, assists: 2, xg: 2.6, xa: 1.8, shots: 18, keyPasses: 14, passCompletionPct: 76.8, progressivePasses: 24, progressiveCarries: 32, tackles: 4, interceptions: 3, duelsWonPct: 48.5, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Montrell Culbreath": { minutes: 800, starts: 6, goals: 1, assists: 1, xg: 1.4, xa: 1.1, shots: 15, keyPasses: 9, passCompletionPct: 79.3, progressivePasses: 18, progressiveCarries: 22, tackles: 5, interceptions: 3, duelsWonPct: 44.0, cleanSheets: 0, savePct: null, avgRating: 6.6 },
-    "Rokas Pukstas": { minutes: 1980, starts: 22, goals: 3, assists: 4, xg: 2.8, xa: 3.6, shots: 30, keyPasses: 28, passCompletionPct: 84.2, progressivePasses: 76, progressiveCarries: 40, tackles: 34, interceptions: 20, duelsWonPct: 53.1, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Quinn Sullivan": { minutes: 640, starts: 6, goals: 2, assists: 3, xg: 1.8, xa: 2.4, shots: 20, keyPasses: 16, passCompletionPct: 81.3, progressivePasses: 26, progressiveCarries: 30, tackles: 6, interceptions: 2, duelsWonPct: 44.6, cleanSheets: 0, savePct: null, avgRating: 6.8 },
-    "Luca Bombino": { minutes: 1860, starts: 20, goals: 0, assists: 3, xg: 0.4, xa: 2.6, shots: 10, keyPasses: 20, passCompletionPct: 85.8, progressivePasses: 96, progressiveCarries: 34, tackles: 32, interceptions: 18, duelsWonPct: 51.7, cleanSheets: 0, savePct: null, avgRating: 6.9 },
-    "Peyton Miller": { minutes: 920, starts: 10, goals: 0, assists: 1, xg: 0.2, xa: 0.6, shots: 4, keyPasses: 6, passCompletionPct: 82.4, progressivePasses: 34, progressiveCarries: 16, tackles: 24, interceptions: 16, duelsWonPct: 55.3, cleanSheets: 3, savePct: null, avgRating: 6.7 },
-    "Joshua Wynder": { minutes: 300, starts: 3, goals: 0, assists: 0, xg: 0, xa: 0, shots: 1, keyPasses: 0, passCompletionPct: 78.9, progressivePasses: 8, progressiveCarries: 2, tackles: 6, interceptions: 8, duelsWonPct: 58.6, cleanSheets: 1, savePct: null, avgRating: 6.6 },
-  };
-
-  const statRows = [];
-  for (const [name, profile] of Object.entries(seasonProfiles)) {
-    const player = playerByName.get(name)!;
-    statRows.push({ playerId: player.id, periodType: "season", season: "2025/26", ...profile });
-    statRows.push({ playerId: player.id, periodType: "last5", season: "2025/26", ...scale(profile, 5 / 32) });
-    statRows.push({ playerId: player.id, periodType: "previous_season", season: "2024/25", ...scale(profile, 0.85) });
-  }
-  await db.insert(playerStatsTable).values(statRows);
-
-  // ---- Match Logs (5 recent matches per current/fringe player) ----
-  const competitionsByLeague: Record<string, string> = {
-    "Serie A": "Serie A",
-    "Premier League": "Premier League",
-    Eredivisie: "Eredivisie",
-    "Ligue 1": "Ligue 1",
-    Bundesliga: "Bundesliga",
-    Championship: "Championship",
-    MLS: "MLS",
-    "La Liga": "La Liga",
-    "Scottish Premiership": "Scottish Premiership",
-    "Liga MX": "Liga MX",
-    HNL: "HNL",
-    "Primeira Liga": "Primeira Liga",
-  };
-
-  const opponentsByLeague: Record<string, string[]> = {
-    "Serie A": ["Inter", "Napoli", "Roma", "Fiorentina", "Bologna"],
-    "Premier League": ["Arsenal", "Newcastle", "Brighton", "Everton", "Aston Villa"],
-    Eredivisie: ["Ajax", "Feyenoord", "Twente", "Utrecht", "AZ Alkmaar"],
-    "Ligue 1": ["PSG", "Lyon", "Lille", "Nice", "Rennes"],
-    Bundesliga: ["Bayern Munich", "RB Leipzig", "Leverkusen", "Freiburg", "Mainz"],
-    Championship: ["Leeds United", "Sunderland", "Sheffield United", "West Brom", "Coventry"],
-    MLS: ["LAFC", "Columbus Crew", "Orlando City", "Atlanta United", "FC Cincinnati"],
-    "La Liga": ["Real Madrid", "Atletico Madrid", "Sevilla", "Villarreal", "Real Sociedad"],
-    "Scottish Premiership": ["Rangers", "Hearts", "Aberdeen", "Hibernian", "Dundee United"],
-    "Liga MX": ["Chivas", "Cruz Azul", "Monterrey", "Tigres UANL", "Pumas UNAM"],
-    HNL: ["Dinamo Zagreb", "Rijeka", "Osijek", "Gorica", "Istra 1961"],
-    "Primeira Liga": ["Porto", "Sporting CP", "Braga", "Vitoria Guimaraes", "Famalicao"],
-  };
-
-  const dayOffsets = [-4, -11, -18, -25, -32];
-  const matchLogRows = [];
-  for (const [name, profile] of Object.entries(seasonProfiles)) {
-    const player = playerByName.get(name)!;
-    const def = playerDefs.find((p) => p.name === name)!;
-    const club = insertedClubs.find((c) => c.id === player.clubId)!;
-    const opponents = opponentsByLeague[club.league] ?? ["Regional FC"];
-    for (let i = 0; i < 5; i++) {
-      const opponent = opponents[i % opponents.length];
-      const goals = i === 0 && profile.goals > 8 ? 1 : Math.random() < profile.goals / 100 ? 1 : 0;
-      const assists = i === 1 && profile.assists > 6 ? 1 : 0;
-      const results = ["W 2-1", "D 1-1", "W 3-0", "L 0-1", "W 2-0"];
-      const rating = Math.round((profile.avgRating + (Math.random() * 1.2 - 0.6)) * 10) / 10;
-      matchLogRows.push({
-        playerId: player.id,
-        date: isoDateOffset(dayOffsets[i]),
-        opponent,
-        competition: competitionsByLeague[club.league] ?? club.league,
-        result: results[i % results.length],
-        minutes: def.position === "GK" ? 90 : 60 + Math.round(Math.random() * 30),
-        goals,
-        assists,
-        rating: Math.max(5.5, Math.min(9.5, rating)),
-      });
-    }
-  }
-  await db.insert(matchLogsTable).values(matchLogRows);
+  // ---- Player Stats, match logs, and injuries are NOT seeded here. ----
+  // These now come exclusively from the live API-Football sync
+  // (artifacts/api-server/src/lib/playerStatsSync.ts), which runs daily and
+  // populates player_stats/match_logs/injuries with real data — no
+  // hardcoded/fabricated per-player numbers. See replit.md and
+  // .agents/memory/usmnt-tracker.md for why this changed.
 
   // ---- Fixtures ----
   function isoDateOffset(days: number): string {
@@ -662,39 +498,6 @@ async function main() {
     if (rows.length) await db.insert(newsArticlePlayersTable).values(rows);
   }
 
-  // ---- Injuries ----
-  const injuryDefs: {
-    player: string;
-    bodyPart: string;
-    status: "active" | "recovering" | "returned";
-    expectedReturn: string | null;
-    daysMissed: number;
-    matchesMissed: number;
-    latestUpdate: string;
-    startDaysAgo: number;
-  }[] = [
-    { player: "Christian Pulisic", bodyPart: "Tibia/Fibula (micro-fracture)", status: "active", expectedReturn: isoDateOffset(24), daysMissed: 4, matchesMissed: 1, latestUpdate: "Suffered the injury on a heavy challenge during the USMNT's World Cup match against Belgium. Ruled out several weeks; timeline to be reassessed after a follow-up scan.", startDaysAgo: 4 },
-    { player: "Sergiño Dest", bodyPart: "Knee", status: "recovering", expectedReturn: isoDateOffset(10), daysMissed: 38, matchesMissed: 9, latestUpdate: "Cleared for non-contact training; expected to rejoin full sessions within two weeks.", startDaysAgo: 38 },
-    { player: "Giovanni Reyna", bodyPart: "Hamstring", status: "active", expectedReturn: isoDateOffset(21), daysMissed: 14, matchesMissed: 3, latestUpdate: "Dortmund's medical staff say Reyna will be reassessed after a further week of rehab.", startDaysAgo: 14 },
-    { player: "Tyler Adams", bodyPart: "Hamstring", status: "returned", expectedReturn: isoDateOffset(-6), daysMissed: 91, matchesMissed: 18, latestUpdate: "Made a full 75-minute return to the Bournemouth starting XI over the weekend without setback.", startDaysAgo: 97 },
-    { player: "Josh Sargent", bodyPart: "Ankle", status: "recovering", expectedReturn: isoDateOffset(5), daysMissed: 12, matchesMissed: 2, latestUpdate: "Sargent is back running on the pitch and targeting a return for Norwich's next home fixture.", startDaysAgo: 12 },
-    { player: "Diego Kochen", bodyPart: "Wrist", status: "active", expectedReturn: isoDateOffset(15), daysMissed: 8, matchesMissed: 1, latestUpdate: "Barcelona's academy staff are managing the injury conservatively given his age and workload.", startDaysAgo: 8 },
-    { player: "Obed Vargas", bodyPart: "Groin", status: "returned", expectedReturn: isoDateOffset(-14), daysMissed: 21, matchesMissed: 4, latestUpdate: "Back to full training with Seattle and available for selection.", startDaysAgo: 35 },
-  ];
-
-  for (const inj of injuryDefs) {
-    const player = playerByName.get(inj.player)!;
-    await db.insert(injuriesTable).values({
-      playerId: player.id,
-      bodyPart: inj.bodyPart,
-      status: inj.status,
-      expectedReturn: inj.expectedReturn,
-      daysMissed: inj.daysMissed,
-      matchesMissed: inj.matchesMissed,
-      latestUpdate: inj.latestUpdate,
-      startDate: isoDateOffset(-inj.startDaysAgo),
-    });
-  }
 
   // ---- Transfers ----
   const transferDefs: {
@@ -752,7 +555,7 @@ async function main() {
     },
   ]);
 
-  console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${statRows.length} stat rows, ${matchLogRows.length} match logs, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles, ${injuryDefs.length} injuries, ${transferDefs.length} transfers.`);
+  console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles, ${transferDefs.length} transfers. Player stats/match logs/injuries are populated by the live API-Football sync, not seeded.`);
   process.exit(0);
 }
 

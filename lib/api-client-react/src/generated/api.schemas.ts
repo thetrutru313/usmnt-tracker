@@ -90,20 +90,20 @@ export interface PlayerStats {
   starts: number;
   goals: number;
   assists: number;
-  xg: number;
-  xa: number;
   shots: number;
   keyPasses: number;
-  passCompletionPct: number;
-  progressivePasses: number;
-  progressiveCarries: number;
+  /** @nullable */
+  passCompletionPct: number | null;
   tackles: number;
   interceptions: number;
-  duelsWonPct: number;
-  cleanSheets: number;
+  /** @nullable */
+  duelsWonPct: number | null;
+  /** @nullable */
+  cleanSheets: number | null;
   /** @nullable */
   savePct: number | null;
-  avgRating: number;
+  /** @nullable */
+  avgRating: number | null;
 }
 
 export interface MatchLog {
@@ -115,7 +115,8 @@ export interface MatchLog {
   minutes: number;
   goals: number;
   assists: number;
-  rating: number;
+  /** @nullable */
+  rating: number | null;
 }
 
 export interface PlayerInjurySummary {
@@ -339,7 +340,8 @@ export interface MatchLogWithPlayer {
   minutes: number;
   goals: number;
   assists: number;
-  rating: number;
+  /** @nullable */
+  rating: number | null;
   player: FeaturedPlayer;
 }
 

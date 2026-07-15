@@ -12,18 +12,18 @@ export interface PlayerStats {
   starts: number;
   goals: number;
   assists: number;
-  xg: number;
-  xa: number;
   shots: number;
   keyPasses: number;
-  passCompletionPct: number;
-  progressivePasses: number;
-  progressiveCarries: number;
+  /** @nullable */
+  passCompletionPct: number | null;
   tackles: number;
   interceptions: number;
-  duelsWonPct: number;
-  cleanSheets: number;
+  /** @nullable */
+  duelsWonPct: number | null;
+  /** @nullable */
+  cleanSheets: number | null;
   /** @nullable */
   savePct: number | null;
-  avgRating: number;
+  /** @nullable */
+  avgRating: number | null;
 }

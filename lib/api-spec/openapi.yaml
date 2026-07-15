@@ -329,13 +329,9 @@ components:
         - starts
         - goals
         - assists
-        - xg
-        - xa
         - shots
         - keyPasses
         - passCompletionPct
-        - progressivePasses
-        - progressiveCarries
         - tackles
         - interceptions
         - duelsWonPct
@@ -348,19 +344,21 @@ components:
         starts: { type: integer }
         goals: { type: integer }
         assists: { type: integer }
-        xg: { type: number }
-        xa: { type: number }
         shots: { type: integer }
         keyPasses: { type: integer }
-        passCompletionPct: { type: number }
-        progressivePasses: { type: integer }
-        progressiveCarries: { type: integer }
+        # Nullable: API-Football has no pass-accuracy data for some players/periods.
+        passCompletionPct: { type: ["number", "null"] }
         tackles: { type: integer }
         interceptions: { type: integer }
-        duelsWonPct: { type: number }
-        cleanSheets: { type: integer }
+        # Nullable: API-Football has no duels data for some players/periods.
+        duelsWonPct: { type: ["number", "null"] }
+        # Nullable: only derivable from real per-match data (the "last5"
+        # period, backed by synced match logs) — not reported by the
+        # season-summary endpoint used for season/previous_season.
+        cleanSheets: { type: ["integer", "null"] }
         savePct: { type: ["number", "null"] }
-        avgRating: { type: number }
+        # Nullable: no rating available when the player has no rated appearances this period.
+        avgRating: { type: ["number", "null"] }
 
     MatchLog:
       type: object
@@ -374,7 +372,8 @@ components:
         minutes: { type: integer }
         goals: { type: integer }
         assists: { type: integer }
-        rating: { type: number }
+        # Nullable: API-Football sometimes has no rating for a very brief cameo.
+        rating: { type: ["number", "null"] }
 
     PlayerInjurySummary:
       type: object
@@ -744,7 +743,8 @@ components:
         minutes: { type: integer }
         goals: { type: integer }
         assists: { type: integer }
-        rating: { type: number }
+        # Nullable: API-Football sometimes has no rating for a very brief cameo.
+        rating: { type: ["number", "null"] }
         player:
           $ref: "#/components/schemas/FeaturedPlayer"
 

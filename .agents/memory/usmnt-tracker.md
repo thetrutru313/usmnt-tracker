@@ -53,6 +53,14 @@ To find real transfer destinations worth seeding into `clubs`, don't just trust 
 
 **How to apply:** for each warning, fetch the player's transfer history directly and cross-check the destination team's real API-Football id via a fresh `/teams?search=` call before adding anything to `clubs`. Before inserting, also check whether a club with that `api_football_team_id` already exists under a different name (no DB constraint currently prevents duplicates — see the "duplicate club" follow-up task) to avoid creating a second row for the same real club.
 
+## No fabricated player stats — live-sync-only invariant
+
+Player stats, match logs, and injuries must reflect only real, currently-fetchable API-Football data — never a fabricated default (0/false) and never a stale row left over from a prior run once this run had the chance to refresh it. Missing-but-real-eventually values are `null`, not `0`.
+
+**Why:** a delete-only-when-fresh-data-exists sync looks correct in the common case but silently preserves fabricated/seeded or outdated rows for exactly the players/clubs most likely to need correction (recent transfers, injuries, unresolved API ids) — the failure is invisible until someone checks a specific player.
+
+**How to apply:** any per-entity sync loop (by player, by club, by stat-period) must clear that entity's existing rows unconditionally, before branching on whether fresh data was actually fetched — including on early-return paths (failed lookups, unresolved external ids, empty API responses). Insert-if-fresh must never be allowed to skip the clear step.
+
 ## Player-pool completeness audits
 
 When asked to audit the Player Pool for missing eligible players, the durable criteria are: (1) ≥1 senior cap, (2) any youth national team (U-15–U-23) appearance, (3) US-eligible, under-20, and a current club starter. Cross-reference against the real official World Cup/senior roster plus a reputable U-21 prospects ranking (e.g. ESPN) rather than trying to enumerate the whole real-world pool from scratch — bounds the work while staying evidence-based. Always resolve real API-Football team IDs/logos for any new club before writing seed rows (some very new/small clubs, e.g. a 2025 MLS expansion side, genuinely aren't in API-Football's DB — leave `logoUrl` null rather than guessing).

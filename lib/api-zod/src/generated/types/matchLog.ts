@@ -15,5 +15,6 @@ export interface MatchLog {
   minutes: number;
   goals: number;
   assists: number;
-  rating: number;
+  /** @nullable */
+  rating: number | null;
 }
