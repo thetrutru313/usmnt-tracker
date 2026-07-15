@@ -22,6 +22,7 @@ export default function PlayerProfile() {
   const playerId = parseInt(id || "0", 10);
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const [matchFilter, setMatchFilter] = useState<"all" | "club" | "usmnt">("all");
 
   // The generated hook's `query` option type omits `Partial<>`, so a bare
   // `{ enabled }` object doesn't structurally satisfy it even though the
@@ -230,7 +231,24 @@ export default function PlayerProfile() {
           {/* Match Log */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg uppercase tracking-tight">Recent Matches</CardTitle>
+              <CardTitle className="text-lg uppercase tracking-tight flex items-center justify-between">
+                Recent Matches
+                <div className="flex items-center gap-1 text-xs font-mono">
+                  {(["all", "club", "usmnt"] as const).map(filter => (
+                    <button
+                      key={filter}
+                      onClick={() => setMatchFilter(filter)}
+                      className={`px-2.5 py-1 rounded uppercase tracking-wider transition-colors ${
+                        matchFilter === filter
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {filter === "all" ? "All" : filter === "club" ? "Club" : "USMNT"}
+                    </button>
+                  ))}
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -247,7 +265,10 @@ export default function PlayerProfile() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {player.matchLog.slice(0, 5).map(match => (
+                    {player.matchLog
+                      .filter(match => matchFilter === "all" || (matchFilter === "usmnt") === match.isNationalTeam)
+                      .slice(0, 5)
+                      .map(match => (
                       <tr key={match.id} className="hover:bg-muted/50 transition-colors">
                         <td className="py-3 pr-2">
                           {match.isNationalTeam ? (
