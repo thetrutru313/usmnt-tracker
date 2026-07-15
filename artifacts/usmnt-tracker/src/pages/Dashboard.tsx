@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FormBadge } from "@/components/FormBadge";
 import { FixtureCard } from "@/components/FixtureCard";
-import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight } from "lucide-react";
+import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { getNextEvent, KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS } from "@/data/schedule";
 
 export default function Dashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -31,36 +32,55 @@ export default function Dashboard() {
     );
   }
 
+  const nextEvent = getNextEvent();
+
   return (
     <div className="space-y-8 pb-10">
       {/* Next Window Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-card border border-card-border shadow-lg">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        
-        <div className="p-6 md:p-8 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-primary/20 text-primary text-xs font-mono font-bold mb-4 tracking-wider">
-                <CalendarDays size={14} />
-                NEXT NATIONAL TEAM WINDOW
+      {nextEvent && (
+        <Link href="/schedule">
+          <section className="relative overflow-hidden rounded-2xl bg-card border border-card-border shadow-lg cursor-pointer hover:border-primary/50 transition-colors group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+
+            <div className="p-6 md:p-8 relative z-10">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-primary/20 text-primary text-xs font-mono font-bold tracking-wider">
+                      <CalendarDays size={14} />
+                      NEXT UP
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${KIND_COLORS[nextEvent.kind]}`}>
+                      {KIND_LABELS[nextEvent.kind]}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[nextEvent.status]}`}>
+                      {STATUS_LABELS[nextEvent.status]}
+                    </span>
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
+                    {nextEvent.name}
+                  </h1>
+                  <p className="text-muted-foreground max-w-xl text-lg">
+                    {nextEvent.description}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-start md:items-end gap-4 shrink-0">
+                  <div className="p-4 bg-background/50 rounded-xl border border-border backdrop-blur">
+                    <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider block mb-1">
+                      {nextEvent.status === "confirmed" ? "Dates" : nextEvent.status === "approximate" ? "Approx." : "TBD"}
+                    </span>
+                    <span className="text-xl font-bold data-value">{nextEvent.dateLabel}</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary group-hover:gap-2 transition-all">
+                    VIEW FULL SCHEDULE <ChevronRight size={13} />
+                  </div>
+                </div>
               </div>
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
-                {dashboard.nextWindow.name}
-              </h1>
-              <p className="text-muted-foreground max-w-xl text-lg">
-                {dashboard.nextWindow.description}
-              </p>
             </div>
-            
-            <div className="flex flex-col items-start md:items-end p-4 bg-background/50 rounded-xl border border-border backdrop-blur">
-              <span className="text-sm text-muted-foreground uppercase font-mono tracking-wider mb-1">DATES</span>
-              <span className="text-xl font-bold data-value">
-                {format(new Date(dashboard.nextWindow.startDate), "MMM d")} - {format(new Date(dashboard.nextWindow.endDate), "MMM d, yyyy")}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+          </section>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's Games */}
