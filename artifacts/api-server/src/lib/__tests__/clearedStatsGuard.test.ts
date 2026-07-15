@@ -203,6 +203,16 @@ describe("cleared-stats guard — null clubTeamId in player loop", () => {
       failures: 0,
     });
   });
+
+  it("calls resolveTeamId exactly once per club (no duplicate lookups)", async () => {
+    await syncPlayerStatsAndInjuries(1);
+    // resolveTeamId must fire exactly once for the one club in this test —
+    // previously it was called twice (once in syncClubMatchLogs + once in the
+    // player loop) and a third time in syncClubInjuries; all three are now
+    // driven by a single upfront resolve in the orchestrator.
+    expect(mockResolveTeamId).toHaveBeenCalledTimes(1);
+    expect(mockResolveTeamId).toHaveBeenCalledWith(CLUB);
+  });
 });
 
 // ---------------------------------------------------------------------------

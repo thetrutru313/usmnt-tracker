@@ -130,14 +130,17 @@ export interface RealMatchLog {
  * > 0) get a row for a given fixture — a bench player who never got on the
  * pitch is correctly left with no entry, which is the root fix for the
  * original bug (a keeper with no row for a match he didn't play).
+ *
+ * `teamId` is resolved once per club by the caller (`syncPlayerStatsAndInjuries`)
+ * and passed in here so `resolveTeamId` is not called a second time per club.
  */
 async function syncClubMatchLogs(
   club: ClubRow,
   clubPlayers: PlayerRow[],
   fixturesPerClub: number,
+  teamId: number | null,
 ): Promise<Map<number, RealMatchLog[]>> {
   const result = new Map<number, RealMatchLog[]>();
-  const teamId = await resolveTeamId(club);
   if (!teamId) return result;
 
   const resolvedPlayers = clubPlayers.filter((p) => p.apiFootballPlayerId);
@@ -542,12 +545,11 @@ function groupInjuryEpisodes(entries: AfInjuryEntry[]): { reason: string; start:
   return episodes;
 }
 
-async function syncClubInjuries(club: ClubRow, clubPlayers: PlayerRow[]): Promise<number> {
-  // Resolve what fresh data we can, but never skip the clear-stale-rows step
-  // below on early return — an unresolved team id or no API ids must still
-  // wipe any injuries left over from a previous run/seed, not just leave
-  // early with old rows intact.
-  const teamId = await resolveTeamId(club);
+async function syncClubInjuries(club: ClubRow, clubPlayers: PlayerRow[], teamId: number | null): Promise<number> {
+  // teamId is resolved once per club by the caller (syncPlayerStatsAndInjuries)
+  // and passed in here — never skip the clear-stale-rows step below on an
+  // unresolved team id; old injury rows must be wiped even when we can't fetch
+  // fresh data.
   const byApiId = new Map(clubPlayers.filter((p) => p.apiFootballPlayerId).map((p) => [p.apiFootballPlayerId as number, p]));
 
   let allEntries: AfInjuryEntry[] = [];
@@ -649,9 +651,10 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
     if (clubPlayers.length === 0) continue;
 
     try {
-      const matchLogsByPlayer = await syncClubMatchLogs(club, clubPlayers, fixturesPerClub);
-
-      // Resolve once per club — used for every player's season-stat filter below.
+      // Resolve once per club — used by syncClubMatchLogs (fixture lookup)
+      // and for every player's season-stat filter below. Resolving here
+      // prevents the double call that previously happened when syncClubMatchLogs
+      // called resolveTeamId internally and the player loop called it again.
       // Emit a WARN when null so unresolvable clubs are visible in server logs
       // and don't silently degrade to a partial filter (friendly-league name only,
       // no team-id guard). See aggregateSeasonBlocks for why both guards matter.
@@ -665,6 +668,8 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
             "fix the club lookup to restore full filtering",
         );
       }
+
+      const matchLogsByPlayer = await syncClubMatchLogs(club, clubPlayers, fixturesPerClub, clubTeamId);
 
       for (const player of clubPlayers) {
         const logs = matchLogsByPlayer.get(player.id) ?? [];
@@ -788,7 +793,7 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
         await db.update(playersTable).set({ performanceTrend: trend, trending }).where(eq(playersTable.id, player.id));
       }
 
-      injuriesWritten += await syncClubInjuries(club, clubPlayers);
+      injuriesWritten += await syncClubInjuries(club, clubPlayers, clubTeamId);
       clubsProcessed++;
       logger.info({ club: club.name, clubsProcessed, totalClubs: clubs.length }, "Player-stats sync progress");
     } catch (err) {
