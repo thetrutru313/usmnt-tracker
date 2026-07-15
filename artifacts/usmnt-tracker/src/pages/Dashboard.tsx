@@ -34,13 +34,40 @@ export default function Dashboard() {
 
   const nextEvent = getNextEvent();
 
+  // Away-jersey star pattern — positions/sizes mirror the jersey's scattered grid
+  const JERSEY_STARS = [
+    // row 1
+    { x: "2%",  y: "-18%", s: 64 }, { x: "15%", y: "5%",   s: 72 }, { x: "29%", y: "-12%", s: 60 },
+    { x: "43%", y: "10%",  s: 68 }, { x: "57%", y: "-8%",  s: 64 }, { x: "71%", y: "8%",   s: 70 },
+    { x: "85%", y: "-14%", s: 62 }, { x: "96%", y: "6%",   s: 58 },
+    // row 2
+    { x: "8%",  y: "48%",  s: 70 }, { x: "22%", y: "60%",  s: 62 }, { x: "36%", y: "44%",  s: 74 },
+    { x: "50%", y: "56%",  s: 66 }, { x: "64%", y: "42%",  s: 68 }, { x: "78%", y: "58%",  s: 62 },
+    { x: "91%", y: "46%",  s: 70 },
+    // row 3 (bleeds off bottom edge)
+    { x: "3%",  y: "88%",  s: 66 }, { x: "18%", y: "100%", s: 70 }, { x: "33%", y: "85%",  s: 60 },
+    { x: "47%", y: "98%",  s: 68 }, { x: "61%", y: "82%",  s: 64 }, { x: "75%", y: "96%",  s: 72 },
+    { x: "89%", y: "86%",  s: 62 },
+  ];
+
   return (
     <div className="space-y-8 pb-10">
-      {/* Next Window Hero */}
+      {/* Next Window Hero — USMNT away jersey theme */}
       {nextEvent && (
         <Link href="/schedule">
-          <section className="relative overflow-hidden rounded-2xl bg-card border border-card-border shadow-lg cursor-pointer hover:border-primary/50 transition-colors group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+          <section className="relative overflow-hidden rounded-2xl bg-[#001a3a] border border-[#002868] border-t-2 border-t-red-600 shadow-xl cursor-pointer hover:brightness-110 transition-all group">
+            {/* Jersey star layer */}
+            <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
+              {JERSEY_STARS.map((star, i) => (
+                <svg
+                  key={i}
+                  viewBox="0 0 100 100"
+                  style={{ position: "absolute", left: star.x, top: star.y, width: star.s, height: star.s, opacity: 0.13 }}
+                >
+                  <polygon points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35" fill="white" />
+                </svg>
+              ))}
+            </div>
 
             <div className="p-6 md:p-8 relative z-10">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
