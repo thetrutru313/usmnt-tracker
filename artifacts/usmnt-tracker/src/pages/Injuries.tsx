@@ -1,6 +1,7 @@
 import { useListInjuries } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FormBadge } from "@/components/FormBadge";
 import { format } from "date-fns";
 import { Activity, Clock, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
@@ -58,7 +59,10 @@ export default function Injuries() {
                       <Link href={`/players/${injury.player.id}`} className="font-bold text-lg hover:underline truncate block">
                         {injury.player.name}
                       </Link>
-                      <div className="text-xs text-muted-foreground">{injury.clubName}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-muted-foreground">{injury.clubName}</span>
+                        <FormBadge trend={injury.performanceTrend} showEmoji={false} className="h-4 text-[9px]" />
+                      </div>
                     </div>
                   </div>
 
@@ -113,8 +117,9 @@ export default function Injuries() {
                     <Link href={`/players/${injury.player.id}`} className="font-bold hover:underline">
                       {injury.player.name}
                     </Link>
-                    <div className="text-xs text-muted-foreground">
-                      Recovered from {injury.bodyPart.toLowerCase()}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground">Recovered from {injury.bodyPart.toLowerCase()}</span>
+                      <FormBadge trend={injury.performanceTrend} showEmoji={false} className="h-4 text-[9px]" />
                     </div>
                   </div>
                 </CardContent>

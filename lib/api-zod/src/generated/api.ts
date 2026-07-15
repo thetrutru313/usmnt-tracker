@@ -352,7 +352,8 @@ export const ListInjuriesResponseItem = zod.object({
   "daysMissed": zod.number(),
   "matchesMissed": zod.number(),
   "latestUpdate": zod.string(),
-  "startDate": zod.coerce.date()
+  "startDate": zod.coerce.date(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })
 export const ListInjuriesResponse = zod.array(ListInjuriesResponseItem)
 
@@ -380,7 +381,8 @@ export const ListTransfersResponseItem = zod.object({
   "status": zod.enum(['confirmed', 'rumor']),
   "probabilityScore": zod.number().nullish(),
   "announcedAt": zod.coerce.date(),
-  "summary": zod.string()
+  "summary": zod.string(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })
 export const ListTransfersResponse = zod.array(ListTransfersResponseItem)
 
@@ -476,7 +478,8 @@ export const GetDashboardResponse = zod.object({
   "daysMissed": zod.number(),
   "matchesMissed": zod.number(),
   "latestUpdate": zod.string(),
-  "startDate": zod.coerce.date()
+  "startDate": zod.coerce.date(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
   "transfers": zod.array(zod.object({
   "id": zod.number(),
@@ -494,7 +497,8 @@ export const GetDashboardResponse = zod.object({
   "status": zod.enum(['confirmed', 'rumor']),
   "probabilityScore": zod.number().nullish(),
   "announcedAt": zod.coerce.date(),
-  "summary": zod.string()
+  "summary": zod.string(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
   "topPerformers": zod.array(zod.object({
   "id": zod.number(),
@@ -550,7 +554,8 @@ export const GetDashboardResponse = zod.object({
   "daysMissed": zod.number(),
   "matchesMissed": zod.number(),
   "latestUpdate": zod.string(),
-  "startDate": zod.coerce.date()
+  "startDate": zod.coerce.date(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
   "nextWindow": zod.object({
   "name": zod.string(),
@@ -600,7 +605,8 @@ export const GetRankingsResponse = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "photoUrl": zod.string().nullable()
-})
+}),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
   "mostMinutes": zod.array(zod.object({
   "id": zod.number(),
@@ -656,7 +662,8 @@ export const GetRankingsResponse = zod.object({
   "daysMissed": zod.number(),
   "matchesMissed": zod.number(),
   "latestUpdate": zod.string(),
-  "startDate": zod.coerce.date()
+  "startDate": zod.coerce.date(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
   "risingFast": zod.array(zod.object({
   "id": zod.number(),
@@ -693,7 +700,8 @@ export const GetRankingsResponse = zod.object({
   "status": zod.enum(['confirmed', 'rumor']),
   "probabilityScore": zod.number().nullish(),
   "announcedAt": zod.coerce.date(),
-  "summary": zod.string()
+  "summary": zod.string(),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 }))
 })
 

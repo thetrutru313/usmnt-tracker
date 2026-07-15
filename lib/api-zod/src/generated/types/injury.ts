@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FeaturedPlayer } from './featuredPlayer';
+import type { InjuryPerformanceTrend } from './injuryPerformanceTrend';
 import type { InjuryStatus } from './injuryStatus';
 
 export interface Injury {
@@ -20,4 +21,5 @@ export interface Injury {
   matchesMissed: number;
   latestUpdate: string;
   startDate: Date;
+  performanceTrend: InjuryPerformanceTrend;
 }

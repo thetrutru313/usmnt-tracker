@@ -1,6 +1,7 @@
 import { useListTransfers } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FormBadge } from "@/components/FormBadge";
 import { format } from "date-fns";
 import { RefreshCw, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
@@ -66,7 +67,10 @@ export default function Transfers() {
                           <Link href={`/players/${transfer.player.id}`} className="font-bold text-xl hover:text-primary transition-colors">
                             {transfer.player.name}
                           </Link>
-                          <div className="text-sm text-muted-foreground uppercase tracking-wider">{transfer.player.position}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-sm text-muted-foreground uppercase tracking-wider">{transfer.player.position}</span>
+                            <FormBadge trend={transfer.performanceTrend} showEmoji={false} className="h-4 text-[9px]" />
+                          </div>
                         </div>
                       </div>
 
@@ -94,9 +98,12 @@ export default function Transfers() {
                 <Card key={transfer.id} className="bg-card/50 border-dashed">
                   <CardContent className="p-5">
                     <div className="flex justify-between items-start mb-4">
-                      <Link href={`/players/${transfer.player.id}`} className="font-bold hover:text-primary transition-colors">
-                        {transfer.player.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/players/${transfer.player.id}`} className="font-bold hover:text-primary transition-colors">
+                          {transfer.player.name}
+                        </Link>
+                        <FormBadge trend={transfer.performanceTrend} showEmoji={false} className="h-4 text-[9px]" />
+                      </div>
                       <div className="flex items-center gap-1.5 bg-background border border-border px-2 py-0.5 rounded text-xs font-mono">
                         Probability
                         <span className={`font-bold ${

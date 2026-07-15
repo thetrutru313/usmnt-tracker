@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FeaturedPlayer } from './featuredPlayer';
+import type { MatchLogWithPlayerPerformanceTrend } from './matchLogWithPlayerPerformanceTrend';
 
 export interface MatchLogWithPlayer {
   id: number;
@@ -19,4 +20,5 @@ export interface MatchLogWithPlayer {
   /** @nullable */
   rating: number | null;
   player: FeaturedPlayer;
+  performanceTrend: MatchLogWithPlayerPerformanceTrend;
 }

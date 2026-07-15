@@ -48,6 +48,7 @@ router.get("/rankings", async (_req, res): Promise<void> => {
           goals: matchLogsTable.goals,
           assists: matchLogsTable.assists,
           rating: matchLogsTable.rating,
+          performanceTrend: playersTable.performanceTrend,
           player: {
             id: playersTable.id,
             name: playersTable.name,

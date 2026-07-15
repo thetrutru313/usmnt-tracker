@@ -642,6 +642,7 @@ components:
         - matchesMissed
         - latestUpdate
         - startDate
+        - performanceTrend
       properties:
         id: { type: integer }
         player:
@@ -655,6 +656,9 @@ components:
         matchesMissed: { type: integer }
         latestUpdate: { type: string }
         startDate: { type: string, format: date }
+        performanceTrend:
+          type: string
+          enum: [on_fire, rising, steady, falling, ice_cold]
 
     Transfer:
       type: object
@@ -667,6 +671,7 @@ components:
         - status
         - announcedAt
         - summary
+        - performanceTrend
       properties:
         id: { type: integer }
         player:
@@ -682,6 +687,9 @@ components:
         probabilityScore: { type: ["integer", "null"] }
         announcedAt: { type: string, format: date-time }
         summary: { type: string }
+        performanceTrend:
+          type: string
+          enum: [on_fire, rising, steady, falling, ice_cold]
 
     DashboardSummary:
       type: object
@@ -782,7 +790,7 @@ components:
 
     MatchLogWithPlayer:
       type: object
-      required: [id, date, opponent, competition, result, minutes, goals, assists, rating, player]
+      required: [id, date, opponent, competition, result, minutes, goals, assists, rating, player, performanceTrend]
       properties:
         id: { type: integer }
         date: { type: string, format: date }
@@ -796,6 +804,9 @@ components:
         rating: { type: ["number", "null"] }
         player:
           $ref: "#/components/schemas/FeaturedPlayer"
+        performanceTrend:
+          type: string
+          enum: [on_fire, rising, steady, falling, ice_cold]
 
     SearchResults:
       type: object

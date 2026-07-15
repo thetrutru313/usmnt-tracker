@@ -284,6 +284,17 @@ export interface PlayerProfile {
   recentNews?: NewsArticle[];
 }
 
+export type InjuryPerformanceTrend = typeof InjuryPerformanceTrend[keyof typeof InjuryPerformanceTrend];
+
+
+export const InjuryPerformanceTrend = {
+  on_fire: 'on_fire',
+  rising: 'rising',
+  steady: 'steady',
+  falling: 'falling',
+  ice_cold: 'ice_cold',
+} as const;
+
 export interface Injury {
   id: number;
   player: FeaturedPlayer;
@@ -296,6 +307,7 @@ export interface Injury {
   matchesMissed: number;
   latestUpdate: string;
   startDate: string;
+  performanceTrend: InjuryPerformanceTrend;
 }
 
 export type TransferTransferType = typeof TransferTransferType[keyof typeof TransferTransferType];
@@ -305,6 +317,17 @@ export const TransferTransferType = {
   transfer: 'transfer',
   loan: 'loan',
   contract_extension: 'contract_extension',
+} as const;
+
+export type TransferPerformanceTrend = typeof TransferPerformanceTrend[keyof typeof TransferPerformanceTrend];
+
+
+export const TransferPerformanceTrend = {
+  on_fire: 'on_fire',
+  rising: 'rising',
+  steady: 'steady',
+  falling: 'falling',
+  ice_cold: 'ice_cold',
 } as const;
 
 export interface Transfer {
@@ -320,6 +343,7 @@ export interface Transfer {
   probabilityScore?: number | null;
   announcedAt: string;
   summary: string;
+  performanceTrend: TransferPerformanceTrend;
 }
 
 export interface NationalTeamWindow {
@@ -341,6 +365,17 @@ export interface DashboardSummary {
   nextWindow: NationalTeamWindow;
 }
 
+export type MatchLogWithPlayerPerformanceTrend = typeof MatchLogWithPlayerPerformanceTrend[keyof typeof MatchLogWithPlayerPerformanceTrend];
+
+
+export const MatchLogWithPlayerPerformanceTrend = {
+  on_fire: 'on_fire',
+  rising: 'rising',
+  steady: 'steady',
+  falling: 'falling',
+  ice_cold: 'ice_cold',
+} as const;
+
 export interface MatchLogWithPlayer {
   id: number;
   date: string;
@@ -353,6 +388,7 @@ export interface MatchLogWithPlayer {
   /** @nullable */
   rating: number | null;
   player: FeaturedPlayer;
+  performanceTrend: MatchLogWithPlayerPerformanceTrend;
 }
 
 export interface Rankings {

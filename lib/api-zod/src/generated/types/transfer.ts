@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FeaturedPlayer } from './featuredPlayer';
+import type { TransferPerformanceTrend } from './transferPerformanceTrend';
 import type { TransferStatus } from './transferStatus';
 import type { TransferTransferType } from './transferTransferType';
 
@@ -22,4 +23,5 @@ export interface Transfer {
   probabilityScore?: number | null;
   announcedAt: Date;
   summary: string;
+  performanceTrend: TransferPerformanceTrend;
 }

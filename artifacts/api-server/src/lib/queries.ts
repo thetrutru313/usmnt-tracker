@@ -312,6 +312,7 @@ const injuryWithPlayerColumns = {
   latestUpdate: injuriesTable.latestUpdate,
   startDate: injuriesTable.startDate,
   clubName: clubsTable.name,
+  performanceTrend: playersTable.performanceTrend,
   player: {
     id: playersTable.id,
     name: playersTable.name,
@@ -339,6 +340,7 @@ const transferWithPlayerColumns = {
   probabilityScore: transfersTable.probabilityScore,
   announcedAt: transfersTable.announcedAt,
   summary: transfersTable.summary,
+  performanceTrend: playersTable.performanceTrend,
   player: {
     id: playersTable.id,
     name: playersTable.name,

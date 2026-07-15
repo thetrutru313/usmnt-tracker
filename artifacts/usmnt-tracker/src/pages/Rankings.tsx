@@ -63,7 +63,10 @@ export default function Rankings() {
                       <Link href={`/players/${match.player.id}`} className="font-bold text-lg hover:text-secondary transition-colors leading-none">
                         {match.player.name}
                       </Link>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">{match.player.position}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider">{match.player.position}</span>
+                        <FormBadge trend={match.performanceTrend} showEmoji={false} className="h-4 text-[9px]" />
+                      </div>
                     </div>
                   </div>
                   
