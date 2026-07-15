@@ -1,17 +1,28 @@
 import { Router, type IRouter } from "express";
 import { GetRankingsResponse } from "@workspace/api-zod";
 import { db, playersTable, clubsTable } from "@workspace/db";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   playerStatsTable,
   matchLogsTable,
   playerSummaryQuery,
   playerSummaryColumns,
+  computePoolTier,
   transfersWithPlayerQuery,
   transfersTable,
   injuriesWithPlayerQuery,
   injuriesTable,
 } from "../lib/queries";
+
+/** Mirrors the `listPlayers` transform: replaces `worldCupRoster` with the derived `poolTier`. */
+function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number }>(
+  rows: T[],
+): (Omit<T, "worldCupRoster"> & { poolTier: ReturnType<typeof computePoolTier> })[] {
+  return rows.map(({ worldCupRoster, ...rest }) => ({
+    ...rest,
+    poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: rest.nationalTeamCaps, age: rest.age }),
+  }));
+}
 
 const router: IRouter = Router();
 
@@ -73,23 +84,25 @@ router.get("/rankings", async (_req, res): Promise<void> => {
         .where(eq(playerStatsTable.periodType, "season"))
         .limit(50),
       injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(6),
-      playerSummaryQuery().where(eq(playersTable.performanceTrend, "rising")).limit(8),
+      playerSummaryQuery().where(inArray(playersTable.performanceTrend, ["on_fire", "rising"])).limit(8),
       transfersWithPlayerQuery().where(eq(transfersTable.status, "rumor")).orderBy(desc(transfersTable.probabilityScore)).limit(6),
     ]);
 
-  const mostGoalContributions = mostGoalContributionsRaw
-    .map(({ goals, assists, ...summary }) => ({ summary, contributions: goals + assists }))
-    .sort((a, b) => b.contributions - a.contributions)
-    .slice(0, 8)
-    .map((r) => r.summary);
+  const mostGoalContributions = withPoolTier(
+    mostGoalContributionsRaw
+      .map(({ goals, assists, ...summary }) => ({ summary, contributions: goals + assists }))
+      .sort((a, b) => b.contributions - a.contributions)
+      .slice(0, 8)
+      .map((r) => r.summary),
+  );
 
   const payload = {
-    mostInForm,
+    mostInForm: withPoolTier(mostInForm),
     bestWeekendPerformances: bestWeekendPerformancesRaw,
-    mostMinutes,
+    mostMinutes: withPoolTier(mostMinutes),
     mostGoalContributions,
     returningFromInjury,
-    risingFast,
+    risingFast: withPoolTier(risingFast),
     transferBuzz,
   };
 

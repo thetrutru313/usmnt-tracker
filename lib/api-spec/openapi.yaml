@@ -330,7 +330,7 @@ components:
         trending: { type: boolean }
         performanceTrend:
           type: string
-          enum: [rising, steady, falling]
+          enum: [on_fire, rising, steady, falling, ice_cold]
         potentialCallUpScore: { type: ["integer", "null"] }
 
     PlayerStats:
@@ -478,7 +478,7 @@ components:
         potentialCallUpScore: { type: ["integer", "null"] }
         performanceTrend:
           type: string
-          enum: [rising, steady, falling]
+          enum: [on_fire, rising, steady, falling, ice_cold]
         trending: { type: boolean }
         bio: { type: string }
         seasonStats:

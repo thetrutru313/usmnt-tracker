@@ -1,6 +1,7 @@
 import { useGetRankings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FormBadge } from "@/components/FormBadge";
 import { Trophy, TrendingUp, Clock, Flame, Star } from "lucide-react";
 import { Link } from "wouter";
 
@@ -106,7 +107,7 @@ export default function Rankings() {
                     </Link>
                     <div className="text-xs text-muted-foreground truncate">{player.clubName}</div>
                   </div>
-                  <Badge variant="success" className="uppercase text-[9px] px-1 tracking-wider h-4">Hot</Badge>
+                  <FormBadge trend={player.performanceTrend} showEmoji={false} className="mt-0 h-4 text-[9px]" />
                 </div>
               ))}
             </div>

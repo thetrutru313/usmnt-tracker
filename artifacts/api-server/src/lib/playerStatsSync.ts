@@ -192,10 +192,12 @@ async function syncClubMatchLogs(
     }
   }
 
-  // Most-recent-first, capped at 5 per player.
+  // Most-recent-first, capped at 10 per player. 10 gives us both a "last5"
+  // window (logs[0..4]) and a "previous5" window (logs[5..9]) for trend
+  // computation — see computeFormTier below.
   for (const [playerId, logs] of result) {
     logs.sort((a, b) => (a.date < b.date ? 1 : -1));
-    result.set(playerId, logs.slice(0, 5));
+    result.set(playerId, logs.slice(0, 10));
   }
   return result;
 }
@@ -327,7 +329,45 @@ export function aggregateFromMatchLogs(logs: RealMatchLog[]): AggregatedSeasonSt
   };
 }
 
-type PeriodType = "season" | "last5" | "previous_season" | "season_all";
+type PeriodType = "season" | "last5" | "previous5" | "previous_season" | "season_all";
+
+export type PerformanceTrend = "on_fire" | "rising" | "steady" | "falling" | "ice_cold";
+
+/**
+ * Derives a player's form tier from their last-5 match ratings relative to
+ * their season baseline, with an optional trajectory boost from the
+ * previous-5 window.
+ *
+ * Formula: score = 50 × (last5Avg − seasonAvg) + 30 × (last5Avg − prev5Avg)
+ *
+ * The season-baseline term is the primary signal (position-agnostic — a CB at
+ * 6.9 and a striker at 7.4 can both be On Fire if both are above their own
+ * norms). The trajectory term is additive context when available.
+ *
+ * Confidence gate: fewer than 270 minutes played across the last 5 matches →
+ * "steady" (not enough data to label reliably).
+ */
+export function computeFormTier(
+  last5: AggregatedSeasonStats | null,
+  prev5: AggregatedSeasonStats | null,
+  seasonAvgRating: number | null,
+): { trend: PerformanceTrend; trending: boolean } {
+  const STEADY: { trend: PerformanceTrend; trending: boolean } = { trend: "steady", trending: false };
+  if (!last5 || last5.minutes < 270 || last5.avgRating == null || seasonAvgRating == null) return STEADY;
+
+  const seasonDelta = last5.avgRating - seasonAvgRating;
+  let score = 50 * seasonDelta;
+  if (prev5?.avgRating != null) score += 30 * (last5.avgRating - prev5.avgRating);
+
+  let trend: PerformanceTrend;
+  if (score >= 25) trend = "on_fire";
+  else if (score >= 12) trend = "rising";
+  else if (score > -12) trend = "steady";
+  else if (score > -25) trend = "falling";
+  else trend = "ice_cold";
+
+  return { trend, trending: trend === "on_fire" || trend === "rising" };
+}
 
 /** Clears a period's stats row entirely — used when this run has no fresh data for that period, so a stale row from a prior run/seed never lingers. */
 async function deleteStatsRow(playerId: number, periodType: PeriodType): Promise<void> {
@@ -486,7 +526,7 @@ export interface PlayerStatsSyncResult {
  * across every tracked player at that club, keeping the per-player API-call
  * cost manageable under the 7s/request throttle (see apiFootballSync.ts).
  */
-export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<PlayerStatsSyncResult> {
+export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<PlayerStatsSyncResult> {
   const clubs: ClubRow[] = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
@@ -543,15 +583,22 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<P
           playersWithMatchLogs++;
         }
 
-        // Same rule for the "last5" stats row: it's derived solely from the
-        // match logs above, so clear it whenever there are no logs to
-        // aggregate rather than leaving a prior run's row in place.
-        const last5 = aggregateFromMatchLogs(logs);
+        // "last5" and "previous5" are both derived from the match logs above.
+        // Clear them whenever there's no fresh data rather than leaving a
+        // prior run's row in place. "previous5" is logs[5..9] — the window
+        // before last5 — used for the trajectory term in computeFormTier.
+        const last5 = aggregateFromMatchLogs(logs.slice(0, 5));
         if (last5) {
-          const cleanSheets = logs.filter((l) => l.conceded === 0).length;
+          const cleanSheets = logs.slice(0, 5).filter((l) => l.conceded === 0).length;
           await upsertStatsRow(player.id, "last5", `${currentSeason}`, last5, cleanSheets);
         } else {
           await deleteStatsRow(player.id, "last5");
+        }
+        const prev5 = aggregateFromMatchLogs(logs.slice(5, 10));
+        if (prev5) {
+          await upsertStatsRow(player.id, "previous5", `${currentSeason}`, prev5, null);
+        } else {
+          await deleteStatsRow(player.id, "previous5");
         }
 
         if (!player.apiFootballPlayerId) {
@@ -599,6 +646,13 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 8): Promise<P
         // latest two) so the player profile's club-season selector has more
         // than just "current"/"previous" to choose from.
         await replaceSeasonHistoryRows(player.id, withData);
+
+        // Update form tier now that we have all three pieces: last5 ratings
+        // from match logs, previous5 ratings (trajectory), and season avg
+        // (the player's own baseline for this season). We write it regardless
+        // of whether the value changed so each run reflects the latest sync.
+        const { trend, trending } = computeFormTier(last5, prev5, current?.agg.avgRating ?? null);
+        await db.update(playersTable).set({ performanceTrend: trend, trending }).where(eq(playersTable.id, player.id));
       }
 
       injuriesWritten += await syncClubInjuries(club, clubPlayers);

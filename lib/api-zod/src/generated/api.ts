@@ -42,7 +42,7 @@ export const ListPlayersResponseItem = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })
 export const ListPlayersResponse = zod.array(ListPlayersResponseItem)
@@ -79,7 +79,7 @@ export const GetPlayerResponse = zod.object({
   "youthNationalTeam": zod.string().nullable(),
   "debutDate": zod.coerce.date().nullable(),
   "potentialCallUpScore": zod.number().nullable(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "trending": zod.boolean(),
   "bio": zod.string(),
   "seasonStats": zod.object({
@@ -496,7 +496,7 @@ export const GetDashboardResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "trending": zod.array(zod.object({
@@ -515,7 +515,7 @@ export const GetDashboardResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "recentlyReturned": zod.array(zod.object({
@@ -565,7 +565,7 @@ export const GetRankingsResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "bestWeekendPerformances": zod.array(zod.object({
@@ -602,7 +602,7 @@ export const GetRankingsResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "mostGoalContributions": zod.array(zod.object({
@@ -621,7 +621,7 @@ export const GetRankingsResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "returningFromInjury": zod.array(zod.object({
@@ -658,7 +658,7 @@ export const GetRankingsResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "transferBuzz": zod.array(zod.object({
@@ -706,7 +706,7 @@ export const SearchResponse = zod.object({
   "nationalTeamCaps": zod.number(),
   "nationalTeamGoals": zod.number(),
   "trending": zod.boolean(),
-  "performanceTrend": zod.enum(['rising', 'steady', 'falling']),
+  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
   "clubs": zod.array(zod.object({

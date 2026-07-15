@@ -10,7 +10,9 @@ export type PlayerSummaryPerformanceTrend = typeof PlayerSummaryPerformanceTrend
 
 
 export const PlayerSummaryPerformanceTrend = {
+  on_fire: 'on_fire',
   rising: 'rising',
   steady: 'steady',
   falling: 'falling',
+  ice_cold: 'ice_cold',
 } as const;

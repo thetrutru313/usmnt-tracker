@@ -1,7 +1,7 @@
 import { useListPlayers } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { FormBadge } from "@/components/FormBadge";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Search, SlidersHorizontal, Shield, Swords, Goal } from "lucide-react";
@@ -131,10 +131,8 @@ export default function Players() {
                       <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Trend</span>
-                      <Badge variant={player.performanceTrend === 'rising' ? 'success' : player.performanceTrend === 'falling' ? 'destructive' : 'secondary'} className="rounded px-1.5 h-5 text-[10px] uppercase font-mono mt-0.5">
-                        {player.performanceTrend}
-                      </Badge>
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Form</span>
+                      <FormBadge trend={player.performanceTrend} />
                     </div>
                   </div>
                 </CardContent>

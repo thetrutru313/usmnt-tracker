@@ -1,6 +1,7 @@
 import { useGetDashboard } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FormBadge } from "@/components/FormBadge";
 import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, Tv, Users } from "lucide-react";
 import { Link } from "wouter";
 import { format, isToday } from "date-fns";
@@ -168,9 +169,7 @@ export default function Dashboard() {
                     <div className="font-bold truncate group-hover:text-secondary transition-colors">{player.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{player.clubName} • {player.position}</div>
                   </div>
-                  <Badge variant={player.performanceTrend === 'rising' ? 'success' : 'secondary'} className="rounded-sm font-mono uppercase text-[10px]">
-                    {player.performanceTrend}
-                  </Badge>
+                  <FormBadge trend={player.performanceTrend} showEmoji={false} className="mt-0" />
                 </Link>
               ))}
             </div>
