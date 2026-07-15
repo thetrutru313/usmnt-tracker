@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ListFixturesQueryParams, ListFixturesResponse } from "@workspace/api-zod";
 import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, notIlike, or } from "drizzle-orm";
 import { attachFeaturedPlayers } from "../lib/queries";
 
 const router: IRouter = Router();
@@ -14,7 +14,8 @@ router.get("/fixtures", async (req, res): Promise<void> => {
   }
   const { scope, playerId } = parsed.data;
 
-  const conditions = [];
+  // Exclude club friendlies; keep national-team fixtures regardless of competition name.
+  const conditions = [or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%"))];
 
   if (scope === "today") {
     const startOfDay = new Date();
