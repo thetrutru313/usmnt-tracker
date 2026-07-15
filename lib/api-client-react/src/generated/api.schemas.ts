@@ -346,11 +346,61 @@ export interface Transfer {
   performanceTrend: TransferPerformanceTrend;
 }
 
-export interface NationalTeamWindow {
+export type ScheduleEventKind = typeof ScheduleEventKind[keyof typeof ScheduleEventKind];
+
+
+export const ScheduleEventKind = {
+  friendly: 'friendly',
+  'nations-league': 'nations-league',
+  'gold-cup': 'gold-cup',
+  'copa-america': 'copa-america',
+  'world-cup-qualifying': 'world-cup-qualifying',
+  'world-cup': 'world-cup',
+} as const;
+
+export type ScheduleEventStatus = typeof ScheduleEventStatus[keyof typeof ScheduleEventStatus];
+
+
+export const ScheduleEventStatus = {
+  confirmed: 'confirmed',
+  approximate: 'approximate',
+  tbd: 'tbd',
+} as const;
+
+export interface ScheduleEvent {
+  id: number;
+  slug: string;
   name: string;
-  startDate: string;
-  endDate: string;
+  kind: ScheduleEventKind;
+  status: ScheduleEventStatus;
+  /** @nullable */
+  startDate: string | null;
+  /** @nullable */
+  endDate: string | null;
+  dateLabel: string;
   description: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleEventsResult {
+  events: ScheduleEvent[];
+}
+
+export interface NextScheduleEvent {
+  id: number;
+  slug: string;
+  name: string;
+  kind: ScheduleEventKind;
+  status: ScheduleEventStatus;
+  /** @nullable */
+  startDate: string | null;
+  /** @nullable */
+  endDate: string | null;
+  dateLabel: string;
+  description: string;
+  sortOrder: number;
 }
 
 export interface DashboardSummary {
@@ -362,7 +412,14 @@ export interface DashboardSummary {
   topPerformers: PlayerSummary[];
   trending: PlayerSummary[];
   recentlyReturned: Injury[];
-  nextWindow: NationalTeamWindow;
+  nextScheduleEvent?: NextScheduleEvent;
+}
+
+export interface NationalTeamWindow {
+  name: string;
+  startDate: string;
+  endDate: string;
+  description: string;
 }
 
 export type MatchLogWithPlayerPerformanceTrend = typeof MatchLogWithPlayerPerformanceTrend[keyof typeof MatchLogWithPlayerPerformanceTrend];

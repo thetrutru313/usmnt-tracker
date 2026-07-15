@@ -9,6 +9,7 @@ import dashboardRouter from "./dashboard";
 import rankingsRouter from "./rankings";
 import searchRouter from "./search";
 import adminRouter from "./admin";
+import scheduleRouter from "./schedule";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(dashboardRouter);
 router.use(rankingsRouter);
 router.use(searchRouter);
 router.use(adminRouter);
+router.use(scheduleRouter);
 
 export default router;

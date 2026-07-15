@@ -31,6 +31,7 @@ import type {
   PlayerProfile,
   PlayerSummary,
   Rankings,
+  ScheduleEventsResult,
   SearchParams,
   SearchResults,
   Transfer
@@ -792,6 +793,83 @@ export function useGetRankings<TData = Awaited<ReturnType<typeof getRankings>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetRankingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListScheduleEventsUrl = () => {
+
+
+
+
+  return `/api/schedule`
+}
+
+/**
+ * @summary List USMNT schedule events
+ */
+export const listScheduleEvents = async ( options?: RequestInit): Promise<ScheduleEventsResult> => {
+
+  return customFetch<ScheduleEventsResult>(getListScheduleEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListScheduleEventsQueryKey = () => {
+    return [
+    `/api/schedule`
+    ] as const;
+    }
+
+
+export const getListScheduleEventsQueryOptions = <TData = Awaited<ReturnType<typeof listScheduleEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScheduleEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListScheduleEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listScheduleEvents>>> = ({ signal }) => listScheduleEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listScheduleEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListScheduleEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listScheduleEvents>>>
+export type ListScheduleEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List USMNT schedule events
+ */
+
+export function useListScheduleEvents<TData = Awaited<ReturnType<typeof listScheduleEvents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScheduleEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListScheduleEventsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

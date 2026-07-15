@@ -7,8 +7,8 @@
  */
 import type { Fixture } from './fixture';
 import type { Injury } from './injury';
-import type { NationalTeamWindow } from './nationalTeamWindow';
 import type { NewsArticle } from './newsArticle';
+import type { NextScheduleEvent } from './nextScheduleEvent';
 import type { PlayerSummary } from './playerSummary';
 import type { Transfer } from './transfer';
 
@@ -21,5 +21,5 @@ export interface DashboardSummary {
   topPerformers: PlayerSummary[];
   trending: PlayerSummary[];
   recentlyReturned: Injury[];
-  nextWindow: NationalTeamWindow;
+  nextScheduleEvent?: NextScheduleEvent;
 }

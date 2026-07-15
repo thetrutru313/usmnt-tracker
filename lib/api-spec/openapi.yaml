@@ -26,6 +26,8 @@ tags:
     description: Ranking operations
   - name: search
     description: Search operations
+  - name: schedule
+    description: USMNT schedule operations
 paths:
   /healthz:
     get:
@@ -235,6 +237,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Rankings"
+
+  /schedule:
+    get:
+      operationId: listScheduleEvents
+      tags: [schedule]
+      summary: List USMNT schedule events
+      responses:
+        "200":
+          description: List of schedule events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleEventsResult"
 
   /search:
     get:
@@ -691,6 +706,81 @@ components:
           type: string
           enum: [on_fire, rising, steady, falling, ice_cold]
 
+    ScheduleEventKind:
+      type: string
+      enum: [friendly, nations-league, gold-cup, copa-america, world-cup-qualifying, world-cup]
+
+    ScheduleEventStatus:
+      type: string
+      enum: [confirmed, approximate, tbd]
+
+    ScheduleEvent:
+      type: object
+      required:
+        - id
+        - slug
+        - name
+        - kind
+        - status
+        - startDate
+        - endDate
+        - dateLabel
+        - description
+        - sortOrder
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        kind:
+          $ref: "#/components/schemas/ScheduleEventKind"
+        status:
+          $ref: "#/components/schemas/ScheduleEventStatus"
+        startDate: { type: ["string", "null"] }
+        endDate: { type: ["string", "null"] }
+        dateLabel: { type: string }
+        description: { type: string }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ScheduleEventsResult:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleEvent"
+
+    NextScheduleEvent:
+      type: object
+      required:
+        - id
+        - slug
+        - name
+        - kind
+        - status
+        - startDate
+        - endDate
+        - dateLabel
+        - description
+        - sortOrder
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        kind:
+          $ref: "#/components/schemas/ScheduleEventKind"
+        status:
+          $ref: "#/components/schemas/ScheduleEventStatus"
+        startDate: { type: ["string", "null"] }
+        endDate: { type: ["string", "null"] }
+        dateLabel: { type: string }
+        description: { type: string }
+        sortOrder: { type: integer }
+
     DashboardSummary:
       type: object
       required:
@@ -702,7 +792,6 @@ components:
         - topPerformers
         - trending
         - recentlyReturned
-        - nextWindow
       properties:
         todaysGames:
           type: array
@@ -736,8 +825,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Injury"
-        nextWindow:
-          $ref: "#/components/schemas/NationalTeamWindow"
+        nextScheduleEvent:
+          $ref: "#/components/schemas/NextScheduleEvent"
 
     NationalTeamWindow:
       type: object

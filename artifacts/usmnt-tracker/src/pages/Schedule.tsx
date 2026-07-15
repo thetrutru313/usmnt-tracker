@@ -1,13 +1,12 @@
-import { CalendarRange, ChevronRight } from "lucide-react";
+import { CalendarRange, ChevronRight, Loader2 } from "lucide-react";
+import { useListScheduleEvents } from "@workspace/api-client-react";
+import type { ScheduleEvent } from "@workspace/api-client-react";
 import {
-  USMNT_SCHEDULE,
-  getNextEvent,
   KIND_LABELS,
   KIND_COLORS,
   KIND_BORDER,
   STATUS_LABELS,
   STATUS_COLORS,
-  type ScheduleEvent,
 } from "@/data/schedule";
 
 function groupByYear(events: ScheduleEvent[]): [string, ScheduleEvent[]][] {
@@ -24,9 +23,35 @@ function groupByYear(events: ScheduleEvent[]): [string, ScheduleEvent[]][] {
   return Array.from(map.entries());
 }
 
+function getNextEvent(events: ScheduleEvent[]): ScheduleEvent | undefined {
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = events.find((e) => e.startDate !== null && e.startDate >= today);
+  if (upcoming) return upcoming;
+  return events.find((e) => e.startDate === null);
+}
+
 export default function Schedule() {
-  const nextEvent = getNextEvent();
-  const groups = groupByYear(USMNT_SCHEDULE);
+  const { data, isLoading, error } = useListScheduleEvents();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin text-muted-foreground" size={28} />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="p-8 text-center bg-destructive/10 text-destructive rounded-xl border border-destructive/20">
+        <p className="font-mono text-sm">FAILED TO LOAD SCHEDULE DATA</p>
+      </div>
+    );
+  }
+
+  const events = data.events;
+  const nextEvent = getNextEvent(events);
+  const groups = groupByYear(events);
 
   return (
     <div className="space-y-10 pb-12">
@@ -67,7 +92,7 @@ export default function Schedule() {
       </div>
 
       {/* Timeline groups */}
-      {groups.map(([year, events]) => (
+      {groups.map(([year, yearEvents]) => (
         <div key={year}>
           <div className="flex items-center gap-3 mb-5">
             <span className="text-2xl font-bold font-mono text-primary/60 tracking-tighter">
@@ -77,12 +102,14 @@ export default function Schedule() {
           </div>
 
           <div className="space-y-4">
-            {events.map((event) => {
-              const isNext = event.id === nextEvent?.id;
+            {yearEvents.map((event) => {
+              const isNext = event.slug === nextEvent?.slug;
+              const kind = event.kind as keyof typeof KIND_COLORS;
+              const status = event.status as keyof typeof STATUS_COLORS;
               return (
                 <div
                   key={event.id}
-                  className={`relative border-l-4 ${KIND_BORDER[event.kind]} bg-card border border-card-border rounded-r-xl pl-5 pr-5 py-4 transition-all ${
+                  className={`relative border-l-4 ${KIND_BORDER[kind]} bg-card border border-card-border rounded-r-xl pl-5 pr-5 py-4 transition-all ${
                     isNext ? "ring-1 ring-primary/40 shadow-md shadow-primary/10" : ""
                   }`}
                 >
@@ -99,14 +126,14 @@ export default function Schedule() {
                       {/* Badges */}
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span
-                          className={`text-xs px-2 py-0.5 rounded border font-medium ${KIND_COLORS[event.kind]}`}
+                          className={`text-xs px-2 py-0.5 rounded border font-medium ${KIND_COLORS[kind]}`}
                         >
-                          {KIND_LABELS[event.kind]}
+                          {KIND_LABELS[kind]}
                         </span>
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[event.status]}`}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[status]}`}
                         >
-                          {STATUS_LABELS[event.status]}
+                          {STATUS_LABELS[status]}
                         </span>
                       </div>
 

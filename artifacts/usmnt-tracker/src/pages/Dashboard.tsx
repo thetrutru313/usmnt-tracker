@@ -6,7 +6,7 @@ import { FixtureCard } from "@/components/FixtureCard";
 import { Activity, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { getNextEvent, KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS } from "@/data/schedule";
+import { KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS, type EventKind, type EventStatus } from "@/data/schedule";
 
 export default function Dashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -32,7 +32,7 @@ export default function Dashboard() {
     );
   }
 
-  const nextEvent = getNextEvent();
+  const nextEvent = dashboard.nextScheduleEvent;
 
   // Away-jersey star pattern — positions/sizes mirror the jersey's scattered grid
   const JERSEY_STARS = [
@@ -77,11 +77,11 @@ export default function Dashboard() {
                       <CalendarDays size={14} />
                       NEXT UP
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${KIND_COLORS[nextEvent.kind]}`}>
-                      {KIND_LABELS[nextEvent.kind]}
+                    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${KIND_COLORS[nextEvent.kind as EventKind]}`}>
+                      {KIND_LABELS[nextEvent.kind as EventKind]}
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[nextEvent.status]}`}>
-                      {STATUS_LABELS[nextEvent.status]}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${STATUS_COLORS[nextEvent.status as EventStatus]}`}>
+                      {STATUS_LABELS[nextEvent.status as EventStatus]}
                     </span>
                   </div>
                   <h1 className="text-2xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
@@ -95,7 +95,7 @@ export default function Dashboard() {
                 <div className="flex flex-col items-start md:items-end gap-4 shrink-0">
                   <div className="p-4 bg-background/50 rounded-xl border border-border backdrop-blur">
                     <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider block mb-1">
-                      {nextEvent.status === "confirmed" ? "Dates" : nextEvent.status === "approximate" ? "Approx." : "TBD"}
+                      {(nextEvent.status as EventStatus) === "confirmed" ? "Dates" : (nextEvent.status as EventStatus) === "approximate" ? "Approx." : "TBD"}
                     </span>
                     <span className="text-xl font-bold data-value">{nextEvent.dateLabel}</span>
                   </div>

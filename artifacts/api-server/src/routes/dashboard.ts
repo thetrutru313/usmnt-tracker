@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
-import { db, nationalTeamWindowsTable, playersTable, clubsTable } from "@workspace/db";
+import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
 import { and, asc, desc, eq, gte, isNotNull, lt, notIlike, or } from "drizzle-orm";
 import {
   fixturesTable,
@@ -35,7 +35,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     topPerformers,
     trending,
     recentlyReturned,
-    nextWindowRows,
+    nextScheduleEventRows,
   ] = await Promise.all([
     db
       .select()
@@ -70,9 +70,9 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(4),
     db
       .select()
-      .from(nationalTeamWindowsTable)
-      .where(gte(nationalTeamWindowsTable.startDate, todayStr))
-      .orderBy(asc(nationalTeamWindowsTable.startDate))
+      .from(scheduleEventsTable)
+      .where(gte(scheduleEventsTable.startDate, todayStr))
+      .orderBy(asc(scheduleEventsTable.sortOrder), asc(scheduleEventsTable.startDate))
       .limit(1),
   ]);
 
@@ -94,7 +94,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     topPerformers: withPoolTier(topPerformers),
     trending: withPoolTier(trending),
     recentlyReturned,
-    nextWindow: nextWindowRows[0],
+    nextScheduleEvent: nextScheduleEventRows[0],
   };
 
   res.json(GetDashboardResponse.parse(payload));

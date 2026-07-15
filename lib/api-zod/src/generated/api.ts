@@ -557,12 +557,18 @@ export const GetDashboardResponse = zod.object({
   "startDate": zod.coerce.date(),
   "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
 })),
-  "nextWindow": zod.object({
+  "nextScheduleEvent": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
   "name": zod.string(),
-  "startDate": zod.coerce.date(),
-  "endDate": zod.coerce.date(),
-  "description": zod.string()
-})
+  "kind": zod.enum(['friendly', 'nations-league', 'gold-cup', 'copa-america', 'world-cup-qualifying', 'world-cup']),
+  "status": zod.enum(['confirmed', 'approximate', 'tbd']),
+  "startDate": zod.string().nullable(),
+  "endDate": zod.string().nullable(),
+  "dateLabel": zod.string(),
+  "description": zod.string(),
+  "sortOrder": zod.number()
+}).optional()
 })
 
 
@@ -702,6 +708,27 @@ export const GetRankingsResponse = zod.object({
   "announcedAt": zod.coerce.date(),
   "summary": zod.string(),
   "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
+}))
+})
+
+
+/**
+ * @summary List USMNT schedule events
+ */
+export const ListScheduleEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['friendly', 'nations-league', 'gold-cup', 'copa-america', 'world-cup-qualifying', 'world-cup']),
+  "status": zod.enum(['confirmed', 'approximate', 'tbd']),
+  "startDate": zod.string().nullable(),
+  "endDate": zod.string().nullable(),
+  "dateLabel": zod.string(),
+  "description": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 
