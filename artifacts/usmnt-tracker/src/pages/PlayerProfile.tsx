@@ -1,9 +1,9 @@
 import { useGetPlayer } from "@workspace/api-client-react";
 import { useParams } from "wouter";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -339,6 +339,53 @@ export default function PlayerProfile() {
               </CardContent>
             </Card>
           )}
+
+          {/* Form Breakdown */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
+                <Activity size={16} className="text-muted-foreground" />
+                Form Breakdown
+              </CardTitle>
+              {player.performanceTrend && (
+                <div className="mt-1">
+                  <FormBadge trend={player.performanceTrend} />
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              {player.last5Stats.minutes >= 270 && player.last5Stats.avgRating != null && player.seasonStats.avgRating != null ? (
+                (() => {
+                  const last5Avg = player.last5Stats.avgRating!;
+                  const seasonAvg = player.seasonStats.avgRating!;
+                  const delta = last5Avg - seasonAvg;
+                  const deltaPositive = delta > 0.005;
+                  const deltaNegative = delta < -0.005;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Last-5 avg rating</span>
+                        <span className="font-bold data-value text-secondary">{last5Avg.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Season avg rating</span>
+                        <span className="font-medium">{seasonAvg.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm pt-2 border-t border-border">
+                        <span className="text-muted-foreground">vs season baseline</span>
+                        <span className={`font-bold flex items-center gap-1 ${deltaPositive ? 'text-green-500' : deltaNegative ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          {deltaPositive ? <TrendingUp size={14} /> : deltaNegative ? <TrendingDown size={14} /> : <Minus size={14} />}
+                          {deltaPositive ? "+" : ""}{delta.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <p className="text-sm text-muted-foreground">Not enough minutes for form data</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Bio & Details */}
           <Card>
