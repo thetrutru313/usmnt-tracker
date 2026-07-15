@@ -217,8 +217,11 @@ export default function Dashboard() {
               {dashboard.transfers.slice(0, 3).map(transfer => (
                 <div key={transfer.id} className="border-b border-border last:border-0 pb-3 last:pb-0">
                   <div className="flex justify-between items-start mb-1">
-                    <Link href={`/players/${transfer.player.id}`} className="font-bold text-sm hover:underline">{transfer.player.name}</Link>
-                    <Badge variant={transfer.status === 'confirmed' ? 'default' : 'outline'} className="text-[10px] uppercase rounded-sm px-1.5 py-0 h-4">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Link href={`/players/${transfer.player.id}`} className="font-bold text-sm hover:underline truncate">{transfer.player.name}</Link>
+                      <FormBadge trend={transfer.performanceTrend} showEmoji={false} className="h-4 text-[9px] shrink-0" />
+                    </div>
+                    <Badge variant={transfer.status === 'confirmed' ? 'default' : 'outline'} className="text-[10px] uppercase rounded-sm px-1.5 py-0 h-4 shrink-0 ml-1">
                       {transfer.status}
                     </Badge>
                   </div>
@@ -248,10 +251,13 @@ export default function Dashboard() {
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${injury.status === 'active' ? 'bg-destructive' : injury.status === 'recovering' ? 'bg-yellow-500' : 'bg-green-500'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
-                      <Link href={`/players/${injury.player.id}`} className="font-bold text-sm hover:underline truncate pr-2">
-                        {injury.player.name}
-                      </Link>
-                      <span className="text-xs font-mono text-muted-foreground whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Link href={`/players/${injury.player.id}`} className="font-bold text-sm hover:underline truncate">
+                          {injury.player.name}
+                        </Link>
+                        <FormBadge trend={injury.performanceTrend} showEmoji={false} className="h-4 text-[9px] shrink-0" />
+                      </div>
+                      <span className="text-xs font-mono text-muted-foreground whitespace-nowrap ml-1">
                         {injury.expectedReturn ? format(new Date(injury.expectedReturn), "MMM d") : 'TBD'}
                       </span>
                     </div>
