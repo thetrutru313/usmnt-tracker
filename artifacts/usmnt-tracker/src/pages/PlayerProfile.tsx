@@ -230,7 +230,7 @@ export default function PlayerProfile() {
           {/* Match Log */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg uppercase tracking-tight flex items-center justify-between">
+              <CardTitle className="text-lg uppercase tracking-tight flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 Recent Matches
                 <div className="flex items-center gap-1 text-xs font-mono">
                   {(["all", "club", "usmnt"] as const).map(filter => (
@@ -257,8 +257,8 @@ export default function PlayerProfile() {
                       <th className="pb-2 font-medium"></th>
                       <th className="pb-2 font-medium">Date</th>
                       <th className="pb-2 font-medium">Opponent</th>
-                      <th className="pb-2 font-medium">Comp</th>
-                      <th className="pb-2 font-medium">Min</th>
+                      <th className="pb-2 font-medium hidden sm:table-cell">Comp</th>
+                      <th className="pb-2 font-medium hidden sm:table-cell">Min</th>
                       <th className="pb-2 font-medium">G/A</th>
                       <th className="pb-2 font-medium text-right">Rating</th>
                     </tr>
@@ -269,7 +269,7 @@ export default function PlayerProfile() {
                       .slice(0, 5)
                       .map(match => (
                       <tr key={match.id} className="hover:bg-muted/50 transition-colors">
-                        <td className="py-3 pr-2">
+                        <td className="py-2 pr-2">
                           {match.isNationalTeam ? (
                             <img src={USMNT_CREST_URL} alt="USMNT" title="USMNT" className="w-5 h-5 object-contain" />
                           ) : player.clubLogoUrl ? (
@@ -278,19 +278,21 @@ export default function PlayerProfile() {
                             <Shield size={16} className="text-muted-foreground" />
                           )}
                         </td>
-                        <td className="py-3 text-muted-foreground font-mono">{format(new Date(match.date), "MMM d")}</td>
-                        <td className="py-3 font-medium flex items-center gap-2">
-                          <span className={match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}>{match.result}</span>
-                          {match.opponent}
+                        <td className="py-2 text-muted-foreground font-mono">{format(new Date(match.date), "MMM d")}</td>
+                        <td className="py-2 font-medium">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
+                            <span className="truncate">{match.opponent}</span>
+                          </div>
                         </td>
-                        <td className="py-3 text-muted-foreground text-xs">{match.competition}</td>
-                        <td className="py-3 font-mono">{match.minutes}'</td>
-                        <td className="py-3 font-mono">
+                        <td className="py-2 text-muted-foreground text-xs hidden sm:table-cell">{match.competition}</td>
+                        <td className="py-2 font-mono hidden sm:table-cell">{match.minutes}'</td>
+                        <td className="py-2 font-mono">
                           {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
                           {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
                           {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
                         </td>
-                        <td className="py-3 text-right font-bold data-value">
+                        <td className="py-2 text-right font-bold data-value">
                           {match.rating != null ? (
                             <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
                               {match.rating.toFixed(1)}
