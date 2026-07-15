@@ -112,7 +112,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's Games */}
         <Card className="col-span-1 lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-2">
             <div>
               <CardTitle className="text-base md:text-lg uppercase tracking-tight flex items-center gap-2">
                 <Activity size={18} className="text-primary" />
