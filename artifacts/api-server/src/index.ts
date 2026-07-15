@@ -5,7 +5,7 @@ import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
-import { startUsmntStatsSyncSchedule } from "./lib/usmntSync";
+import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
 // intentionally not started — the user upgraded API-Football instead, which
 // is now live. See replit.md and .agents/memory/usmnt-tracker.md.
@@ -51,16 +51,15 @@ app.listen(port, (err) => {
   // per club), and injuries from API-Football, replacing the old seed's
   // fabricated data entirely. Runs daily — see playerStatsSync.ts for the
   // call-volume/rate-limit reasoning. Skips itself if API_FOOTBALL_KEY isn't set.
-  // USMNT (national-team) match logs/stats sync separately below, on their
-  // own faster schedule.
-  startPlayerStatsSyncSchedule();
+  //
+  // The USMNT sync is chained as an afterSync callback so it always runs after
+  // all player IDs are resolved and club stats are committed — running them
+  // concurrently starved the USMNT sync of rate-limit quota and left it unable
+  // to complete before the next server restart.
+  startPlayerStatsSyncSchedule(undefined, () => syncUsmntStats().then(() => {}));
 
-  // Polls the USMNT's own recent fixtures hourly — much cheaper and more
-  // frequent than the club sync above, since new national-team results
-  // shouldn't have to wait behind an hour-long 50-club crawl to show up.
-  // Only pays for the expensive per-fixture lineup/stats resync when a new
-  // finished match is actually detected. See usmntSync.ts. Skips itself if
-  // API_FOOTBALL_KEY isn't set.
+  // Also keeps an independent hourly poll so a newly-finished USMNT match
+  // shows up promptly — not just on the next daily club-sync cycle.
   startUsmntStatsSyncSchedule();
 
   // Syncs senior USMNT caps/goals from Wikidata daily. Separate from both

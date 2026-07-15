@@ -861,15 +861,21 @@ let intervalHandle: NodeJS.Timeout | null = null;
  * injuries calls per club) — at the enforced 7s/request throttle that's
  * ~30+ minutes for the full roster, too heavy to run more than once a day.
  */
-export function startPlayerStatsSyncSchedule(intervalMs = 24 * 60 * 60 * 1000): void {
+export function startPlayerStatsSyncSchedule(
+  intervalMs = 24 * 60 * 60 * 1000,
+  /** Optional callback invoked after each successful club-stats sync cycle, used to chain dependent syncs (e.g. USMNT) that need resolved player IDs and fresh stats to already be committed. */
+  afterSync?: () => Promise<void>,
+): void {
   if (!process.env["API_FOOTBALL_KEY"]) {
     logger.warn("API_FOOTBALL_KEY not set — skipping live player-stats sync, no season stats/match logs/injuries will be available");
     return;
   }
-  syncPlayerStatsAndInjuries().catch((err) => logger.error({ err }, "Initial player-stats sync failed"));
-  intervalHandle = setInterval(() => {
-    syncPlayerStatsAndInjuries().catch((err) => logger.error({ err }, "Scheduled player-stats sync failed"));
-  }, intervalMs);
+  const run = () =>
+    syncPlayerStatsAndInjuries()
+      .then(() => afterSync?.())
+      .catch((err) => logger.error({ err }, "Player-stats sync (or post-sync) failed"));
+  run();
+  intervalHandle = setInterval(run, intervalMs);
 }
 
 export function stopPlayerStatsSyncSchedule(): void {
