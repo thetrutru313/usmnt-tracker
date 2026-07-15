@@ -343,9 +343,14 @@ export default function PlayerProfile() {
           {/* Form Breakdown */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
-                <Activity size={16} className="text-muted-foreground" />
-                Form Breakdown
+              <CardTitle className="text-md uppercase tracking-tight flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-muted-foreground" />
+                  Form Breakdown
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground normal-case tracking-normal">
+                  {formatSeasonLabel(player.clubSeasonStats.season)}
+                </span>
               </CardTitle>
               {player.performanceTrend && (
                 <div className="mt-1">
