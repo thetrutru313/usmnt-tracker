@@ -2,6 +2,7 @@ import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
@@ -33,6 +34,40 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      // Keep the service worker off during dev to avoid conflicts with Vite HMR.
+      devOptions: { enabled: false },
+      manifest: {
+        name: 'USMNT Tracker',
+        short_name: 'USMNT',
+        description: 'Track the US Men\'s National Soccer Team — player form, injuries, fixtures, and call-up analysis.',
+        theme_color: '#002966',
+        background_color: '#002966',
+        display: 'standalone',
+        orientation: 'portrait',
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: 'icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        // Pre-cache all static build output.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
+        // Serve the app shell for any navigation so the SPA router takes over.
+        navigateFallback: 'index.html',
+        // Exclude Replit dev endpoints from the SW so hot-reload still works
+        // in any environment where devOptions.enabled is true.
+        navigateFallbackDenylist: [/^\/__/, /\/api\//],
+      },
+    }),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [

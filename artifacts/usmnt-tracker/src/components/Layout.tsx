@@ -1,12 +1,28 @@
 import * as React from "react"
-import { Search, MapPin, Calendar, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw } from "lucide-react"
+import { Search, Calendar, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
 
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = React.useState(() => navigator.onLine)
+  React.useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+  return isOnline
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const isOnline = useOnlineStatus()
 
   const navItems = [
     { label: "Dashboard", path: "/", icon: Activity },
@@ -71,6 +87,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+        {!isOnline && (
+          <div className="flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-amber-400 text-xs font-medium font-mono shrink-0">
+            <WifiOff size={12} />
+            <span>You're offline — showing last cached data.</span>
+          </div>
+        )}
         <header className="h-16 flex-shrink-0 flex items-center px-4 lg:px-8 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
           <button className="lg:hidden mr-4" onClick={() => setMobileMenuOpen(true)}>
             <Menu size={24} />
