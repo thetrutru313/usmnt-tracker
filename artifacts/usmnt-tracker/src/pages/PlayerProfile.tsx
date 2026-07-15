@@ -254,12 +254,12 @@ export default function PlayerProfile() {
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-border text-xs uppercase font-mono text-muted-foreground tracking-wider">
-                      <th className="pb-2 font-medium"></th>
+                      <th className="pb-2 font-medium hidden sm:table-cell"></th>
                       <th className="pb-2 font-medium">Date</th>
                       <th className="pb-2 font-medium">Opponent</th>
                       <th className="pb-2 font-medium hidden sm:table-cell">Comp</th>
                       <th className="pb-2 font-medium hidden sm:table-cell">Min</th>
-                      <th className="pb-2 font-medium">G/A</th>
+                      <th className="pb-2 font-medium pr-4">G/A</th>
                       <th className="pb-2 font-medium text-right">Rating</th>
                     </tr>
                   </thead>
@@ -269,7 +269,7 @@ export default function PlayerProfile() {
                       .slice(0, 5)
                       .map(match => (
                       <tr key={match.id} className="hover:bg-muted/50 transition-colors">
-                        <td className="py-2 pr-2">
+                        <td className="py-2 pr-2 hidden sm:table-cell">
                           {match.isNationalTeam ? (
                             <img src={USMNT_CREST_URL} alt="USMNT" title="USMNT" className="w-5 h-5 object-contain" />
                           ) : player.clubLogoUrl ? (
@@ -278,7 +278,7 @@ export default function PlayerProfile() {
                             <Shield size={16} className="text-muted-foreground" />
                           )}
                         </td>
-                        <td className="py-2 text-muted-foreground font-mono">{format(new Date(match.date), "MMM d")}</td>
+                        <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">{format(new Date(match.date), "MMM d")}</td>
                         <td className="py-2 font-medium">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
