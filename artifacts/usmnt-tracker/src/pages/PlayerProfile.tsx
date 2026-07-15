@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock,
 import { FormBadge } from "@/components/FormBadge";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { formatKickoffMst } from "@/lib/formatMst";
+import { formatKickoff } from "@/lib/formatTime";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
 
@@ -464,7 +464,7 @@ export default function PlayerProfile() {
                   {player.upcomingFixtures.slice(0, 3).map(fixture => (
                     <div key={fixture.id} className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{formatKickoffMst(fixture.kickoff)}</span>
+                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{formatKickoff(fixture.kickoff)}</span>
                         <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-medium">
