@@ -1,5 +1,5 @@
 import { db, playersTable, playerStatsTable, matchLogsTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import {
@@ -16,11 +16,13 @@ import {
 // USMNT match logs and cycle stats sync independently of the 50-club sync in
 // playerStatsSync.ts, on its own faster schedule — national-team games are
 // far less frequent than club fixtures and shouldn't wait behind an hour-long
-// club-by-club crawl to show up. See replit.md / .agents/memory for why: no
-// true webhook/push exists for match completion on this provider, so this
-// polls the USMNT team's own fixture list (1-2 cheap calls) and only pays for
-// the expensive per-fixture lineup fetch when something has actually changed
-// since the last run.
+// club-by-club crawl to show up.
+//
+// The sync is INCREMENTAL: it only fetches per-fixture lineups for fixtures
+// not already in the DB. Cycle totals are re-aggregated from all DB match_logs
+// after insertion (not from the API response), so a partial run that is cut
+// short by a server restart still makes forward progress instead of rolling
+// everything back.
 // ---------------------------------------------------------------------------
 
 type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null };
@@ -47,21 +49,9 @@ export function cycleForDate(dateStr: string): string {
   return `${last.year + Math.max(yearsAhead, 4)} World Cup`;
 }
 
-// Cycle totals need every finished fixture within the current World Cup
-// cycle, not just a handful of recent ones — the "2026 World Cup" cycle
-// alone (started December 2022) has already produced 60 finished USMNT
-// fixtures. A small window silently undercounts caps/goals/minutes for any
-// player who has played more than that window's worth of matches. This is
-// only used for the expensive per-fixture crawl (triggered rarely, when a
-// new match is detected), not the cheap polling check below. 99 is
-// API-Football's hard ceiling for the `last` fixtures param (100+ is
-// rejected outright), and comfortably covers the current cycle's 60 games.
+// 99 is API-Football's hard ceiling for the `last` param; covers the entire
+// current World Cup cycle (~60 games) for the initial history build.
 const CYCLE_TOTAL_FIXTURES_WINDOW = 99;
-
-// The stored match_logs rows (used for "recent match history" display) stay
-// capped at a small, browsable number — cycle *totals* are aggregated from
-// the full fetched set below, independently of this display cap.
-const RECENT_MATCH_LOG_DISPLAY_CAP = 10;
 
 /** Every USMNT fixture id currently recorded in our match logs, regardless of which player it's attached to — used to detect "has anything new finished". */
 async function getSyncedFixtureIds(): Promise<Set<number>> {
@@ -73,33 +63,22 @@ async function getSyncedFixtureIds(): Promise<Set<number>> {
 }
 
 /**
- * Syncs the USMNT senior men's national team's recent finished fixtures
- * (World Cup qualifiers, Nations League, friendlies) and, for whichever
- * tracked players actually appeared (minutes > 0), their per-match stats —
- * the same real-data-only approach as the club match-log sync, just scoped
- * to the national team. Runs once, shared across every tracked player who
- * got called in, rather than once per club.
+ * Fetches per-player match-log data from API-Football for a specific list of
+ * finished USMNT fixtures. Only calls `/fixtures/players` for the provided
+ * fixtures — callers control which subset to process (new-only for
+ * incremental runs, full history for fresh starts).
  */
-async function fetchUsmntMatchLogs(allPlayers: PlayerRow[], fixturesToCheck: number): Promise<{ logsByPlayer: Map<number, RealMatchLog[]>; finishedFixtureIds: Set<number> }> {
+async function fetchLogsForFixtures(
+  allPlayers: PlayerRow[],
+  teamId: number,
+  fixtures: AfFixtureListItem[],
+): Promise<Map<number, RealMatchLog[]>> {
   const logsByPlayer = new Map<number, RealMatchLog[]>();
-  const finishedFixtureIds = new Set<number>();
-  const teamId = await resolveUsmntTeamId();
-  if (!teamId) return { logsByPlayer, finishedFixtureIds };
-
   const resolvedPlayers = allPlayers.filter((p) => p.apiFootballPlayerId);
-  if (resolvedPlayers.length === 0) return { logsByPlayer, finishedFixtureIds };
+  if (resolvedPlayers.length === 0) return logsByPlayer;
   const byApiId = new Map(resolvedPlayers.map((p) => [p.apiFootballPlayerId as number, p]));
 
-  let fixtures: AfFixtureListItem[];
-  try {
-    fixtures = await afFetch<AfFixtureListItem[]>(`/fixtures?team=${teamId}&last=${fixturesToCheck}`);
-  } catch (err) {
-    logger.warn({ err }, "API-Football USMNT recent-fixtures fetch failed — skipping national-team match-log sync");
-    return { logsByPlayer, finishedFixtureIds };
-  }
-
   const finished = fixtures.filter((f) => FINISHED_STATUSES.has(f.fixture.status.short));
-  for (const f of finished) finishedFixtureIds.add(f.fixture.id);
 
   for (const f of finished) {
     let teams: AfFixturePlayersTeam[];
@@ -148,22 +127,13 @@ async function fetchUsmntMatchLogs(allPlayers: PlayerRow[], fixturesToCheck: num
     }
   }
 
-  // Most-recent-first. Intentionally NOT capped here — callers decide
-  // separately how much of this to persist for display (see
-  // RECENT_MATCH_LOG_DISPLAY_CAP) versus how much to aggregate into cycle
-  // totals (the full list, so totals aren't undercounted).
-  for (const [, logs] of logsByPlayer) {
-    logs.sort((a, b) => (a.date < b.date ? 1 : -1));
-  }
-  return { logsByPlayer, finishedFixtureIds };
+  return logsByPlayer;
 }
 
 /**
  * Replaces every "national_team_cycle" row for a player with one row per
  * cycle that has real synced data — analogous to `replaceSeasonHistoryRows`
- * for club seasons, but keyed by World Cup cycle label instead of season
- * year. Clears the whole periodType first since which cycles have data can
- * change between runs (e.g. a fresh sync with a wider/narrower fixture window).
+ * for club seasons, but keyed by World Cup cycle label instead of season year.
  */
 async function replaceCycleHistoryRows(playerId: number, entries: { cycle: string; agg: AggregatedSeasonStats }[]): Promise<void> {
   await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "national_team_cycle")));
@@ -190,99 +160,204 @@ async function replaceCycleHistoryRows(playerId: number, entries: { cycle: strin
 }
 
 export interface UsmntSyncResult {
-  ran: boolean; // false when the cheap check found nothing new and the expensive sync was skipped
-  playersWithMatchLogs: number;
+  apiCallsMade: boolean; // true when lineup fetches actually ran (new fixtures found)
+  newFixturesProcessed: number;
+  playersWithNewLogs: number;
   cyclesWritten: number;
 }
 
 /**
- * Cheaply checks whether the USMNT has a newly-finished fixture since the
- * last run; if so, re-syncs match logs and cycle-tagged stats for every
- * tracked player. Skips the expensive per-fixture lineup fetch entirely when
- * nothing has changed, so this can run on a tight schedule without wasting
- * API-Football's rate-limited request budget.
+ * Incrementally syncs USMNT match logs and cycle-tagged stats.
+ *
+ * The function has two separate concerns with different cost profiles:
+ *
+ * EXPENSIVE (API calls — gated behind new-fixture detection):
+ *   1. Cheap poll: fetches the last 20 USMNT fixtures to detect new finished
+ *      games not yet in the DB.
+ *   2. If new fixtures found and DB is empty: fetches last=99 to build
+ *      complete cycle history. Otherwise: fetches lineups for new IDs only.
+ *   3. INSERTs new match_log rows, one atomic INSERT per fixture so a
+ *      crash between fixtures never leaves a fixture partially written.
+ *      onConflictDoNothing() prevents double-inserts from concurrent timers.
+ *
+ * CHEAP (pure DB reads+writes — always runs, even when no new fixtures):
+ *   4. Re-aggregates national_team_cycle rows from ALL match_logs for every
+ *      player that has any NT log in the DB.
+ *
+ * Running step 4 unconditionally is what makes crash recovery correct: if a
+ * prior run inserted some fixture logs but was killed before recomputing cycle
+ * stats, the next run (even if it finds no new fixtures) will still recompute
+ * cycle stats from the now-complete DB state and fix the stale rows.
  */
 export async function syncUsmntStats(fixturesToCheck = 20): Promise<UsmntSyncResult> {
   const teamId = await resolveUsmntTeamId();
-  if (!teamId) return { ran: false, playersWithMatchLogs: 0, cyclesWritten: 0 };
+  if (!teamId) return { apiCallsMade: false, newFixturesProcessed: 0, playersWithNewLogs: 0, cyclesWritten: 0 };
+
+  // Load players once — used for both lineup matching and cycle recomputation.
+  const players: PlayerRow[] = await db
+    .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId })
+    .from(playersTable);
+
+  // -------------------------------------------------------------------------
+  // PHASE A — lineup sync (expensive, gated by new-fixture detection)
+  // -------------------------------------------------------------------------
+
+  let newFixturesProcessed = 0;
+  let playersWithNewLogs = 0;
 
   let recentFixtures: AfFixtureListItem[];
   try {
     recentFixtures = await afFetch<AfFixtureListItem[]>(`/fixtures?team=${teamId}&last=${fixturesToCheck}`);
   } catch (err) {
-    logger.warn({ err }, "API-Football USMNT fixture-status check failed — skipping this poll");
-    return { ran: false, playersWithMatchLogs: 0, cyclesWritten: 0 };
+    logger.warn({ err }, "API-Football USMNT fixture-status check failed — skipping lineup sync this poll, cycle stats will still be recomputed from DB");
+    recentFixtures = [];
   }
 
-  const freshFinishedIds = new Set(recentFixtures.filter((f) => FINISHED_STATUSES.has(f.fixture.status.short)).map((f) => f.fixture.id));
   const alreadySynced = await getSyncedFixtureIds();
-  const hasNewFinishedMatch = [...freshFinishedIds].some((id) => !alreadySynced.has(id));
 
-  if (!hasNewFinishedMatch) {
-    logger.info({ checked: recentFixtures.length }, "USMNT fixture check found nothing new — skipping full sync");
-    return { ran: false, playersWithMatchLogs: 0, cyclesWritten: 0 };
+  if (recentFixtures.length > 0) {
+    const freshFinishedIds = new Set(
+      recentFixtures.filter((f) => FINISHED_STATUSES.has(f.fixture.status.short)).map((f) => f.fixture.id),
+    );
+    const hasNewFinishedMatch = [...freshFinishedIds].some((id) => !alreadySynced.has(id));
+
+    if (hasNewFinishedMatch) {
+      let fixturesToProcess: AfFixtureListItem[];
+
+      if (alreadySynced.size === 0) {
+        // Fresh start — fetch the full cycle window to build complete history.
+        // This is the only time we pay for 99 lineup calls; subsequent runs are
+        // incremental (only the new games from the cheap poll).
+        let allFixtures: AfFixtureListItem[];
+        try {
+          allFixtures = await afFetch<AfFixtureListItem[]>(`/fixtures?team=${teamId}&last=${CYCLE_TOTAL_FIXTURES_WINDOW}`);
+        } catch (err) {
+          logger.warn({ err }, "API-Football USMNT full-cycle fixture fetch failed — falling back to recent window");
+          allFixtures = recentFixtures;
+        }
+        fixturesToProcess = allFixtures.filter(
+          (f) => FINISHED_STATUSES.has(f.fixture.status.short) && !alreadySynced.has(f.fixture.id),
+        );
+        logger.info({ fixturesToProcess: fixturesToProcess.length }, "USMNT fresh-start: fetching full cycle history");
+      } else {
+        fixturesToProcess = recentFixtures.filter(
+          (f) => FINISHED_STATUSES.has(f.fixture.status.short) && !alreadySynced.has(f.fixture.id),
+        );
+        logger.info({ fixturesToProcess: fixturesToProcess.length, alreadySyncedCount: alreadySynced.size }, "USMNT incremental: fetching lineups for new fixtures only");
+      }
+
+      if (fixturesToProcess.length > 0) {
+        const newLogsByPlayer = await fetchLogsForFixtures(players, teamId, fixturesToProcess);
+
+        // Insert per-fixture (atomic): either ALL players for a fixture are
+        // committed or none. A crash between fixtures leaves everything already
+        // committed in getSyncedFixtureIds() and skips correctly next run.
+        const logsByFixtureId = new Map<number, Array<{ playerId: number; log: RealMatchLog }>>();
+        for (const player of players) {
+          for (const log of newLogsByPlayer.get(player.id) ?? []) {
+            if (log.apiFootballFixtureId == null) continue;
+            const bucket = logsByFixtureId.get(log.apiFootballFixtureId) ?? [];
+            bucket.push({ playerId: player.id, log });
+            logsByFixtureId.set(log.apiFootballFixtureId, bucket);
+          }
+        }
+
+        const insertedPlayerIds = new Set<number>();
+        for (const [, entries] of logsByFixtureId) {
+          await db
+            .insert(matchLogsTable)
+            .values(
+              entries.map(({ playerId, log }) => ({
+                playerId,
+                apiFootballFixtureId: log.apiFootballFixtureId,
+                date: log.date,
+                opponent: log.opponent,
+                competition: log.competition,
+                result: log.result,
+                minutes: log.minutes,
+                goals: log.goals,
+                assists: log.assists,
+                conceded: log.conceded,
+                rating: log.rating,
+                isNationalTeam: true,
+                cycle: cycleForDate(log.date),
+              })),
+            )
+            .onConflictDoNothing();
+          for (const { playerId } of entries) insertedPlayerIds.add(playerId);
+        }
+
+        newFixturesProcessed = fixturesToProcess.length;
+        playersWithNewLogs = insertedPlayerIds.size;
+        logger.info({ newFixturesProcessed, playersWithNewLogs }, "USMNT match logs inserted");
+      }
+    } else {
+      logger.info({ checked: recentFixtures.length, alreadySyncedCount: alreadySynced.size }, "USMNT fixture check found nothing new — skipping lineup fetch");
+    }
   }
 
-  const players: PlayerRow[] = await db
-    .select({ id: playersTable.id, name: playersTable.name, clubId: playersTable.clubId, apiFootballPlayerId: playersTable.apiFootballPlayerId })
-    .from(playersTable);
+  // -------------------------------------------------------------------------
+  // PHASE B — cycle stat recomputation (cheap, always runs)
+  //
+  // Reads ALL national-team match_logs from DB and rebuilds every player's
+  // national_team_cycle rows from scratch. Running this unconditionally means
+  // a run that was crashed before phase B completes will be self-healing:
+  // the next run — even if it finds no new fixtures — will recompute cycle
+  // stats for all players that have NT logs in the DB, including any logs
+  // inserted by the crashed run.
+  // -------------------------------------------------------------------------
 
-  // The cheap poll above only needs a small recent window to detect "did
-  // anything finish" — but once we know a full crawl is warranted, fetch a
-  // window wide enough to cover the whole current cycle so totals are
-  // complete, not just however many fixtures the poll happened to check.
-  const { logsByPlayer } = await fetchUsmntMatchLogs(players, CYCLE_TOTAL_FIXTURES_WINDOW);
+  // Fetch all NT logs in one query, then bucket by player in memory.
+  const allNtLogs = await db
+    .select({
+      playerId: matchLogsTable.playerId,
+      apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
+      date: matchLogsTable.date,
+      opponent: matchLogsTable.opponent,
+      competition: matchLogsTable.competition,
+      result: matchLogsTable.result,
+      minutes: matchLogsTable.minutes,
+      goals: matchLogsTable.goals,
+      assists: matchLogsTable.assists,
+      conceded: matchLogsTable.conceded,
+      rating: matchLogsTable.rating,
+      isNationalTeam: matchLogsTable.isNationalTeam,
+    })
+    .from(matchLogsTable)
+    .where(eq(matchLogsTable.isNationalTeam, true));
 
-  let playersWithMatchLogs = 0;
+  const logsByPlayer = new Map<number, RealMatchLog[]>();
+  for (const log of allNtLogs) {
+    const bucket = logsByPlayer.get(log.playerId) ?? [];
+    bucket.push(log as RealMatchLog);
+    logsByPlayer.set(log.playerId, bucket);
+  }
+
   let cyclesWritten = 0;
-  for (const player of players) {
-    const logs = logsByPlayer.get(player.id) ?? [];
-    const logsForDisplay = logs.slice(0, RECENT_MATCH_LOG_DISPLAY_CAP);
-    await db.delete(matchLogsTable).where(and(eq(matchLogsTable.playerId, player.id), eq(matchLogsTable.isNationalTeam, true)));
-    if (logsForDisplay.length > 0) {
-      await db.insert(matchLogsTable).values(
-        logsForDisplay.map((l) => ({
-          playerId: player.id,
-          apiFootballFixtureId: l.apiFootballFixtureId,
-          date: l.date,
-          opponent: l.opponent,
-          competition: l.competition,
-          result: l.result,
-          minutes: l.minutes,
-          goals: l.goals,
-          assists: l.assists,
-          conceded: l.conceded,
-          rating: l.rating,
-          isNationalTeam: true,
-          cycle: cycleForDate(l.date),
-        })),
-      );
-      playersWithMatchLogs++;
-    }
-
+  for (const [playerId, playerLogs] of logsByPlayer) {
     const logsByCycle = new Map<string, RealMatchLog[]>();
-    for (const log of logs) {
+    for (const log of playerLogs) {
       const cycle = cycleForDate(log.date);
       logsByCycle.set(cycle, [...(logsByCycle.get(cycle) ?? []), log]);
     }
     const cycleEntries = [...logsByCycle.entries()]
       .map(([cycle, cycleLogs]) => ({ cycle, agg: aggregateFromMatchLogs(cycleLogs) }))
       .filter((e): e is { cycle: string; agg: AggregatedSeasonStats } => e.agg != null);
-    await replaceCycleHistoryRows(player.id, cycleEntries);
+
+    await replaceCycleHistoryRows(playerId, cycleEntries);
     cyclesWritten += cycleEntries.length;
   }
 
-  logger.info({ playersWithMatchLogs, cyclesWritten, newFixturesDetected: [...freshFinishedIds].filter((id) => !alreadySynced.has(id)).length }, "USMNT stats sync complete");
-  return { ran: true, playersWithMatchLogs, cyclesWritten };
+  logger.info({ newFixturesProcessed, playersWithNewLogs, cyclesWritten, playersRecomputed: logsByPlayer.size }, "USMNT stats sync complete");
+  return { apiCallsMade: recentFixtures.length > 0, newFixturesProcessed, playersWithNewLogs, cyclesWritten };
 }
 
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /**
- * Runs the cheap "did anything finish" check immediately, then hourly —
- * independent of the daily club-stats sync in playerStatsSync.ts. Cheap on
- * every poll (1 fixtures-list call); only pays for the expensive per-fixture
- * lineup sync when a new finished match is actually detected.
+ * Runs the incremental USMNT sync immediately, then hourly. The cheap
+ * fixture-list poll runs on every tick; the expensive per-fixture lineup
+ * fetch only fires when a new finished match is detected.
  */
 export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
   if (!process.env["API_FOOTBALL_KEY"]) {

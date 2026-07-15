@@ -3,9 +3,11 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 const BASE_URL = "https://v3.football.api-sports.io";
-// Free plan is rate-limited to ~10 requests/minute. Space calls out generously
-// (one every 7s) so a full club sync (2 calls/club) doesn't trip 429s.
-const MIN_REQUEST_INTERVAL_MS = 7000;
+// Pro plan allows 30 requests/minute (1 every 2s). The original 7s interval
+// was for the free plan (~10/min) and made 99-fixture USMNT syncs take
+// 11+ minutes — longer than a typical server restart window — so writes
+// never committed. Reduced to 2s to match the actual Pro plan limit.
+const MIN_REQUEST_INTERVAL_MS = 2000;
 const MAX_RETRIES = 2;
 
 export function apiKey(): string {

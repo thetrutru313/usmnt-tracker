@@ -1,4 +1,5 @@
-import { boolean, doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { playersTable } from "./players";
@@ -49,9 +50,9 @@ export type PlayerStatsRow = typeof playerStatsTable.$inferSelect;
 export const matchLogsTable = pgTable("match_logs", {
   id: serial("id").primaryKey(),
   playerId: integer("player_id").notNull().references(() => playersTable.id),
-  // API-Football fixture id this row came from — kept for traceability/debug,
-  // not used as a dedupe key (the sync deletes and re-inserts a player's rows
-  // each run rather than upserting).
+  // API-Football fixture id this row came from. For national-team rows this is
+  // part of the dedup key (see partial unique index below); club rows still use
+  // delete-and-reinsert so no uniqueness constraint is applied to them.
   apiFootballFixtureId: integer("api_football_fixture_id"),
   date: text("date").notNull(),
   opponent: text("opponent").notNull(),
@@ -76,7 +77,18 @@ export const matchLogsTable = pgTable("match_logs", {
   // concept doesn't apply.
   cycle: text("cycle"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+(table) => [
+  // Prevents a player+fixture pair from being inserted twice for national-team
+  // rows (e.g. if two sync timers fire simultaneously, or a run is retried
+  // after partial completion). A partial index on non-NULL fixture ids keeps
+  // club rows (which use delete-and-reinsert) unaffected — they never supply
+  // an api_football_fixture_id that could collide here.
+  uniqueIndex("match_logs_player_nt_fixture_unique")
+    .on(table.playerId, table.apiFootballFixtureId)
+    .where(sql`${table.apiFootballFixtureId} IS NOT NULL AND ${table.isNationalTeam} = true`),
+],
+);
 
 export const insertMatchLogSchema = createInsertSchema(matchLogsTable).omit({ id: true, createdAt: true });
 export type InsertMatchLog = z.infer<typeof insertMatchLogSchema>;
