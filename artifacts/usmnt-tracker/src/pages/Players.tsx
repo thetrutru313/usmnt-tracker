@@ -121,19 +121,19 @@ export default function Players() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
-                    <div className="flex flex-col justify-between">
+                  <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50 items-end">
+                    <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Age</span>
                       <span className="font-bold data-value text-sm">{player.age}</span>
                     </div>
-                    <div className="flex flex-col items-center justify-between">
+                    <div className="flex flex-col items-center gap-1">
                       <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide leading-tight text-center">
                         <span className="sm:hidden">NT Caps</span>
                         <span className="hidden sm:inline">National Team Caps</span>
                       </span>
                       <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
                     </div>
-                    <div className="flex flex-col items-end justify-between">
+                    <div className="flex flex-col items-end gap-1">
                       <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Form</span>
                       <FormBadge trend={player.performanceTrend} />
                     </div>
