@@ -108,27 +108,27 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-4 mb-3">
-            <div className="flex-1 flex items-center justify-center gap-2 font-bold text-lg">
-              <span className="text-center">{fixture.homeTeam}</span>
-              {/* Fixed-width slot keeps centering stable whether or not a logo exists */}
-              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
-                {fixture.homeLogoUrl && (
-                  <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="w-6 h-6 object-contain" />
-                )}
-              </div>
+          {/*
+            Layout: [home name →] [home logo] [VS] [away logo] [← away name]
+            Logos sit in fixed-size slots directly flanking the VS badge so
+            they stay at the same position regardless of team name length.
+          */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex-1 font-bold text-lg text-right leading-snug">{fixture.homeTeam}</span>
+            <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+              {fixture.homeLogoUrl && (
+                <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="block w-full h-full object-contain" />
+              )}
             </div>
             <div className="shrink-0 px-2 py-0.5 rounded-sm bg-muted text-muted-foreground text-xs font-mono font-bold uppercase">
               vs
             </div>
-            <div className="flex-1 flex items-center justify-center gap-2 font-bold text-lg">
-              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
-                {fixture.awayLogoUrl && (
-                  <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="w-6 h-6 object-contain" />
-                )}
-              </div>
-              <span className="text-center">{fixture.awayTeam}</span>
+            <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+              {fixture.awayLogoUrl && (
+                <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="block w-full h-full object-contain" />
+              )}
             </div>
+            <span className="flex-1 font-bold text-lg leading-snug">{fixture.awayTeam}</span>
           </div>
 
           {/* USMNT Players involved */}
