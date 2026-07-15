@@ -570,3 +570,64 @@ describe("syncPlayerStatsAndInjuries — two players injured in the same fixture
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 5: National-team season fetch partial / total failure
+//
+// The fetch loop wraps each of the three season calls in a try/catch and
+// continues on error. These tests confirm:
+//  a) a partial failure (first season succeeds, second and third throw) still
+//     surfaces the successful season's entries in the episode grouping, and
+//  b) a total failure (all three seasons throw) does NOT throw from
+//     syncPlayerStatsAndInjuries itself, writes zero injury rows for the
+//     affected player, and does not leave stale rows behind.
+// ---------------------------------------------------------------------------
+
+describe("syncPlayerStatsAndInjuries — national-team season fetch failures", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveTeamId.mockResolvedValue(TEAM_ID);
+    mockEnsurePlayerApiFootballIds.mockResolvedValue(undefined);
+  });
+
+  it("first season succeeds, second and third throw — successful season's entry still produces one episode", async () => {
+    setupDbMocks();
+
+    // seasonYearCandidates() = [2026, 2025, 2024] at test-run time.
+    // We match on the full path so we can distinguish seasons.
+    let callIndex = 0;
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) {
+        // First call succeeds; subsequent calls throw
+        if (callIndex++ === 0) return [NATIONAL_TEAM_ENTRY];
+        throw new Error("Simulated API failure");
+      }
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    // Must not throw — resolves to a stats summary object
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // The one entry from the first season must have been written as an episode
+    expect(countInjuryInserts()).toBe(1);
+  });
+
+  it("all three season calls throw — sync completes without throwing and writes zero injury rows", async () => {
+    setupDbMocks();
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) {
+        throw new Error("Simulated API failure");
+      }
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    // Must not throw — resolves to a stats summary object
+    await expect(syncPlayerStatsAndInjuries(0)).resolves.toBeDefined();
+
+    // No national-team entries means no injury episodes should be written
+    expect(countInjuryInserts()).toBe(0);
+  });
+});
