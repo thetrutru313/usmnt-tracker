@@ -208,11 +208,29 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string }): Pr
 }
 
 /**
+ * Writes each resolved player's official API-Football headshot, replacing
+ * whatever was there before (the old hand-picked seed photos, or a stale
+ * headshot from a previously-resolved id). The URL is a deterministic path
+ * on API-Football's media CDN — no extra API call needed, just the id we
+ * already resolved above. Players still missing an id are left untouched so
+ * whatever photo they already have (seeded or null) isn't cleared out from
+ * under them.
+ */
+async function syncResolvedPlayerPhotos(players: PlayerRow[]): Promise<void> {
+  for (const player of players) {
+    if (!player.apiFootballPlayerId) continue;
+    const photoUrl = `https://media.api-sports.io/football/players/${player.apiFootballPlayerId}.png`;
+    await db.update(playersTable).set({ photoUrl }).where(eq(playersTable.id, player.id));
+  }
+}
+
+/**
  * Resolves API-Football ids for every player missing one, mutating each
  * row's `apiFootballPlayerId` in place (and persisting it) as it goes —
  * shared by the player-club sync and the player-stats/match-log/injuries
  * sync so both reuse the same known-id overrides, squad-lookup, and
- * name-search fallback rather than re-resolving independently.
+ * name-search fallback rather than re-resolving independently. Also keeps
+ * each resolved player's photo current (see `syncResolvedPlayerPhotos`).
  */
 export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById: Map<number, ClubRow>): Promise<void> {
   await applyKnownPlayerIdOverrides(players);
@@ -221,6 +239,7 @@ export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById
     if (player.apiFootballPlayerId) continue;
     player.apiFootballPlayerId = await resolvePlayerIdBySearch(player);
   }
+  await syncResolvedPlayerPhotos(players);
 }
 
 /**

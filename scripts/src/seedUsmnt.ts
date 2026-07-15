@@ -183,70 +183,15 @@ async function main() {
     bio: string;
   };
 
-  // Real public headshots (US Soccer / news wire bio photos), keyed by player name.
-  const PLAYER_PHOTOS: Record<string, string> = {
-    "Christian Pulisic": "https://cdn.ussoccerplayers.com/images/2016/05/usmnt-player-christian-pulisic-credit-greg-bartram-isiphotos-400x400.jpg",
-    "Weston McKennie": "https://cdn.ussoccerplayers.com/images/2019/06/usmnt-player-weston-mckennie-vs-trinidad-and-tobabo-november-16-2023-credit-robin-alam-isiphotos.jpg",
-    "Tyler Adams": "https://cdn.ussoccerplayers.com/images/2018/12/tyler-adams-bio-main-banner-400x400.jpg",
-    "Antonee Robinson": "https://cdn.ussoccerplayers.com/images/2021/09/antonee-robinson-bio-main-banner-400x400.jpg",
-    "Yunus Musah": "https://cdn.ussoccerplayers.com/images/2021/10/yunus-musah-usmnt-vs-trinidad-and-tobago-november-15-2023-credit-robin-alam-isiphotos.jpg",
-    "Ricardo Pepi": "https://cdn.ussoccerplayers.com/images/2022/10/ricardo-pepi-usmnt-vs-trinidad-and-tobago-november-16-2023-credit-robin-alam-isiphotos.jpg",
-    "Folarin Balogun": "https://static01.nyt.com/athletic/uploads/wp/2026/06/22172514/GettyImages-2282406782-1024x683.jpg?width=400&quality=70",
-    "Timothy Weah": "https://cdn.ussoccerplayers.com/images/2021/04/tim-weah-bio-main-banner-400x400.jpg",
-    "Malik Tillman": "https://cdn.ussoccerplayers.com/images/2023/10/malik-tillman-usmnt-player-bio-main-400x400.jpg",
-    "Sergiño Dest": "https://content.ussoccer.com/media/images/oyf3dba6/production/6e89d7320f73d55cb2023e6975101e3d43f2cc65-1080x1638.png",
-    "Chris Richards": "https://cdn.ussoccerplayers.com/images/2023/06/chris-richards-bio-main-banner-400x400.jpg",
-    "Matt Turner": "https://library.sportingnews.com/styles/crop_style_16_9_desktop_webp/s3/2022-02/Matt%20Turner%20USMNT%20021122.jpg.webp?itok=dywwnpUG",
-    "Giovanni Reyna": "https://cdn.ussoccerplayers.com/images/2021/04/gio-reyna-bio-main-banner-400x400.jpg",
-    "Josh Sargent": "https://statico.profootballnetwork.com/wp-content/uploads/2026/02/27112130/usmnt-star-josh-sargent-opens-02-27-26-1920x1280.jpg",
-    "Paxten Aaronson": "https://cdn.ussoccerplayers.com/images/2025/06/paxten-aaronson-usmnt-vs-switzerland-june-10-2025-credit-robin-alam-isiphotos-400x400.jpg",
-    "Aidan Morris": "https://cdn.ussoccerplayers.com/images/2025/10/usmnt-player-aidan-morris-september-10-2024-credit-joe-robbins-isiphotos-400x400.jpg",
-    "Djordje Mihailovic": "https://cdn.ussoccerplayers.com/images/2023/12/djordje-mihailovic-usmnt-player-bio-banner-400x400.jpg",
-    "Tanner Tessmann": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2026/03/17/ca45d1fd-b1a4-4928-8ad3-f588910fc7ab/tessmann-0317.jpg?width=400&crop=16:9,smart&w=3840&q=70",
-    "Diego Kochen": "https://a57.foxsports.com/statics.foxsports.com/www.foxsports.com/content/uploads/2026/06/548/308/diego-kochen-1.jpg?ve=1&tl=1",
-    "Benjamin Cremaschi": "https://www.cbssports.com/_next/image?url=https://sportshub.cbsistatic.com/i/2025/10/06/f437cf0b-c353-4bca-b237-0ae0af86cd94/cremaschi-v2.jpg?width=400&crop=16:9,smart&w=3840&q=70",
-    "Noel Buck": "https://images.mlssoccer.com/image/private/t_thumb_squared/f_png/mls/uszfeypgkitxztkitbob.png",
-    "Obed Vargas": "https://external-preview.redd.it/dazn-seattle-sounders-midfielder-obed-vargas-a-childhood-v0-OWpzbmoxa3p0NDhmMVSmKWAHyN7qFix2ArOkC4hhNTu5pJsM6g97VFOvAltl.png?width=640&crop=smart&format=pjpg&auto=webp&s=22c49750cacb16cf30a663422710bf8ce0a8b1d1",
-    "Nimfasha Berchimas": "https://content.ussoccer.com/media/images/oyf3dba6/production/8dfee51234cfb163c45d7d4643a2ff433186a7ce-1080x1080.jpg?w=1080&h=1080&fit=max&auto=format",
-    // Verified against fresh photos before adding — see conversation notes on
-    // 2026-07-13 photo audit (Cavan Sullivan was previously showing Balogun's photo).
-    "Cavan Sullivan": "https://cdn.abcotvs.com/dip/images/18658561_cavan-sullivan-ap-img-022726.jpeg",
-    "Mathis Albert": "https://assets.goal.com/images/v3/bltfd885e9b81513290/albert.jpg?auto=webp&format=pjpg&width=3840&quality=60",
-    "Noahkai Banks": "https://i.guim.co.uk/img/media/094cf9ce3140ba4a5a7ee9202d0366bf912f7ca8/816_0_4502_3602/master/4502.jpg?width=465&dpr=1&s=none&crop=none",
-    "Leonard Prescott": "https://static01.nyt.com/athletic/uploads/wp/2026/03/16135902/GettyImages-2254908556-1024x683.jpg?width=1920&quality=70&auto=webp",
-    "Zavier Gozo": "https://cdn.sanity.io/images/oyf3dba6/production/7c5aabde2d031eddf43d49d0a9e7aa7fc5251e49-1440x1680.png",
-    // Added 2026-07-13 during a player-pool audit against: (1) senior caps,
-    // (2) youth national team history, (3) US-eligible U20 club starters.
-    "Chris Brady": "https://cdn.ussoccerplayers.com/images/2026/05/usmnt-player-chris-brady-bio-may-26-2026-credit-thiago-szwarc-isiphotos-400x400.jpg",
-    "Matt Freese": "https://content.ussoccer.com/media/images/oyf3dba6/production/375eaf55741794346dfa8e5ea6c794397bfca948-3024x3024.jpg",
-    "Max Arfsten": "https://cdn.sanity.io/images/oyf3dba6/production/4beef4d0aa3c2001f16e31106af821f5bc91cc01-2400x2400.png?w=960&fit=max&auto=format",
-    "Alex Freeman": "https://cdn.ussoccerplayers.com/images/2025/06/alex-freeman-usmnt-vs-trinidad-and-tobago-june-29-2025-credit-doug-zimmerman-isiphotos-400x400.jpg",
-    "Mark McKenzie": "https://cdn.ussoccerplayers.com/images/2021/09/mark-mckenzie-bio-main-banner-400x400.jpg",
-    "Tim Ream": "https://cdn.ussoccerplayers.com/images/2011/11/tim-ream-usmnt-player-bio-credit-brad-smith-isiphotos-400x400.jpg",
-    "Miles Robinson": "https://cdn.ussoccerplayers.com/images/2023/10/miles-robinson-usmnt-player-bio-400x400.jpg",
-    "Joe Scally": "https://cdn.ussoccerplayers.com/images/2023/09/joe-scally-usmnt-player-bio-banner-9-2023-400x400.jpg",
-    "Auston Trusty": "https://cdn.ussoccerplayers.com/images/2026/05/usmnt-player-auston-trusty-bio-credit-eston-parker-isiphotos-400x400.jpg",
-    "Sebastian Berhalter": "https://hips.hearstapps.com/hmg-prod/images/f81aaacd-b6ac-4ceb-b82a-d6fcb01fc43e.jpg?crop=1xw:1xh;center,top&resize=980:*",
-    "Cristian Roldan": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls/x0aftrvdqgfvdmcgyugg",
-    "Brenden Aaronson": "https://cdn.ussoccerplayers.com/images/2023/10/brenden-aaronson-bio-main-banner-400x400.jpg",
-    "Alejandro Zendejas": "https://cdn.ussoccerplayers.com/images/2023/12/alex-zendejas-usmnt-player-bio-banner-400x400.jpg",
-    "Haji Wright": "https://assets.goal.com/images/v3/blt1abedd603928843b/haji.jpg?auto=webp&format=pjpg&width=3840&quality=60",
-    "Diego Luna": "https://static01.nyt.com/athletic/uploads/wp/2025/07/27205525/USATSI_25856416-scaled.jpg?width=1920&quality=70&auto=webp",
-    "Gaga Slonina": "https://media.gettyimages.com/id/2224962270/photo/metlife-stadium-east-rutherford-new-jersey-united-states-gaga-slonina-of-chelsea-fc-poses.jpg?s=612x612&w=0&k=20&c=ugMJkpZL96Botwy0oeyiZULWN-g-qbKDYh1nEeb7f7I=",
-    "Caleb Wiley": "https://a57.foxsports.com/statics.foxsports.com/www.foxsports.com/content/uploads/2024/07/548/308/wiley1_720.jpg?ve=1&tl=1",
-    "Damion Downs": "https://assets.bundesliga.com/contender/2026/0/imago1068588731.jpg?crop=333px,0px,3332px,2666px&fit=540,540",
-    "Cole Campbell": "https://assets.bundesliga.com/contender/2026/6/imago1070627692.jpg?crop=403px,0px,4032px,3226px&fit=540,540",
-    "Rokas Pukstas": "https://static01.nyt.com/athletic/uploads/wp/2026/03/02122430/IMG_5988.JPG-1024x683.jpeg?width=1920&quality=70&auto=webp",
-    "Quinn Sullivan": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-phi/bnrsmjou2bnenqdpqwl1",
-    "Luca Bombino": "https://tmssl.akamaized.net//images/foto/galerie/luca-bombino-to-san-diego-1763488417-183117.jpg",
-    "Peyton Miller": "https://images.mlssoccer.com/image/private/t_editorial_landscape_8_desktop_mobile/f_auto/mls-ner/qmg2vcsoll1tozwsqqpc",
-    "Joshua Wynder": "https://external-preview.redd.it/joshua-wynder-to-be-promoted-to-benficas-first-team-next-v0-Sk7QGule3yyz8SRIGVgcS_L-KJ4nanRUTR4HvscRqek.jpg?width=640&crop=smart&auto=webp&s=9fa35b7152ba03f95cd0854c709c8f5f4c9ca825",
-    // Added 2026-07-13: European-based US-eligible prospects/dual nationals
-    // per user request, included purely on "at a European club" grounds
-    // rather than caps.
-    "Bajung Darboe": "https://b.thumbs.redditmedia.com/QCPzNwwK6fvbU5R7Yl4z4CKli1jiGCi23MuN-h7wO2E.jpg",
-    "Montrell Culbreath": "https://assets.bundesliga.com/contender/2025/11/2526_MD15_RBLB04_BS_051.jpg?crop=239px,0px,4187px,3350px&fit=540,540",
-  };
+  // Photos are no longer seeded here — they're synced live from
+  // API-Football's per-player headshot URL (`ensurePlayerApiFootballIds` in
+  // playerClubSync.ts, called from the club/stats syncs) once each player's
+  // apiFootballPlayerId is resolved. That replaced this file's old hand-
+  // picked PLAYER_PHOTOS map (static ussoccerplayers.com/news-wire URLs),
+  // which had grown stale and inconsistent (outdated photos, text/graphics
+  // baked into some images) since it was never revisited after being added.
+  // New rows seed with `photoUrl: null` and pick up a real photo on the next
+  // sync run for any player with a resolvable API-Football id.
 
   const playerDefs: PlayerDef[] = [
     { name: "Christian Pulisic", slug: "christian-pulisic", position: "FW", category: "current", club: "AC Milan", age: 27, contractUntil: "2028-06-30", marketValueUsd: 42000000, youthNationalTeam: null, debutDate: "2016-01-29", callUpScore: null, trend: "rising", trending: true, bio: "The captain and the face of American soccer's rise in Europe. Since moving to Milan, Pulisic has rediscovered the explosive form that once made him the USMNT's most feared attacker, combining pace, close control, and a nose for the big moment." },
@@ -360,7 +305,7 @@ async function main() {
         position: p.position,
         category: p.category,
         clubId: clubIdByName.get(p.club)!,
-        photoUrl: PLAYER_PHOTOS[p.name] ?? null,
+        photoUrl: null,
         age: p.age,
         contractUntil: p.contractUntil,
         marketValueUsd: p.marketValueUsd,
