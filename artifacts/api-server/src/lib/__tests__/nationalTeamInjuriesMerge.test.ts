@@ -449,3 +449,124 @@ describe("syncPlayerStatsAndInjuries — fixture-less entry produces correct epi
     expect(countInjuryInserts()).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 4: Two players injured in the same fixture each get their own episode
+// ---------------------------------------------------------------------------
+//
+// The dedup key is `fix:<playerId>:<fixtureId>`. If it were simplified to just
+// `fix:<fixtureId>` (dropping the player id) the second player's entry would
+// be discarded by the Set, giving player B zero episodes and player A a
+// matches=1 episode — silently wrong. This suite guards that regression.
+
+const PLAYER_A_API_ID = 201;
+const PLAYER_B_API_ID = 202;
+const SHARED_FIXTURE_ID = 500;
+
+const PLAYER_A = {
+  id: 20,
+  name: "Player A",
+  clubId: 1,
+  apiFootballPlayerId: PLAYER_A_API_ID,
+  age: 24,
+  category: "core",
+  nationalTeamCaps: 8,
+  marketValueUsd: 4_000_000,
+};
+const PLAYER_B = {
+  id: 21,
+  name: "Player B",
+  clubId: 1,
+  apiFootballPlayerId: PLAYER_B_API_ID,
+  age: 26,
+  category: "core",
+  nationalTeamCaps: 12,
+  marketValueUsd: 6_000_000,
+};
+
+describe("syncPlayerStatsAndInjuries — two players injured in the same fixture each get their own episode", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveTeamId.mockResolvedValue(TEAM_ID);
+    mockEnsurePlayerApiFootballIds.mockResolvedValue(undefined);
+  });
+
+  function setupTwoPlayerDbMocks() {
+    mockDb.select
+      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([CLUB])) })
+      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([PLAYER_A, PLAYER_B])) })
+      .mockReturnValue({ from: vi.fn().mockReturnValue(makeFromResult([])) });
+
+    mockDb.delete.mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+    mockDb.insert.mockImplementation(() => ({ values: vi.fn().mockResolvedValue(undefined) }));
+    mockDb.update.mockImplementation(() => ({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+    }));
+  }
+
+  it("both players get exactly one episode each (not conflated by the shared fixture id)", async () => {
+    setupTwoPlayerDbMocks();
+
+    const ENTRY_A: InjuryEntry = makeEntry({
+      playerId: PLAYER_A_API_ID,
+      fixtureId: SHARED_FIXTURE_ID,
+      fixtureDate: "2026-05-10T15:00:00Z",
+      reason: "Hamstring Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+    const ENTRY_B: InjuryEntry = makeEntry({
+      playerId: PLAYER_B_API_ID,
+      fixtureId: SHARED_FIXTURE_ID,
+      fixtureDate: "2026-05-10T15:00:00Z",
+      reason: "Knee Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [ENTRY_A, ENTRY_B];
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) return [];
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    await syncPlayerStatsAndInjuries(0);
+
+    // Each player must have exactly one injury episode written — total = 2.
+    expect(countInjuryInserts()).toBe(2);
+  });
+
+  it("each player's episode has matches=1 (not one getting matches=2 and the other nothing)", async () => {
+    setupTwoPlayerDbMocks();
+
+    const ENTRY_A: InjuryEntry = makeEntry({
+      playerId: PLAYER_A_API_ID,
+      fixtureId: SHARED_FIXTURE_ID,
+      fixtureDate: "2026-05-10T15:00:00Z",
+      reason: "Hamstring Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+    const ENTRY_B: InjuryEntry = makeEntry({
+      playerId: PLAYER_B_API_ID,
+      fixtureId: SHARED_FIXTURE_ID,
+      fixtureDate: "2026-05-10T15:00:00Z",
+      reason: "Knee Injury",
+      teamId: USA_NATIONAL_TEAM_ID,
+    });
+
+    mockAfFetch.mockImplementation(async (path: string) => {
+      if (path.includes(`/injuries?team=${USA_NATIONAL_TEAM_ID}`)) return [ENTRY_A, ENTRY_B];
+      if (path.includes(`/injuries?team=${TEAM_ID}`)) return [];
+      if (path.startsWith("/fixtures?team=")) return [];
+      return [];
+    });
+
+    await syncPlayerStatsAndInjuries(0);
+
+    const rows = collectInjuryInsertPayloads();
+    // Both episodes must report exactly one missed match.
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.matchesMissed).toBe(1);
+    }
+  });
+});
