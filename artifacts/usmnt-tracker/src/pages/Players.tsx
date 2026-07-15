@@ -70,10 +70,10 @@ export default function Players() {
           type="multiple"
           value={poolFilter}
           onValueChange={handlePoolFilterChange}
-          className="justify-start flex-wrap"
+          className="justify-start flex-nowrap gap-1"
         >
           {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-3 h-8 rounded-md border border-border data-[state=on]:border-primary">
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap">
               {f.label}
             </ToggleGroupItem>
           ))}
@@ -122,15 +122,18 @@ export default function Players() {
                   </div>
                   
                   <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col justify-between">
                       <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Age</span>
                       <span className="font-bold data-value text-sm">{player.age}</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">National Team Caps</span>
+                    <div className="flex flex-col items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide leading-tight text-center">
+                        <span className="sm:hidden">NT Caps</span>
+                        <span className="hidden sm:inline">National Team Caps</span>
+                      </span>
                       <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
                     </div>
-                    <div className="flex flex-col items-end">
+                    <div className="flex flex-col items-end justify-between">
                       <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Form</span>
                       <FormBadge trend={player.performanceTrend} />
                     </div>
