@@ -143,4 +143,22 @@ describe("aggregateSeasonBlocks", () => {
     expect(result).not.toBeNull();
     expect(result!.goals).toBe(3); // friendly still excluded; MLS block passes
   });
+
+  // -------------------------------------------------------------------------
+  // Cleared-stats guard: when clubTeamId is null the team-id filter is inactive,
+  // but the friendly-league filter still runs — so if ALL blocks are friendlies
+  // the function must still return null (no data to write, not inflated data).
+  // This is the unit-level complement of the integration test in
+  // clearedStatsGuard.test.ts which confirms the player loop deletes season
+  // rows rather than writing them when resolveTeamId returns null.
+  // -------------------------------------------------------------------------
+  it("returns null when clubTeamId is null and every block is a friendly league", () => {
+    const blocks = [
+      makeBlock({ leagueName: "Friendlies Clubs", teamId: 10, goals: 3 }),
+      makeBlock({ leagueName: "Friendlies", teamId: 7, goals: 2 }),
+    ];
+    // The team-id guard is off (null), so neither block is dropped by that
+    // path — but both are still dropped by the friendly-league name filter.
+    expect(aggregateSeasonBlocks(blocks, null)).toBeNull();
+  });
 });
