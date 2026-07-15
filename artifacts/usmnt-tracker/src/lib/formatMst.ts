@@ -18,6 +18,18 @@ export function formatKickoffMst(value: string | Date): string {
 }
 
 /**
+ * Formats just the date portion in MST, e.g. "Jul 16".
+ */
+export function formatDateMst(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: MST_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+/**
  * Formats just the time portion in MST, e.g. "2:00 PM MST".
  */
 export function formatTimeMst(value: string | Date): string {

@@ -94,7 +94,7 @@ export default function Dashboard() {
               return (
                 <div className="space-y-3">
                   {nextGames.map(game => (
-                    <FixtureCard key={game.id} fixture={game} />
+                    <FixtureCard key={game.id} fixture={game} showDate />
                   ))}
                 </div>
               );

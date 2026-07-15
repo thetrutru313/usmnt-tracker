@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin, Star } from "lucide-react";
-import { formatTimeMst } from "@/lib/formatMst";
+import { formatTimeMst, formatDateMst } from "@/lib/formatMst";
 import { Link } from "wouter";
 
 export type PoolTier = "core" | "inMix" | "prospect";
@@ -64,7 +64,7 @@ export type FixtureCardFixture = {
   }>;
 };
 
-export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
+export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
   return (
     <Card className="overflow-hidden hover:border-primary/50 transition-colors">
       <div className="flex flex-col md:flex-row">
@@ -92,6 +92,11 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             </Badge>
           ) : (
             <div className="flex flex-col items-center">
+              {showDate && (
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                  {formatDateMst(fixture.kickoff)}
+                </span>
+              )}
               <span className="text-base md:text-lg font-bold data-value">{formatTimeMst(fixture.kickoff)}</span>
             </div>
           )}
