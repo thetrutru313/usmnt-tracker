@@ -555,6 +555,15 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
     try {
       const matchLogsByPlayer = await syncClubMatchLogs(club, clubPlayers, fixturesPerClub);
 
+      // Resolve once per club — used for every player's season-stat filter below.
+      // Emit a WARN when null so unresolvable clubs are visible in server logs
+      // and don't silently degrade to a partial filter (friendly-league name only,
+      // no team-id guard). See aggregateSeasonBlocks for why both guards matter.
+      const clubTeamId = await resolveTeamId(club);
+      if (!clubTeamId) {
+        logger.warn({ club: club.name }, "resolveTeamId returned null — club-season stats will use friendly-league filter only (team-id guard inactive); fix the club lookup to restore full filtering");
+      }
+
       for (const player of clubPlayers) {
         const logs = matchLogsByPlayer.get(player.id) ?? [];
         // Always clear stale club match logs first — a player with no logs
@@ -613,7 +622,6 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
         // for why). Whichever candidates actually returned real data, the
         // most recent becomes "season" and the next-most-recent "previous_season".
         const seasonYears = seasonYearCandidates();
-        const clubTeamId = await resolveTeamId(club);
         const blocksByYear = await Promise.all(seasonYears.map((y) => fetchSeasonStats(player.apiFootballPlayerId!, y)));
         const withData = seasonYears
           .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, clubTeamId) }))
