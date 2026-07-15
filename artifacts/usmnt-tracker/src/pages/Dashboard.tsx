@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FormBadge } from "@/components/FormBadge";
 import { FixtureCard } from "@/components/FixtureCard";
-import { Goal, Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
+import { Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
+import soccerBall from "@/assets/soccer-ball.png";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS, type EventKind, type EventStatus } from "@/data/schedule";
@@ -115,7 +116,7 @@ export default function Dashboard() {
           <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-2">
             <div>
               <CardTitle className="text-base md:text-lg uppercase tracking-tight flex items-center gap-2">
-                <Goal size={18} className="text-primary" />
+                <img src={soccerBall} alt="" aria-hidden="true" style={{ width: 18, height: 18, filter: "invert(1)", opacity: 0.9 }} />
                 Upcoming Matches
               </CardTitle>
               <CardDescription>USMNT players in action</CardDescription>
