@@ -114,13 +114,13 @@ export default function Dashboard() {
         <Card className="col-span-1 lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
-              <CardTitle className="text-lg uppercase tracking-tight flex items-center gap-2">
+              <CardTitle className="text-base md:text-lg uppercase tracking-tight flex items-center gap-2">
                 <Activity size={18} className="text-primary" />
                 Upcoming Matches
               </CardTitle>
               <CardDescription>USMNT players in action</CardDescription>
             </div>
-            <Link href="/fixtures" className="text-sm font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+            <Link href="/fixtures" className="text-sm font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 whitespace-nowrap shrink-0">
               ALL FIXTURES <ArrowUpRight size={14} />
             </Link>
           </CardHeader>
