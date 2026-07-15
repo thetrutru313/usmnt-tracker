@@ -104,6 +104,18 @@ async function searchPlayerArticles(name: string): Promise<{ title: string; wiki
     .filter((p) => p.wikitext);
 }
 
+/**
+ * Manual overrides for players whose tracked display name doesn't match
+ * their Wikipedia article title (nicknames, legal-name mismatches, etc.) —
+ * mirrors the `KNOWN_PLAYER_IDS` pattern in playerClubSync.ts. The strict
+ * title-match check in `titleMatchesPlayerName` correctly refuses to guess
+ * on these (that's what prevents cross-player mismatches), so they need an
+ * explicit, verified mapping instead of relying on search + exact match.
+ */
+const KNOWN_WIKIPEDIA_TITLES: Record<string, string> = {
+  "Gaga Slonina": "Gabriel Slonina",
+};
+
 /** Strips Wikipedia disambiguation parentheticals, e.g. "Matt Turner (soccer)" -> "Matt Turner". */
 function stripDisambiguation(title: string): string {
   return title.replace(/\s*\([^)]*\)\s*$/, "").trim();
@@ -183,6 +195,17 @@ function hasAnyUsNationalTeamEntry(wikitext: string): boolean {
  */
 async function resolvePlayerWikipediaArticle(player: PlayerRow): Promise<{ title: string; wikitext: string } | null> {
   try {
+    const overrideTitle = KNOWN_WIKIPEDIA_TITLES[player.name];
+    if (overrideTitle) {
+      const wikitext = (await fetchWikitextByTitles([overrideTitle])).get(overrideTitle);
+      if (!wikitext) {
+        logger.warn({ player: player.name, overrideTitle }, "KNOWN_WIKIPEDIA_TITLES override title failed to fetch");
+        return null;
+      }
+      await db.update(playersTable).set({ wikipediaTitle: overrideTitle }).where(eq(playersTable.id, player.id));
+      return { title: overrideTitle, wikitext };
+    }
+
     const candidates = await searchPlayerArticles(player.name);
     const match = candidates.find(
       (c) => titleMatchesPlayerName(c.title, player.name) && hasFootballInfobox(c.wikitext) && hasAnyUsNationalTeamEntry(c.wikitext),
