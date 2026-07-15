@@ -657,7 +657,13 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
       // no team-id guard). See aggregateSeasonBlocks for why both guards matter.
       const clubTeamId = await resolveTeamId(club);
       if (!clubTeamId) {
-        logger.warn({ club: club.name }, "resolveTeamId returned null — club-season stats will use friendly-league filter only (team-id guard inactive); fix the club lookup to restore full filtering");
+        const skippableCount = clubPlayers.filter((p) => p.apiFootballPlayerId).length;
+        logger.warn(
+          { club: club.name, playersSkipped: skippableCount },
+          "resolveTeamId returned null — season/previous_season/season_all stats will be cleared for all players at this club " +
+            "to avoid inflated data (team-id guard inactive means aggregateSeasonBlocks could include blocks from unrelated teams); " +
+            "fix the club lookup to restore full filtering",
+        );
       }
 
       for (const player of clubPlayers) {
@@ -711,6 +717,23 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
           // stats, so any prior season/previous_season rows are stale.
           await deleteStatsRow(player.id, "season");
           await deleteStatsRow(player.id, "previous_season");
+          continue;
+        }
+
+        if (!clubTeamId) {
+          // Club lookup unresolvable — clear season stats rather than write
+          // potentially-inflated data: without a team-id guard,
+          // aggregateSeasonBlocks could accumulate blocks from unrelated teams
+          // that happen to pass the friendly-league name filter. Clearing is
+          // safer than writing partial data; last5/previous5 (match-log
+          // derived) are unaffected and remain above.
+          await deleteStatsRow(player.id, "season");
+          await deleteStatsRow(player.id, "previous_season");
+          await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, player.id), eq(playerStatsTable.periodType, "season_all")));
+          // Form tier: no season baseline available, but compute from match
+          // logs alone so the trend field isn't left stale from a prior run.
+          const { trend, trending } = computeFormTier(last5, prev5, null);
+          await db.update(playersTable).set({ performanceTrend: trend, trending }).where(eq(playersTable.id, player.id));
           continue;
         }
         // Query several consecutive season-year labels and aggregate each —
