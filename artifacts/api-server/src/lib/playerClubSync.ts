@@ -375,6 +375,16 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
   }
 
   logger.info({ playersChecked, clubsUpdated, failures }, "API-Football player-club sync complete");
+
+  // Discovery pass — scan squads for US-eligible players not yet in the pool.
+  // Runs after the main sync so all API IDs are up to date before we compare.
+  try {
+    const { discoverUSProspects } = await import("./playerDiscovery");
+    await discoverUSProspects();
+  } catch (err) {
+    logger.warn({ err }, "Player discovery pass failed — main sync unaffected");
+  }
+
   return { playersChecked, clubsUpdated, failures };
 }
 

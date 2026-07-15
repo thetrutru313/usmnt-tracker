@@ -8,6 +8,7 @@ import transfersRouter from "./transfers";
 import dashboardRouter from "./dashboard";
 import rankingsRouter from "./rankings";
 import searchRouter from "./search";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(transfersRouter);
 router.use(dashboardRouter);
 router.use(rankingsRouter);
 router.use(searchRouter);
+router.use(adminRouter);
 
 export default router;

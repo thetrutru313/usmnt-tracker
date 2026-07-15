@@ -6,3 +6,4 @@ export * from "./news";
 export * from "./injuries";
 export * from "./transfers";
 export * from "./nationalTeam";
+export * from "./playerCandidates";
