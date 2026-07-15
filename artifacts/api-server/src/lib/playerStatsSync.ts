@@ -34,7 +34,7 @@ export interface AfFixturePlayersTeam {
   players: { player: { id: number; name: string }; statistics: AfFixturePlayerStatBlock[] }[];
 }
 
-interface AfSeasonStatBlock {
+export interface AfSeasonStatBlock {
   team: { id: number; name: string };
   league: { name: string; season: number };
   games: { minutes: number | null; lineups: number | null; position: string | null; rating: string | null };
@@ -57,8 +57,8 @@ interface AfPlayerSeasonResponse {
 // belongs in "club season" totals: friendlies aren't official competitive
 // stats, and national-team appearances are tracked separately (see
 // usmntSync.ts) and would otherwise double up here under the wrong label.
-const FRIENDLY_LEAGUE_PATTERN = /friendl/i;
-function isFriendlyLeague(leagueName: string): boolean {
+export const FRIENDLY_LEAGUE_PATTERN = /friendl/i;
+export function isFriendlyLeague(leagueName: string): boolean {
   return FRIENDLY_LEAGUE_PATTERN.test(leagueName);
 }
 
@@ -225,7 +225,7 @@ export interface AggregatedSeasonStats {
  * the player's on-file club is dropped too, so a national-team appearance
  * can never contribute to a "club season" row regardless of league name.
  */
-function aggregateSeasonBlocks(allBlocks: AfSeasonStatBlock[], clubTeamId: number | null): AggregatedSeasonStats | null {
+export function aggregateSeasonBlocks(allBlocks: AfSeasonStatBlock[], clubTeamId: number | null): AggregatedSeasonStats | null {
   const blocks = allBlocks.filter((b) => !isFriendlyLeague(b.league.name) && (clubTeamId == null || b.team.id === clubTeamId));
   if (blocks.length === 0) return null;
 
