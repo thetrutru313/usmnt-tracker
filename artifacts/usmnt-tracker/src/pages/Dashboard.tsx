@@ -116,7 +116,7 @@ export default function Dashboard() {
           <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-2">
             <div>
               <CardTitle className="text-base md:text-lg uppercase tracking-tight flex items-center gap-2">
-                <img src={soccerBall} alt="" aria-hidden="true" style={{ width: 18, height: 18, opacity: 0.9 }} />
+                <img src={soccerBall} alt="" aria-hidden="true" style={{ width: 18, height: 18, filter: "brightness(0) invert(1)", opacity: 0.9 }} />
                 Upcoming Matches
               </CardTitle>
               <CardDescription>USMNT players in action</CardDescription>
