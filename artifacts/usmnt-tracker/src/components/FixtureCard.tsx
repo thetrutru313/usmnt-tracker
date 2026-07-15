@@ -108,12 +108,29 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
             )}
           </div>
 
-          {/*
-            Layout: [home name →] [home logo] [VS] [away logo] [← away name]
-            Logos sit in fixed-size slots directly flanking the VS badge so
-            they stay at the same position regardless of team name length.
-          */}
-          <div className="flex items-center gap-2">
+          {/* Mobile: vertical stack so long names have full row width */}
+          <div className="md:hidden flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                {fixture.homeLogoUrl && (
+                  <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="block w-full h-full object-contain" />
+                )}
+              </div>
+              <span className="font-bold text-sm leading-snug">{fixture.homeTeam}</span>
+            </div>
+            <div className="pl-8 text-[10px] font-mono font-bold uppercase text-muted-foreground tracking-wider">vs</div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                {fixture.awayLogoUrl && (
+                  <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="block w-full h-full object-contain" />
+                )}
+              </div>
+              <span className="font-bold text-sm leading-snug">{fixture.awayTeam}</span>
+            </div>
+          </div>
+
+          {/* Desktop: side-by-side [home name →][logo] VS [logo][← away name] */}
+          <div className="hidden md:flex items-center gap-2">
             <span className="flex-1 font-bold text-lg text-right leading-snug">{fixture.homeTeam}</span>
             <div className="w-7 h-7 shrink-0 flex items-center justify-center">
               {fixture.homeLogoUrl && (
