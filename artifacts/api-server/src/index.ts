@@ -4,6 +4,7 @@ import { startRssIngestionSchedule } from "./lib/rssIngest";
 import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
+import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 // Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
 // intentionally not started — the user upgraded API-Football instead, which
 // is now live. See replit.md and .agents/memory/usmnt-tracker.md.
@@ -50,4 +51,10 @@ app.listen(port, (err) => {
   // fabricated data entirely. Runs daily — see playerStatsSync.ts for the
   // call-volume/rate-limit reasoning. Skips itself if API_FOOTBALL_KEY isn't set.
   startPlayerStatsSyncSchedule();
+
+  // Syncs senior USMNT caps/goals from Wikidata daily. Separate from the
+  // club-stats pipeline above since API-Football doesn't reliably cover
+  // international career totals — see nationalTeamSync.ts for why Wikidata
+  // was chosen over ESPN's site API. No API key needed.
+  startNationalTeamSyncSchedule();
 });

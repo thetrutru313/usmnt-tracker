@@ -14,6 +14,14 @@ export const playersTable = pgTable("players", {
   // reused) — lets the club sync look up transfer history without
   // re-searching by name every run. Null until the sync has resolved it.
   apiFootballPlayerId: integer("api_football_player_id"),
+  // Cached English Wikipedia article title (e.g. "Tyler Adams"), resolved
+  // once via search and reused so the national-team caps/goals sync doesn't
+  // re-search by name every run. Null until that sync has resolved it (or
+  // gave up — ambiguous or no match). See nationalTeamSync.ts for why
+  // Wikipedia's infobox wikitext is used instead of Wikidata's structured
+  // claims (the latter are frequently missing the caps/goals qualifier even
+  // when the "member of" claim itself exists).
+  wikipediaTitle: text("wikipedia_title"),
   photoUrl: text("photo_url"),
   age: integer("age").notNull(),
   contractUntil: date("contract_until", { mode: "string" }),
