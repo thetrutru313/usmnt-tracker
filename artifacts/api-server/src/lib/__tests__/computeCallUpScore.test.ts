@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCallUpScore } from "../playerStatsSync.js";
+import { computeCallUpScore, aggregateSeasonBlocks, AfSeasonStatBlock } from "../playerStatsSync.js";
 
 // ---------------------------------------------------------------------------
 // Helper: build a minimal player fixture with all neutral defaults so each
@@ -440,5 +440,125 @@ describe("computeCallUpScore — combined scenarios", () => {
       false,
     );
     expect(result).toBe(40);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mid-season transfer: aggregateSeasonBlocks + computeCallUpScore integration
+//
+// When a player transfers mid-season, the API-Football /players response
+// contains two statistics blocks: one for the old club's team ID and one for
+// the new club's team ID. aggregateSeasonBlocks(blocks, newClubTeamId) must
+// scope to only the new club's block so that computeCallUpScore receives the
+// correct season-minutes figure. Using the stale old-club minutes or an
+// unscoped total both produce meaningfully wrong scores.
+//
+// Test setup:
+//   OLD_TEAM_ID=100 — played 400 min there before the transfer
+//   NEW_TEAM_ID=200 — played 1500 min there after the transfer
+//
+// Expected minutes per scope:
+//   new-club scoped  → 1500 min  → fraction=0.556 → round((0.556−0.5)×30)=+2  → score=42
+//   stale old-club   →  400 min  → fraction=0.148 → round((0.148−0.5)×30)=−11 → score=29
+//   unscoped total   → 1900 min  → fraction=0.704 → round((0.704−0.5)×30)=+6  → score=46
+// ---------------------------------------------------------------------------
+
+/** Minimal AfSeasonStatBlock factory — only populates the fields used by aggregateSeasonBlocks. */
+function makeBlock(overrides: {
+  teamId: number;
+  teamName?: string;
+  leagueName?: string;
+  minutes?: number;
+  rating?: string | null;
+}): AfSeasonStatBlock {
+  return {
+    team: { id: overrides.teamId, name: overrides.teamName ?? "Club" },
+    league: { name: overrides.leagueName ?? "League", season: 2025 },
+    games: { minutes: overrides.minutes ?? 0, lineups: null, position: null, rating: overrides.rating ?? null },
+    goals: { total: null, assists: null, conceded: null, saves: null },
+    shots: { total: null },
+    passes: { total: null, key: null, accuracy: null },
+    tackles: { total: null, interceptions: null },
+    duels: { total: null, won: null },
+  };
+}
+
+const OLD_TEAM_ID = 100;
+const NEW_TEAM_ID = 200;
+
+describe("mid-season transfer — aggregateSeasonBlocks scopes to new club", () => {
+  const blocks: AfSeasonStatBlock[] = [
+    makeBlock({ teamId: OLD_TEAM_ID, teamName: "Old Club", minutes: 400 }),
+    makeBlock({ teamId: NEW_TEAM_ID, teamName: "New Club", minutes: 1500 }),
+  ];
+
+  it("scoped to new club returns only the new-club minutes (1500)", () => {
+    const stats = aggregateSeasonBlocks(blocks, NEW_TEAM_ID);
+    expect(stats).not.toBeNull();
+    expect(stats!.minutes).toBe(1500);
+  });
+
+  it("scoped to old club returns only the old-club minutes (400)", () => {
+    const stats = aggregateSeasonBlocks(blocks, OLD_TEAM_ID);
+    expect(stats).not.toBeNull();
+    expect(stats!.minutes).toBe(400);
+  });
+
+  it("unscoped (clubTeamId=null) returns combined minutes (1900)", () => {
+    const stats = aggregateSeasonBlocks(blocks, null);
+    expect(stats).not.toBeNull();
+    expect(stats!.minutes).toBe(1900);
+  });
+});
+
+describe("mid-season transfer — computeCallUpScore differs meaningfully by minutes source", () => {
+  // All other signals are held neutral (age=27, caps=0, no rating, no MV, no injury, steady form)
+  // so the only variable is which minutes figure is passed in.
+
+  it("correct new-club minutes (1500) → score 42", () => {
+    // fraction=1500/2700=0.556; round((0.556−0.5)×30)=round(1.67)=+2; base=40+2=42
+    expect(computeCallUpScore(neutralPlayer(), "steady", 1500, null, false)).toBe(42);
+  });
+
+  it("stale old-club minutes (400) → score 29", () => {
+    // fraction=400/2700=0.148; round((0.148−0.5)×30)=round(−10.56)=−11; base=40−11=29
+    expect(computeCallUpScore(neutralPlayer(), "steady", 400, null, false)).toBe(29);
+  });
+
+  it("stale old-club score (29) differs meaningfully from correct new-club score (42)", () => {
+    const correctScore = computeCallUpScore(neutralPlayer(), "steady", 1500, null, false)!;
+    const staleScore = computeCallUpScore(neutralPlayer(), "steady", 400, null, false)!;
+    // 13-point difference — equivalent to crossing multiple score brackets
+    expect(correctScore - staleScore).toBe(13);
+  });
+
+  it("unscoped inflated minutes (1900) also differ from correct new-club score", () => {
+    // fraction=1900/2700=0.704; round((0.704−0.5)×30)=round(6.11)=+6; score=46
+    const correctScore = computeCallUpScore(neutralPlayer(), "steady", 1500, null, false)!;
+    const inflatedScore = computeCallUpScore(neutralPlayer(), "steady", 1900, null, false)!;
+    expect(inflatedScore).toBe(46);
+    expect(inflatedScore).not.toBe(correctScore);
+  });
+
+  it("end-to-end: aggregateSeasonBlocks(new club) minutes fed to computeCallUpScore yields 42", () => {
+    const blocks: AfSeasonStatBlock[] = [
+      makeBlock({ teamId: OLD_TEAM_ID, minutes: 400 }),
+      makeBlock({ teamId: NEW_TEAM_ID, minutes: 1500 }),
+    ];
+    const stats = aggregateSeasonBlocks(blocks, NEW_TEAM_ID);
+    expect(stats).not.toBeNull();
+    const score = computeCallUpScore(neutralPlayer(), "steady", stats!.minutes, null, false);
+    expect(score).toBe(42);
+  });
+
+  it("end-to-end: stale aggregateSeasonBlocks(old club) minutes fed to computeCallUpScore yields 29", () => {
+    const blocks: AfSeasonStatBlock[] = [
+      makeBlock({ teamId: OLD_TEAM_ID, minutes: 400 }),
+      makeBlock({ teamId: NEW_TEAM_ID, minutes: 1500 }),
+    ];
+    const stats = aggregateSeasonBlocks(blocks, OLD_TEAM_ID);
+    expect(stats).not.toBeNull();
+    const score = computeCallUpScore(neutralPlayer(), "steady", stats!.minutes, null, false);
+    expect(score).toBe(29);
   });
 });
