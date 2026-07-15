@@ -85,6 +85,14 @@ National-team match logs/cycle stats sync on their own schedule (`usmntSync.ts`,
 
 **How to apply:** all three schedules (`apiFootballSync.ts` fixtures, `playerStatsSync.ts` club stats, `usmntSync.ts` USMNT stats) call the same `afFetch` against one shared per-minute rate limit and all fire immediately on server boot — expect a burst of "Too many requests" warnings in the first minute or two after every restart; each sync degrades gracefully (skips and logs, retries next scheduled run) rather than corrupting data, so this is noisy but not broken. See task backlog for the follow-up to stagger/throttle these against each other.
 
+## Preventing duplicate club rows
+
+`clubs.api_football_team_id` now has a partial unique index (nullable column, so a plain unique constraint would only allow one NULL row — a partial index `WHERE api_football_team_id IS NOT NULL` is required). `resolveTeamId` in `apiFootballSync.ts` also checks for an existing row with the resolved team id before writing, and skips (logs a warning) rather than creating a duplicate mapping.
+
+**Why:** a club can get tracked twice under different names (e.g. "Lyngby Boldklub" and "Lyngby" both resolving to the same real club) since name strings are how clubs get seeded but API-Football team id is the actual source of truth for identity — nothing previously stopped a second row for an already-tracked club.
+
+**How to apply:** if a future warning says a resolved team id is "already tracked under a different club row," that's a genuine duplicate needing manual merge (reassign any `players.club_id` pointing at the loser row, then delete it) — don't just re-run the sync expecting it to resolve itself.
+
 ## Player-pool completeness audits
 
 When asked to audit the Player Pool for missing eligible players, the durable criteria are: (1) ≥1 senior cap, (2) any youth national team (U-15–U-23) appearance, (3) US-eligible, under-20, and a current club starter. Cross-reference against the real official World Cup/senior roster plus a reputable U-21 prospects ranking (e.g. ESPN) rather than trying to enumerate the whole real-world pool from scratch — bounds the work while staying evidence-based. Always resolve real API-Football team IDs/logos for any new club before writing seed rows (some very new/small clubs, e.g. a 2025 MLS expansion side, genuinely aren't in API-Football's DB — leave `logoUrl` null rather than guessing).

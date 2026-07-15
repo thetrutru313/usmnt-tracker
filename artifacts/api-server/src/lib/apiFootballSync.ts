@@ -169,10 +169,37 @@ export async function resolveTeamId(club: { id: number; name: string; apiFootbal
       logger.warn({ club: club.name, searchTerm }, "API-Football team search returned no match");
       return null;
     }
-    await db
-      .update(clubsTable)
-      .set({ apiFootballTeamId: match.team.id, logoUrl: match.team.logo })
-      .where(eq(clubsTable.id, club.id));
+
+    // Guard against tracking the same real-world club twice under two
+    // different names (e.g. "Lyngby Boldklub" vs "Lyngby" both resolving to
+    // team id 625) — check for an existing row with this team id *before*
+    // writing, rather than relying solely on the DB unique index to reject
+    // it after the fact. Surfaces the duplicate for manual merging instead
+    // of silently leaving this club's id unresolved forever.
+    const [existing] = await db
+      .select({ id: clubsTable.id, name: clubsTable.name })
+      .from(clubsTable)
+      .where(and(eq(clubsTable.apiFootballTeamId, match.team.id), sql`${clubsTable.id} != ${club.id}`));
+    if (existing) {
+      logger.warn(
+        { club: club.name, clubId: club.id, existingClub: existing.name, existingClubId: existing.id, teamId: match.team.id },
+        "API-Football team search resolved to a team id already tracked under a different club row — likely a duplicate club; not assigning, needs manual merge",
+      );
+      return null;
+    }
+
+    try {
+      await db
+        .update(clubsTable)
+        .set({ apiFootballTeamId: match.team.id, logoUrl: match.team.logo })
+        .where(eq(clubsTable.id, club.id));
+    } catch (err) {
+      // Defense-in-depth against the race between the check above and this
+      // write (e.g. two sync runs overlapping) — the partial unique index on
+      // api_football_team_id will reject a genuine duplicate.
+      logger.warn({ err, club: club.name, teamId: match.team.id }, "Failed to assign API-Football team id — likely a duplicate club row");
+      return null;
+    }
     return match.team.id;
   } catch (err) {
     logger.warn({ err, club: club.name, searchTerm }, "API-Football team search failed");

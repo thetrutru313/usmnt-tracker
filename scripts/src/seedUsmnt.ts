@@ -147,6 +147,21 @@ async function main() {
     { name: "Benfica B", league: "Liga Portugal 2", country: "Portugal" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
+  // Guard against accidentally seeding the same real-world club twice under
+  // two different name strings (the root cause of the "Lyngby Boldklub" /
+  // "Lyngby" duplicate) — this can't be checked by name/id alone since the
+  // whole failure mode is two *different* names for the same club, so the
+  // authoritative source of truth is API-Football's team id. That id isn't
+  // known until the live sync resolves it after this insert (see
+  // `resolveTeamId` in apiFootballSync.ts, which now checks-before-write and
+  // is backed by a partial unique index on clubs.api_football_team_id).
+  // What we *can* catch here is a literal copy-paste duplicate name, which
+  // this cheap check guards against before it ever reaches the DB.
+  const duplicateNames = clubDefs.map((c) => c.name).filter((name, i, arr) => arr.indexOf(name) !== i);
+  if (duplicateNames.length > 0) {
+    throw new Error(`Duplicate club name(s) in clubDefs — remove the repeat before seeding: ${[...new Set(duplicateNames)].join(", ")}`);
+  }
+
   const insertedClubs = await db.insert(clubsTable).values(clubDefs).returning();
   const clubIdByName = new Map(insertedClubs.map((c) => [c.name, c.id]));
 
