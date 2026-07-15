@@ -3,7 +3,8 @@ import { useParams } from "wouter";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, TrendingUp, Calendar, Info, Clock, AlertTriangle, Shield } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield } from "lucide-react";
+import { FormBadge } from "@/components/FormBadge";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { formatKickoffMst } from "@/lib/formatMst";
@@ -87,10 +88,8 @@ export default function PlayerProfile() {
                 } className="uppercase font-mono text-[10px] tracking-widest">
                   {player.category === 'current' ? 'Core Squad' : player.category === 'fringe' ? 'In the Mix' : 'Prospect'}
                 </Badge>
-                {player.trending && (
-                  <Badge variant="success" className="uppercase font-mono text-[10px] tracking-widest gap-1">
-                    <TrendingUp size={10} /> TRENDING
-                  </Badge>
+                {player.performanceTrend && (
+                  <FormBadge trend={player.performanceTrend} />
                 )}
               </div>
               
