@@ -81,19 +81,109 @@ interface AfFixture {
 
 // API-Football's fixtures endpoint doesn't return US broadcast info on our
 // plan, so map each league to its primary US TV/streaming home. Falls back
-// to a generic streaming-only entry for leagues not explicitly listed.
-const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingService: string }> = {
-  "Premier League": { tvNetwork: "USA Network", streamingService: "Fubo" },
-  "Championship": { tvNetwork: null, streamingService: "ESPN+" },
-  "Serie A": { tvNetwork: "CBS Sports Network", streamingService: "Paramount+" },
-  "La Liga": { tvNetwork: "ESPN Deportes", streamingService: "ESPN+" },
-  "Bundesliga": { tvNetwork: null, streamingService: "ESPN+" },
-  "Ligue 1": { tvNetwork: "beIN Sports", streamingService: "beIN Sports Connect" },
-  "Eredivisie": { tvNetwork: null, streamingService: "ESPN+" },
-  "Primeira Liga": { tvNetwork: null, streamingService: "ESPN+" },
-  "Major League Soccer": { tvNetwork: "Apple TV", streamingService: "MLS Season Pass" },
-  "UEFA Champions League": { tvNetwork: "CBS", streamingService: "Paramount+" },
-  "UEFA Europa League": { tvNetwork: null, streamingService: "Paramount+" },
+// to null for leagues not explicitly listed.
+// Keys must match the exact league-name strings returned by API-Football.
+// Rights change regularly — update this map when deals change rather than
+// touching fixture rows.
+const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingService: string | null }> = {
+  // ── England ──────────────────────────────────────────────────────────────
+  "Premier League":      { tvNetwork: "NBC Sports / Peacock", streamingService: "Peacock" },
+  "Championship":        { tvNetwork: null,                   streamingService: "Paramount+" },
+  "League One":          { tvNetwork: null,                   streamingService: "Paramount+" },
+  "League Two":          { tvNetwork: null,                   streamingService: "Paramount+" },
+  "FA Cup":              { tvNetwork: null,                   streamingService: "ESPN+" },
+  "League Cup":          { tvNetwork: null,                   streamingService: "Paramount+" }, // Carabao Cup
+  "EFL Trophy":          { tvNetwork: null,                   streamingService: "Paramount+" },
+
+  // ── Spain ─────────────────────────────────────────────────────────────────
+  "La Liga":             { tvNetwork: "ESPN Deportes",        streamingService: "ESPN+" },
+  "La Liga 2":           { tvNetwork: null,                   streamingService: "ESPN+" },
+
+  // ── Germany ───────────────────────────────────────────────────────────────
+  // New US deal (2026-27 onward): USA Network & Fubo
+  "Bundesliga":          { tvNetwork: "USA Network",          streamingService: "Fubo" },
+  "2. Bundesliga":       { tvNetwork: null,                   streamingService: "Fubo" },
+  "DFB Pokal":           { tvNetwork: null,                   streamingService: "Fubo" },
+
+  // ── Italy ─────────────────────────────────────────────────────────────────
+  "Serie A":             { tvNetwork: "CBS Sports Network",   streamingService: "Paramount+" },
+  "Coppa Italia":        { tvNetwork: null,                   streamingService: "Paramount+" },
+
+  // ── France ────────────────────────────────────────────────────────────────
+  "Ligue 1":             { tvNetwork: "beIN Sports",          streamingService: "beIN Sports Connect" },
+
+  // ── Netherlands ───────────────────────────────────────────────────────────
+  "Eredivisie":          { tvNetwork: null,                   streamingService: "ESPN+" },
+
+  // ── Portugal ──────────────────────────────────────────────────────────────
+  "Primeira Liga":       { tvNetwork: null,                   streamingService: "GolTV / Fanatiz" },
+  "Segunda Liga":        { tvNetwork: null,                   streamingService: "GolTV / Fanatiz" },
+
+  // ── Belgium ───────────────────────────────────────────────────────────────
+  "Belgian Pro League":  { tvNetwork: null,                   streamingService: "DAZN" },
+  "Jupiler Pro League":  { tvNetwork: null,                   streamingService: "DAZN" }, // alt name
+
+  // ── Scotland ──────────────────────────────────────────────────────────────
+  "Premiership":         { tvNetwork: null,                   streamingService: "Paramount+" }, // Scottish Premiership
+
+  // ── Austria ───────────────────────────────────────────────────────────────
+  "Austrian Bundesliga": { tvNetwork: null,                   streamingService: "OneFootball" },
+  "Bundesliga Austria":  { tvNetwork: null,                   streamingService: "OneFootball" }, // alt name
+
+  // ── Switzerland ───────────────────────────────────────────────────────────
+  "Super League":        { tvNetwork: null,                   streamingService: "OneFootball / Fanatiz" },
+
+  // ── Denmark ───────────────────────────────────────────────────────────────
+  "Superliga":           { tvNetwork: null,                   streamingService: "OneFootball" }, // Danish Superliga & Serbian SuperLiga
+
+  // ── Norway ────────────────────────────────────────────────────────────────
+  "Eliteserien":         { tvNetwork: null,                   streamingService: "OneFootball" },
+
+  // ── Sweden ────────────────────────────────────────────────────────────────
+  "Allsvenskan":         { tvNetwork: null,                   streamingService: "OneFootball" },
+
+  // ── Turkey ────────────────────────────────────────────────────────────────
+  "Süper Lig":           { tvNetwork: "beIN Sports",          streamingService: "beIN Sports" },
+
+  // ── Croatia ───────────────────────────────────────────────────────────────
+  "HNL":                 { tvNetwork: null,                   streamingService: "OneFootball" },
+
+  // ── MLS / US ──────────────────────────────────────────────────────────────
+  "Major League Soccer": { tvNetwork: "Apple TV",             streamingService: "MLS Season Pass" },
+  "MLS Next Pro":        { tvNetwork: null,                   streamingService: "MLS Season Pass" },
+  "Leagues Cup":         { tvNetwork: null,                   streamingService: "MLS Season Pass" },
+  "USL Championship":    { tvNetwork: null,                   streamingService: "ESPN+ / Paramount+" },
+  "USL League One":      { tvNetwork: null,                   streamingService: "ESPN+" },
+
+  // ── Mexico ────────────────────────────────────────────────────────────────
+  "Liga MX":             { tvNetwork: "TUDN / UniMás",        streamingService: "ViX / Peacock" },
+  "Liga de Expansión":   { tvNetwork: null,                   streamingService: "ViX" },
+
+  // ── Brazil ────────────────────────────────────────────────────────────────
+  "Brasileirão Série A": { tvNetwork: null,                   streamingService: "Fanatiz" },
+  "Serie A Brazil":      { tvNetwork: null,                   streamingService: "Fanatiz" }, // alt name
+
+  // ── Argentina ─────────────────────────────────────────────────────────────
+  "Liga Profesional":    { tvNetwork: null,                   streamingService: "Fanatiz" },
+
+  // ── UEFA club competitions ─────────────────────────────────────────────────
+  "UEFA Champions League":   { tvNetwork: "CBS",  streamingService: "Paramount+" },
+  "UEFA Europa League":      { tvNetwork: null,   streamingService: "Paramount+" },
+  "UEFA Conference League":  { tvNetwork: null,   streamingService: "Paramount+" },
+
+  // ── CONCACAF club competitions ────────────────────────────────────────────
+  "CONCACAF Champions Cup":  { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+
+  // ── International / national team ─────────────────────────────────────────
+  "FIFA World Cup":          { tvNetwork: "FOX",        streamingService: "FOX Sports App" },
+  "FIFA Club World Cup":     { tvNetwork: null,         streamingService: "DAZN" },
+  "CONCACAF Nations League": { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "CONCACAF Gold Cup":       { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "Copa América":            { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "UEFA Nations League":     { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "International Friendly":  { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "Copa Libertadores":       { tvNetwork: "beIN Sports", streamingService: "beIN Sports" },
+  "Copa Sudamericana":       { tvNetwork: "beIN Sports", streamingService: "beIN Sports" },
 };
 
 function broadcastFor(leagueName: string): { tvNetwork: string | null; streamingService: string | null } {
