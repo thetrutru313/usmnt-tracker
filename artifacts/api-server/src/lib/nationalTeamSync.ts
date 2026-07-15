@@ -67,7 +67,9 @@ async function wmFetch<T>(url: string, attempt = 0): Promise<T> {
 }
 
 interface QuerySearchResponse {
-  query?: { pages?: Record<string, { pageid: number; title: string; revisions?: { slots: { main: { "*": string } } }[] }> };
+  query?: {
+    pages?: Record<string, { pageid: number; title: string; index?: number; revisions?: { slots: { main: { "*": string } } }[] }>;
+  };
 }
 
 /** Fetches the raw wikitext for up to 50 article titles in one call. */
@@ -86,13 +88,48 @@ async function fetchWikitextByTitles(titles: string[]): Promise<Map<string, stri
   return result;
 }
 
-/** Searches for a player's article and returns the top few candidates' titles + wikitext in one call. */
+/**
+ * Searches for a player's article and returns the top few candidates' titles
+ * + wikitext in one call, ordered by search relevance (MediaWiki's
+ * generator=search returns pages keyed by pageid, so the object's own
+ * iteration order does NOT reflect rank — the `index` field on each page is
+ * the actual rank and must be sorted on explicitly).
+ */
 async function searchPlayerArticles(name: string): Promise<{ title: string; wikitext: string }[]> {
-  const url = `${API_BASE}?action=query&generator=search&gsrsearch=${encodeURIComponent(`${name} soccer`)}&gsrlimit=3&prop=revisions&rvprop=content&rvslots=main&format=json`;
+  const url = `${API_BASE}?action=query&generator=search&gsrsearch=${encodeURIComponent(`${name} soccer`)}&gsrlimit=5&prop=revisions&rvprop=content&rvslots=main&format=json`;
   const json = await wmFetch<QuerySearchResponse>(url);
   return Object.values(json.query?.pages ?? {})
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
     .map((page) => ({ title: page.title, wikitext: page.revisions?.[0]?.slots.main["*"] ?? "" }))
     .filter((p) => p.wikitext);
+}
+
+/** Strips Wikipedia disambiguation parentheticals, e.g. "Matt Turner (soccer)" -> "Matt Turner". */
+function stripDisambiguation(title: string): string {
+  return title.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+/**
+ * True if the resolved article's title is actually this player, not a
+ * relative, teammate, or unrelated same-sport figure who happens to satisfy
+ * the "footballer with a US national team appearance" filter. Search
+ * relevance alone is not a safe identity check (seen in testing: search
+ * results for one player's name resolving to a completely different
+ * player's article) — the title itself must match the name we searched for.
+ */
+function titleMatchesPlayerName(title: string, playerName: string): boolean {
+  return normalizeName(stripDisambiguation(title)) === normalizeName(playerName);
+}
+
+/** Loose name matching: lowercase, strip accents/punctuation, collapse whitespace. */
+function normalizeName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 interface NationalTeamEntry {
@@ -122,7 +159,10 @@ function seniorUsmntEntries(entries: NationalTeamEntry[]): NationalTeamEntry[] {
 }
 
 function hasFootballInfobox(wikitext: string): boolean {
-  return /\{\{\s*infobox\s+football\s+biography/i.test(wikitext);
+  // American-football-context articles (most USMNT bios) commonly use
+  // "soccer biography" instead of "football biography" — confirmed via
+  // testing (e.g. Yunus Musah's article uses {{Infobox soccer biography}}).
+  return /\{\{\s*infobox\s+(football|soccer)\s+biography/i.test(wikitext);
 }
 
 function hasAnyUsNationalTeamEntry(wikitext: string): boolean {
@@ -131,17 +171,22 @@ function hasAnyUsNationalTeamEntry(wikitext: string): boolean {
 
 /**
  * Resolves a Wikipedia article for a player not yet cached, by searching
- * "<name> soccer" and requiring the candidate be a football biography that
- * lists at least one United States national team appearance (senior or
- * youth) — the same "don't guess on ambiguity" posture as API-Football's
- * name-search fallback (see playerClubSync.ts): if none of the top few
- * search results confirm identity this way, the player is left unresolved
- * rather than risking a wrong attribution.
+ * "<name> soccer" and requiring the candidate: (a) have a title that
+ * actually matches the player's name (not a relative, teammate, or other
+ * unrelated figure who happens to pass the other checks — search relevance
+ * alone is not a safe identity check, confirmed by testing), and (b) be a
+ * football biography that lists at least one United States national team
+ * appearance (senior or youth). This mirrors the "don't guess on ambiguity"
+ * posture as API-Football's name-search fallback (see playerClubSync.ts): if
+ * none of the top few search results confirm identity this way, the player
+ * is left unresolved rather than risking a wrong attribution.
  */
 async function resolvePlayerWikipediaArticle(player: PlayerRow): Promise<{ title: string; wikitext: string } | null> {
   try {
     const candidates = await searchPlayerArticles(player.name);
-    const match = candidates.find((c) => hasFootballInfobox(c.wikitext) && hasAnyUsNationalTeamEntry(c.wikitext));
+    const match = candidates.find(
+      (c) => titleMatchesPlayerName(c.title, player.name) && hasFootballInfobox(c.wikitext) && hasAnyUsNationalTeamEntry(c.wikitext),
+    );
     if (!match) {
       logger.warn({ player: player.name, candidateCount: candidates.length }, "No confirmed Wikipedia football-biography match for national-team caps/goals sync");
       return null;
