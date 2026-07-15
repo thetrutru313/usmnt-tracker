@@ -83,6 +83,12 @@ interface AfInjuryEntry {
 // injuries panel only shows genuine injuries.
 const SUSPENSION_REASON_PATTERN = /card|suspen/i;
 
+// USA national-team id in API-Football. Injuries from World Cup / Gold Cup /
+// Nations League fixtures are filed under this team, not the player's club.
+// We fetch this team's injuries once per sync run and merge them alongside
+// each club's data so national-competition injuries aren't silently dropped.
+const USA_NATIONAL_TEAM_ID = 2384;
+
 // Different leagues label "season" differently — MLS uses the calendar year,
 // most European leagues use the year the season *started* (e.g. "2025" for
 // the 2025/26 season, which is still the real "current" season through the
@@ -525,44 +531,91 @@ async function replaceSeasonHistoryRows(playerId: number, entries: { year: numbe
 
 // --- Injuries ----------------------------------------------------------------
 
-/** Groups a player's real "missing fixture" entries into injury episodes (gaps > 45 days start a new episode). */
-function groupInjuryEpisodes(entries: AfInjuryEntry[]): { reason: string; start: string; end: string; matches: number }[] {
-  const sorted = [...entries]
-    .filter((e) => e.fixture.date && !SUSPENSION_REASON_PATTERN.test(e.player.reason))
-    .sort((a, b) => (a.fixture.date! < b.fixture.date! ? -1 : 1));
+/**
+ * Groups a player's injury entries into episodes (gaps > 45 days start a new episode).
+ *
+ * Entries without a fixture date (pre-season / offseason injuries where no match has
+ * been missed yet) are included but use `today` as their placeholder date. Those
+ * entries do NOT increment the `matches` counter — they represent "currently out
+ * but hasn't missed a match yet". The `hasFixturelessEntry` flag on the episode
+ * lets callers produce the right status text.
+ */
+function groupInjuryEpisodes(
+  entries: AfInjuryEntry[],
+  today: string,
+): { reason: string; start: string; end: string; matches: number; hasFixturelessEntry: boolean }[] {
+  // Non-suspensions only. Null fixture dates become today (offseason / pre-season injuries).
+  const eligible = [...entries]
+    .filter((e) => !SUSPENSION_REASON_PATTERN.test(e.player.reason))
+    .map((e) => ({
+      reason: e.player.reason,
+      date: e.fixture.date ? e.fixture.date.slice(0, 10) : today,
+      hasFixture: !!e.fixture.date,
+    }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  const episodes: { reason: string; start: string; end: string; matches: number }[] = [];
-  for (const entry of sorted) {
-    const date = entry.fixture.date!.slice(0, 10);
+  const episodes: { reason: string; start: string; end: string; matches: number; hasFixturelessEntry: boolean }[] = [];
+  for (const entry of eligible) {
     const last = episodes.at(-1);
-    if (last && last.reason === entry.player.reason && Date.parse(date) - Date.parse(last.end) <= 45 * 24 * 60 * 60 * 1000) {
-      last.end = date;
-      last.matches++;
+    if (last && last.reason === entry.reason && Date.parse(entry.date) - Date.parse(last.end) <= 45 * 24 * 60 * 60 * 1000) {
+      last.end = entry.date;
+      if (entry.hasFixture) last.matches++;
+      else last.hasFixturelessEntry = true;
     } else {
-      episodes.push({ reason: entry.player.reason, start: date, end: date, matches: 1 });
+      episodes.push({
+        reason: entry.reason,
+        start: entry.date,
+        end: entry.date,
+        matches: entry.hasFixture ? 1 : 0,
+        hasFixturelessEntry: !entry.hasFixture,
+      });
     }
   }
   return episodes;
 }
 
-async function syncClubInjuries(club: ClubRow, clubPlayers: PlayerRow[], teamId: number | null): Promise<number> {
+async function syncClubInjuries(
+  club: ClubRow,
+  clubPlayers: PlayerRow[],
+  teamId: number | null,
+  /** Pre-fetched national-team injury entries (USA WC/Gold Cup/Nations League).
+   *  Merged with club-fetched entries so injuries from international fixtures
+   *  are not silently dropped. */
+  nationalTeamEntries: AfInjuryEntry[] = [],
+): Promise<number> {
   // teamId is resolved once per club by the caller (syncPlayerStatsAndInjuries)
   // and passed in here — never skip the clear-stale-rows step below on an
   // unresolved team id; old injury rows must be wiped even when we can't fetch
   // fresh data.
   const byApiId = new Map(clubPlayers.filter((p) => p.apiFootballPlayerId).map((p) => [p.apiFootballPlayerId as number, p]));
 
-  let allEntries: AfInjuryEntry[] = [];
+  let clubEntries: AfInjuryEntry[] = [];
   if (teamId && byApiId.size > 0) {
     for (const season of seasonYearCandidates()) {
       try {
         const entries = await afFetch<AfInjuryEntry[]>(`/injuries?team=${teamId}&season=${season}`);
-        allEntries = allEntries.concat(entries);
+        clubEntries = clubEntries.concat(entries);
       } catch (err) {
         logger.warn({ err, club: club.name, season }, "API-Football injuries fetch failed for season");
       }
     }
   }
+
+  // Merge club + national-team entries, deduplicating true duplicates (same
+  // player, same fixture, same reason). The key MUST include the player id so
+  // that two different players who both missed the same fixture are not
+  // conflated — a non-player-scoped fixture key would silently drop all but
+  // the first player for any given fixture.
+  const seen = new Set<string>();
+  const allEntries = [...clubEntries, ...nationalTeamEntries].filter((e) => {
+    const key =
+      e.fixture.id != null
+        ? `fix:${e.player.id}:${e.fixture.id}`
+        : `nofix:${e.player.id}:${e.player.reason}:${e.fixture.date ?? "null"}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const byPlayer = new Map<number, AfInjuryEntry[]>();
   for (const entry of allEntries) {
@@ -575,7 +628,7 @@ async function syncClubInjuries(club: ClubRow, clubPlayers: PlayerRow[], teamId:
   const today = new Date().toISOString().slice(0, 10);
   for (const player of clubPlayers) {
     const entries = byPlayer.get(player.id) ?? [];
-    const episodes = groupInjuryEpisodes(entries);
+    const episodes = groupInjuryEpisodes(entries, today);
     await db.delete(injuriesTable).where(eq(injuriesTable.playerId, player.id));
     for (const ep of episodes) {
       const daysMissed = Math.round((Date.parse(ep.end) - Date.parse(ep.start)) / (24 * 60 * 60 * 1000)) + 1;
@@ -584,12 +637,14 @@ async function syncClubInjuries(club: ClubRow, clubPlayers: PlayerRow[], teamId:
         playerId: player.id,
         bodyPart: ep.reason,
         status,
-        expectedReturn: null, // API-Football doesn't report a projected return date — left null rather than guessed.
+        expectedReturn: null, // API-Football does not include a projected return date in its injury response.
         daysMissed,
         matchesMissed: ep.matches,
         latestUpdate:
           status === "active"
-            ? `Ruled out (${ep.reason}) — missed ${ep.matches} match${ep.matches === 1 ? "" : "es"} as of ${ep.end}.`
+            ? ep.matches > 0
+              ? `Ruled out (${ep.reason}) — missed ${ep.matches} match${ep.matches === 1 ? "" : "es"} as of ${ep.end}.`
+              : `Ruled out (${ep.reason}) — no matches missed yet.`
             : `Missed ${ep.matches} match${ep.matches === 1 ? "" : "es"} between ${ep.start} and ${ep.end} (${ep.reason}).`,
         startDate: ep.start,
       });
@@ -645,6 +700,22 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
   let failures = 0;
 
   const [currentSeason] = seasonYearCandidates();
+
+  // Fetch USA national-team injury entries once, before the per-club loop.
+  // Injuries from World Cup / Gold Cup / Nations League fixtures are filed
+  // under team=2384 in API-Football — not under the player's club — so a
+  // club-only query misses them entirely. We fetch all seasons and pass the
+  // combined list into every syncClubInjuries call; dedup by fixture id
+  // happens inside that function.
+  let nationalTeamEntries: AfInjuryEntry[] = [];
+  for (const season of seasonYearCandidates()) {
+    try {
+      const entries = await afFetch<AfInjuryEntry[]>(`/injuries?team=${USA_NATIONAL_TEAM_ID}&season=${season}`);
+      nationalTeamEntries = nationalTeamEntries.concat(entries);
+    } catch (err) {
+      logger.warn({ err, season }, "API-Football USA national-team injuries fetch failed");
+    }
+  }
 
   for (const club of clubs) {
     const clubPlayers = playersByClub.get(club.id) ?? [];
@@ -793,7 +864,7 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
         await db.update(playersTable).set({ performanceTrend: trend, trending }).where(eq(playersTable.id, player.id));
       }
 
-      injuriesWritten += await syncClubInjuries(club, clubPlayers, clubTeamId);
+      injuriesWritten += await syncClubInjuries(club, clubPlayers, clubTeamId, nationalTeamEntries);
       clubsProcessed++;
       logger.info({ club: club.name, clubsProcessed, totalClubs: clubs.length }, "Player-stats sync progress");
     } catch (err) {
