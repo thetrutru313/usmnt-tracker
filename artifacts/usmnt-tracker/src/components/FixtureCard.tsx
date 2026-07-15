@@ -99,7 +99,7 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
 
         {/* Match Details */}
         <div className="flex-1 p-4 flex flex-col justify-center">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
             <span className="uppercase tracking-wider font-medium text-primary">{fixture.competition}</span>
             {fixture.isNationalTeam && (
               <Badge variant="default" className="h-4 text-[9px] px-1 py-0 ml-2">
@@ -111,15 +111,22 @@ export function FixtureCard({ fixture }: { fixture: FixtureCardFixture }) {
           <div className="flex items-center justify-between gap-4 mb-3">
             <div className="flex-1 flex items-center justify-center gap-2 font-bold text-lg">
               <span className="text-center">{fixture.homeTeam}</span>
-              {fixture.homeLogoUrl && (
-                <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="w-6 h-6 object-contain shrink-0" />
-              )}
+              {/* Fixed-width slot keeps centering stable whether or not a logo exists */}
+              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                {fixture.homeLogoUrl && (
+                  <img src={fixture.homeLogoUrl} alt={fixture.homeTeam} className="w-6 h-6 object-contain" />
+                )}
+              </div>
             </div>
-            <div className="text-muted-foreground font-mono text-xs w-4 text-center shrink-0">vs</div>
+            <div className="shrink-0 px-2 py-0.5 rounded-sm bg-muted text-muted-foreground text-xs font-mono font-bold uppercase">
+              vs
+            </div>
             <div className="flex-1 flex items-center justify-center gap-2 font-bold text-lg">
-              {fixture.awayLogoUrl && (
-                <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="w-6 h-6 object-contain shrink-0" />
-              )}
+              <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                {fixture.awayLogoUrl && (
+                  <img src={fixture.awayLogoUrl} alt={fixture.awayTeam} className="w-6 h-6 object-contain" />
+                )}
+              </div>
               <span className="text-center">{fixture.awayTeam}</span>
             </div>
           </div>
