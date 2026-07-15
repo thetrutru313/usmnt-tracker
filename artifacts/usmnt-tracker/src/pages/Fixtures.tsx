@@ -25,10 +25,10 @@ function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string
           type="multiple"
           value={poolFilter}
           onValueChange={onPoolFilterChange}
-          className="justify-start flex-wrap"
+          className="justify-start flex-nowrap gap-1"
         >
           {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-3 h-8 rounded-md border border-border data-[state=on]:border-primary">
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap">
               {f.label}
             </ToggleGroupItem>
           ))}
