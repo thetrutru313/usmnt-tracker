@@ -73,7 +73,7 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
           {fixture.status === "live" ? (
             <div className="flex flex-col items-center">
               {showDate && (
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
                   {formatDate(fixture.kickoff)}
                 </span>
               )}
@@ -87,7 +87,7 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
           ) : fixture.status === "finished" ? (
             <div className="flex flex-col items-center">
               {showDate && (
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
                   {formatDate(fixture.kickoff)}
                 </span>
               )}
@@ -103,11 +103,11 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
           ) : (
             <div className="flex flex-col items-center">
               {showDate && (
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
+                <span className="text-xs md:text-sm font-mono font-bold text-foreground uppercase tracking-wider mb-0.5">
                   {formatDate(fixture.kickoff)}
                 </span>
               )}
-              <span className="text-base md:text-lg font-bold data-value">{formatTime(fixture.kickoff)}</span>
+              <span className="text-xs md:text-sm text-muted-foreground font-mono">{formatTime(fixture.kickoff)}</span>
             </div>
           )}
         </div>
