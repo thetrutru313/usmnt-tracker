@@ -47,25 +47,39 @@ const MONTH_NAMES = [
 
 const STORAGE_KEY = "usmnt_admin_token";
 const STORAGE_TS_KEY = "usmnt_admin_token_ts";
-/** How long a saved session stays valid. Adjust as needed. */
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const STORAGE_EXPIRY_KEY = "usmnt_admin_session_expiry_ms";
+/** Fallback session length used when the server hasn't supplied a value yet. */
+const DEFAULT_SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 /** Show the expiry warning banner when this many milliseconds remain. */
 const WARN_BEFORE_MS = 30 * 60 * 1000; // 30 minutes
+
+/** Returns the session expiry duration stored from the last verify call, or the default. */
+function getSessionExpiryMs(): number {
+  const stored = localStorage.getItem(STORAGE_EXPIRY_KEY);
+  if (stored) {
+    const parsed = parseInt(stored, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_SESSION_EXPIRY_MS;
+}
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ─── Session helpers ───────────────────────────────────────────────────────────
 
-function saveSession(token: string): void {
+function saveSession(token: string, expiryMs?: number): void {
   localStorage.setItem(STORAGE_KEY, token);
   localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
+  if (expiryMs !== undefined) {
+    localStorage.setItem(STORAGE_EXPIRY_KEY, String(expiryMs));
+  }
 }
 
 function loadSession(): string | null {
   const token = localStorage.getItem(STORAGE_KEY);
   const ts = localStorage.getItem(STORAGE_TS_KEY);
   if (!token || !ts) return null;
-  if (Date.now() - parseInt(ts, 10) > SESSION_EXPIRY_MS) {
+  if (Date.now() - parseInt(ts, 10) > getSessionExpiryMs()) {
     clearSession();
     return null;
   }
@@ -75,6 +89,7 @@ function loadSession(): string | null {
 function clearSession(): void {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(STORAGE_TS_KEY);
+  localStorage.removeItem(STORAGE_EXPIRY_KEY);
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
@@ -91,7 +106,7 @@ function useSessionExpiry(): number | null {
     function check() {
       const ts = localStorage.getItem(STORAGE_TS_KEY);
       if (!ts) { setMinutesLeft(null); return; }
-      const remaining = SESSION_EXPIRY_MS - (Date.now() - parseInt(ts, 10));
+      const remaining = getSessionExpiryMs() - (Date.now() - parseInt(ts, 10));
       setMinutesLeft(Math.max(0, Math.floor(remaining / 60_000)));
     }
     check();
@@ -120,8 +135,8 @@ function ReAuthModal({
     setError("");
     setLoading(true);
     try {
-      await apiFetch("/admin/transparency/verify", password, { method: "POST" });
-      saveSession(password);
+      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; sessionExpiryMs?: number };
+      saveSession(password, res.sessionExpiryMs);
       onSuccess();
     } catch {
       setError("Incorrect password.");
@@ -225,8 +240,8 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
     setError("");
     setLoading(true);
     try {
-      await apiFetch("/admin/transparency/verify", password, { method: "POST" });
-      saveSession(password);
+      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; sessionExpiryMs?: number };
+      saveSession(password, res.sessionExpiryMs);
       onSuccess(password);
     } catch {
       setError("Incorrect password.");

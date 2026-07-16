@@ -75,11 +75,14 @@ router.get("/transparency/totals", async (_req, res): Promise<void> => {
 
 /**
  * POST /admin/transparency/verify
- * Returns 200 OK if the password is correct. Used by the frontend to validate
- * credentials before storing them in sessionStorage.
+ * Returns 200 OK if the password is correct, plus the session expiry duration
+ * the frontend should enforce. Driven by the ADMIN_SESSION_HOURS env var so
+ * the timeout can be changed without a code deploy (default: 24 hours).
  */
 router.post("/admin/transparency/verify", requireAdminPassword, (_req, res): void => {
-  res.json({ ok: true });
+  const hours = parseFloat(process.env["ADMIN_SESSION_HOURS"] ?? "24");
+  const sessionExpiryMs = (Number.isFinite(hours) && hours > 0 ? hours : 24) * 60 * 60 * 1000;
+  res.json({ ok: true, sessionExpiryMs });
 });
 
 /**
