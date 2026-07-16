@@ -907,6 +907,277 @@ describe("GET /fixtures?scope=upcoming — national-team fixture keeps player af
   );
 });
 
+// ─── Multi-club stale-fixture removal guard ──────────────────────────────────
+
+/**
+ * Regression guard: when the reconciliation loop iterates over multiple clubs
+ * in the same sync run, each club must get its own independent pass through the
+ * removal logic. A bug that shares or resets the `freshById` map or the
+ * `removalsTrustworthy` flag across iterations could cause one club's stale
+ * fixture to survive because the other club's fetch failed.
+ *
+ * ## What is tested
+ * 1. Two clubs (A and B) each have a past-kickoff "scheduled" fixture with an
+ *    `apiFootballFixtureId` set, and a `fixture_players` link.
+ * 2. `reconcileClubFixtures` is invoked for club A, then for club B, each with
+ *    an empty `freshById` and `removalsTrustworthy=true` — exactly how the
+ *    sync loop exercises each club in sequence.
+ * 3. Both stale fixture rows and both `fixture_players` links are confirmed
+ *    deleted from the DB.
+ * 4. Neither fixture appears in GET /fixtures?scope=upcoming.
+ */
+
+describe("Stale fixture removal — both clubs' stale fixtures deleted in a multi-club run", () => {
+  let multiClubAId: number | null = null;
+  let multiClubBId: number | null = null;
+  let multiPlayerAId: number | null = null;
+  let multiPlayerBId: number | null = null;
+  let multiFixtureAId: number | null = null;
+  let multiFixtureBId: number | null = null;
+
+  afterAll(async () => {
+    // Belt-and-suspenders cleanup — tests should have deleted the fixtures and
+    // links, but guard against a test failure leaving orphaned rows.
+    for (const fixtureId of [multiFixtureAId, multiFixtureBId]) {
+      if (fixtureId !== null) {
+        await db
+          .delete(fixturePlayersTable)
+          .where(eq(fixturePlayersTable.fixtureId, fixtureId));
+        await db.delete(fixturesTable).where(eq(fixturesTable.id, fixtureId));
+      }
+    }
+    for (const playerId of [multiPlayerAId, multiPlayerBId]) {
+      if (playerId !== null) {
+        await db.delete(playersTable).where(eq(playersTable.id, playerId));
+      }
+    }
+    for (const clubId of [multiClubAId, multiClubBId]) {
+      if (clubId !== null) {
+        await db.delete(clubsTable).where(eq(clubsTable.id, clubId));
+      }
+    }
+  });
+
+  it(
+    "deletes stale fixtures and links for both clubs when reconcileClubFixtures is called per-club in sequence",
+    async () => {
+      // ── Setup: Club A ──────────────────────────────────────────────────────
+
+      const [clubA] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_multi_stale_club_a__", league: "Multi Test League A", country: "USA" })
+        .returning({ id: clubsTable.id, name: clubsTable.name });
+      if (!clubA) throw new Error("Club A insert failed");
+      multiClubAId = clubA.id;
+
+      const basePlayer = {
+        position: "MF" as const,
+        category: "current" as const,
+        age: 25,
+        nationalTeamCaps: 0,
+        nationalTeamGoals: 0,
+        performanceTrend: "steady" as const,
+        trending: false,
+        bio: "",
+        worldCupRoster: false,
+      };
+
+      const [playerA] = await db
+        .insert(playersTable)
+        .values({ ...basePlayer, name: "__Test Multi Stale Player A__", slug: "__test-multi-stale-player-a__", clubId: clubA.id })
+        .returning({ id: playersTable.id });
+      if (!playerA) throw new Error("Player A insert failed");
+      multiPlayerAId = playerA.id;
+
+      const pastKickoffA = new Date(Date.now() - 48 * 60 * 60 * 1000); // 48 h ago
+      const [fixtureA] = await db
+        .insert(fixturesTable)
+        .values({
+          apiFootballFixtureId: 9_998_001, // arbitrary; not in any real season fetch
+          isNationalTeam: false,
+          competition: "Multi Stale League A",
+          kickoff: pastKickoffA,
+          venue: "Old Stadium A",
+          homeTeam: "__Multi Stale Home A__",
+          awayTeam: "__Multi Stale Away A__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixtureA) throw new Error("Fixture A insert failed");
+      multiFixtureAId = fixtureA.id;
+
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: fixtureA.id, playerId: playerA.id, clubId: clubA.id });
+
+      // ── Setup: Club B ──────────────────────────────────────────────────────
+
+      const [clubB] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_multi_stale_club_b__", league: "Multi Test League B", country: "GER" })
+        .returning({ id: clubsTable.id, name: clubsTable.name });
+      if (!clubB) throw new Error("Club B insert failed");
+      multiClubBId = clubB.id;
+
+      const [playerB] = await db
+        .insert(playersTable)
+        .values({ ...basePlayer, name: "__Test Multi Stale Player B__", slug: "__test-multi-stale-player-b__", clubId: clubB.id })
+        .returning({ id: playersTable.id });
+      if (!playerB) throw new Error("Player B insert failed");
+      multiPlayerBId = playerB.id;
+
+      const pastKickoffB = new Date(Date.now() - 72 * 60 * 60 * 1000); // 72 h ago
+      const [fixtureB] = await db
+        .insert(fixturesTable)
+        .values({
+          apiFootballFixtureId: 9_998_002, // arbitrary; not in any real season fetch
+          isNationalTeam: false,
+          competition: "Multi Stale League B",
+          kickoff: pastKickoffB,
+          venue: "Old Stadium B",
+          homeTeam: "__Multi Stale Home B__",
+          awayTeam: "__Multi Stale Away B__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixtureB) throw new Error("Fixture B insert failed");
+      multiFixtureBId = fixtureB.id;
+
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: fixtureB.id, playerId: playerB.id, clubId: clubB.id });
+
+      // ── Pre-reconciliation: confirm both fixtures and links are present ─────
+
+      const beforeRowsA = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, fixtureA.id));
+      expect(beforeRowsA).toHaveLength(1);
+
+      const beforeLinksA = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureA.id));
+      expect(beforeLinksA).toHaveLength(1);
+
+      const beforeRowsB = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, fixtureB.id));
+      expect(beforeRowsB).toHaveLength(1);
+
+      const beforeLinksB = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureB.id));
+      expect(beforeLinksB).toHaveLength(1);
+
+      // ── Invoke reconciliation for each club in sequence ────────────────────
+      // This mirrors how syncApiFootballFixtures iterates over tracked clubs:
+      // each club is reconciled independently with its own freshById map and
+      // its own removalsTrustworthy flag. The empty maps simulate the provider
+      // returning zero fixtures (e.g. season ended). Both flags are true,
+      // meaning all fetch attempts succeeded — the stale past-kickoff fixtures
+      // must be removed.
+
+      const now = Date.now();
+
+      const resultA = await reconcileClubFixtures({
+        club: { id: clubA.id, name: clubA.name },
+        clubPlayerIds: [playerA.id],
+        freshById: new Map(), // empty — fixture A absent from provider list
+        removalsTrustworthy: true,
+        now,
+      });
+
+      expect(
+        resultA.fixturesRemoved,
+        `reconcileClubFixtures for club A should have removed 1 stale fixture but reported ${resultA.fixturesRemoved}`,
+      ).toBe(1);
+
+      const resultB = await reconcileClubFixtures({
+        club: { id: clubB.id, name: clubB.name },
+        clubPlayerIds: [playerB.id],
+        freshById: new Map(), // empty — fixture B absent from provider list
+        removalsTrustworthy: true,
+        now,
+      });
+
+      expect(
+        resultB.fixturesRemoved,
+        `reconcileClubFixtures for club B should have removed 1 stale fixture but reported ${resultB.fixturesRemoved}`,
+      ).toBe(1);
+
+      // ── Post-reconciliation: fixture A row and link are gone ───────────────
+
+      const afterRowsA = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, fixtureA.id));
+      expect(
+        afterRowsA,
+        `Fixture A (id=${fixtureA.id}) should have been deleted by club A's reconciliation pass but still exists in the DB`,
+      ).toHaveLength(0);
+
+      const afterLinksA = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureA.id));
+      expect(
+        afterLinksA,
+        `fixture_players link for fixture A (id=${fixtureA.id}) should have been deleted but still exists`,
+      ).toHaveLength(0);
+
+      // ── Post-reconciliation: fixture B row and link are gone ───────────────
+
+      const afterRowsB = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, fixtureB.id));
+      expect(
+        afterRowsB,
+        `Fixture B (id=${fixtureB.id}) should have been deleted by club B's reconciliation pass but still exists in the DB`,
+      ).toHaveLength(0);
+
+      const afterLinksB = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureB.id));
+      expect(
+        afterLinksB,
+        `fixture_players link for fixture B (id=${fixtureB.id}) should have been deleted but still exists`,
+      ).toHaveLength(0);
+
+      // Clear IDs so afterAll skips the redundant deletes.
+      multiFixtureAId = null;
+      multiFixtureBId = null;
+
+      // ── Neither fixture appears in GET /fixtures?scope=upcoming ───────────
+
+      const res = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `/fixtures?scope=upcoming did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const foundA = parsed.data!.find((f) => f.id === fixtureA.id);
+      expect(
+        foundA,
+        `Stale fixture A (id=${fixtureA.id}) still appears in GET /fixtures?scope=upcoming after multi-club reconciliation`,
+      ).toBeUndefined();
+
+      const foundB = parsed.data!.find((f) => f.id === fixtureB.id);
+      expect(
+        foundB,
+        `Stale fixture B (id=${fixtureB.id}) still appears in GET /fixtures?scope=upcoming after multi-club reconciliation`,
+      ).toBeUndefined();
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 
 describe("ListFixturesResponse schema — response contract", () => {
