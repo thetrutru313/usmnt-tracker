@@ -96,7 +96,7 @@ export default function Rankings() {
           <CardHeader className="pb-3 border-b border-border">
             <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
               <Flame size={16} className="text-primary" />
-              Most In Form
+              Best Club Form
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

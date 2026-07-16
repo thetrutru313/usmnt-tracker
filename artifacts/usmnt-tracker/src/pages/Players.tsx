@@ -134,7 +134,7 @@ export default function Players() {
                       <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Form</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide leading-tight text-center">Club Form</span>
                       <FormBadge trend={player.performanceTrend} />
                     </div>
                   </div>

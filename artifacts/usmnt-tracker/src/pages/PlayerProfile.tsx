@@ -348,7 +348,7 @@ export default function PlayerProfile() {
               <CardTitle className="text-md uppercase tracking-tight flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Activity size={16} className="text-muted-foreground" />
-                  Form Breakdown
+                  Club Form Breakdown
                 </div>
                 <span className="text-[10px] font-mono text-muted-foreground normal-case tracking-normal flex items-center gap-1">
                   {isFetching && <Loader2 size={10} className="animate-spin" />}
