@@ -472,6 +472,32 @@ export interface SearchResults {
   clubs: ClubResult[];
 }
 
+export interface TransparencyMonth {
+  id: number;
+  periodYear: number;
+  periodMonth: number;
+  expensesCents: number;
+  donationsCents: number;
+  goalFoundationCents: number;
+  /** @nullable */
+  invoiceUrl?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TransparencyTotals {
+  totalExpensesCents: number;
+  totalDonationsCents: number;
+  totalGoalFoundationCents: number;
+  monthCount: number;
+}
+
+export interface TransparencyMonthsResult {
+  months: TransparencyMonth[];
+}
+
 export type ListPlayersParams = {
 category?: PlayerCategory;
 position?: string;

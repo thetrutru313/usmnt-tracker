@@ -13,7 +13,46 @@ import {
   Users,
   TrendingUp,
   BarChart2,
+  DollarSign,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface TransparencyMonth {
+  id: number;
+  periodYear: number;
+  periodMonth: number;
+  expensesCents: number;
+  donationsCents: number;
+  goalFoundationCents: number;
+  invoiceUrl: string | null;
+  notes: string | null;
+}
+
+interface TransparencyTotals {
+  totalExpensesCents: number;
+  totalDonationsCents: number;
+  totalGoalFoundationCents: number;
+  monthCount: number;
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function dollars(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // ─── Page-level guide entries ────────────────────────────────────────────────
 
@@ -104,6 +143,136 @@ const formTiers = [
   },
 ];
 
+// ─── Transparency visualization ───────────────────────────────────────────────
+
+function TransparencySection() {
+  const { data: monthsData, isLoading: monthsLoading } = useQuery({
+    queryKey: ["transparency"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/transparency`);
+      const json = await res.json() as { months: TransparencyMonth[] };
+      return json.months;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: totalsData, isLoading: totalsLoading } = useQuery({
+    queryKey: ["transparency-totals"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/transparency/totals`);
+      return res.json() as Promise<TransparencyTotals>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const months = monthsData ?? [];
+  const totals = totalsData;
+  const isLoading = monthsLoading || totalsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center space-y-2">
+        <BarChart2 size={22} className="text-muted-foreground mx-auto" />
+        <p className="text-sm text-muted-foreground">Loading transparency data…</p>
+      </div>
+    );
+  }
+
+  if (months.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center space-y-3">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <BarChart2 size={22} />
+        </div>
+        <p className="font-semibold text-sm">Monthly Transparency Report</p>
+        <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+          A breakdown of operating expenses, donations received, and Goal Foundation contributions will appear here. Coming soon.
+        </p>
+      </div>
+    );
+  }
+
+  // Build chart data
+  const chartData = months.map((m) => ({
+    name: `${MONTH_SHORT[(m.periodMonth - 1) % 12]} ${m.periodYear}`,
+    Donations: parseFloat((m.donationsCents / 100).toFixed(2)),
+    Expenses: parseFloat((m.expensesCents / 100).toFixed(2)),
+    "Goal Foundation": parseFloat((m.goalFoundationCents / 100).toFixed(2)),
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* All-time totals */}
+      {totals && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            {
+              label: "Total Raised",
+              value: `$${dollars(totals.totalDonationsCents)}`,
+              color: "text-green-400",
+              sub: "from Buy Me a Coffee",
+            },
+            {
+              label: "Operating Costs",
+              value: `$${dollars(totals.totalExpensesCents)}`,
+              color: "text-foreground",
+              sub: "APIs, hosting, Replit",
+            },
+            {
+              label: "Goal Foundation",
+              value: `$${dollars(totals.totalGoalFoundationCents)}`,
+              color: "text-primary",
+              sub: "donated so far",
+            },
+          ].map(({ label, value, color, sub }) => (
+            <div key={label} className="rounded-xl border border-border bg-card p-4 text-center">
+              <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
+              <p className="text-xs font-semibold mt-1">{label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bar chart */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-4">Month-by-month breakdown</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData} barGap={2} barSize={16}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tickFormatter={(v: number) => `$${v}`}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              axisLine={false}
+              tickLine={false}
+              width={52}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "8px",
+                fontSize: "12px",
+              }}
+              formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
+            />
+            <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+            <Bar dataKey="Donations" fill="#22c55e" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Expenses" fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} opacity={0.6} />
+            <Bar dataKey="Goal Foundation" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function About() {
@@ -164,7 +333,7 @@ export default function About() {
           </p>
           <div className="space-y-3">
             <div className="flex gap-3">
-              <span className="shrink-0 mt-0.5 w-2 h-2 rounded-full bg-primary mt-1.5" />
+              <span className="shrink-0 w-2 h-2 rounded-full bg-primary mt-1.5" />
               <div>
                 <p className="text-sm font-semibold">Core Squad</p>
                 <p className="text-sm text-muted-foreground">
@@ -174,7 +343,7 @@ export default function About() {
               </div>
             </div>
             <div className="flex gap-3">
-              <span className="shrink-0 mt-0.5 w-2 h-2 rounded-full bg-yellow-400 mt-1.5" />
+              <span className="shrink-0 w-2 h-2 rounded-full bg-yellow-400 mt-1.5" />
               <div>
                 <p className="text-sm font-semibold">In the Mix</p>
                 <p className="text-sm text-muted-foreground">
@@ -185,7 +354,7 @@ export default function About() {
               </div>
             </div>
             <div className="flex gap-3">
-              <span className="shrink-0 mt-0.5 w-2 h-2 rounded-full bg-slate-400 mt-1.5" />
+              <span className="shrink-0 w-2 h-2 rounded-full bg-slate-400 mt-1.5" />
               <div>
                 <p className="text-sm font-semibold">Prospects</p>
                 <p className="text-sm text-muted-foreground">
@@ -310,16 +479,13 @@ export default function About() {
           </a>
         </div>
 
-        {/* Monthly Transparency placeholder */}
-        <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center space-y-3">
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <BarChart2 size={22} />
+        {/* Monthly Transparency — live data or placeholder */}
+        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+          <div className="flex items-center gap-2 text-foreground font-bold text-sm uppercase tracking-wider">
+            <DollarSign size={16} className="text-primary" />
+            Monthly Transparency Report
           </div>
-          <p className="font-semibold text-sm">Monthly Transparency Report</p>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            A breakdown of operating expenses, donations received, and Goal
-            Foundation contributions will appear here. Coming soon.
-          </p>
+          <TransparencySection />
         </div>
       </section>
     </div>

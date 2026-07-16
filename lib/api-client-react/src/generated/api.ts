@@ -34,7 +34,9 @@ import type {
   ScheduleEventsResult,
   SearchParams,
   SearchResults,
-  Transfer
+  Transfer,
+  TransparencyMonthsResult,
+  TransparencyTotals
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -870,6 +872,160 @@ export function useListScheduleEvents<TData = Awaited<ReturnType<typeof listSche
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListScheduleEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListTransparencyMonthsUrl = () => {
+
+
+
+
+  return `/api/transparency`
+}
+
+/**
+ * @summary List all monthly transparency records
+ */
+export const listTransparencyMonths = async ( options?: RequestInit): Promise<TransparencyMonthsResult> => {
+
+  return customFetch<TransparencyMonthsResult>(getListTransparencyMonthsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTransparencyMonthsQueryKey = () => {
+    return [
+    `/api/transparency`
+    ] as const;
+    }
+
+
+export const getListTransparencyMonthsQueryOptions = <TData = Awaited<ReturnType<typeof listTransparencyMonths>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTransparencyMonths>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTransparencyMonthsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTransparencyMonths>>> = ({ signal }) => listTransparencyMonths({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTransparencyMonths>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTransparencyMonthsQueryResult = NonNullable<Awaited<ReturnType<typeof listTransparencyMonths>>>
+export type ListTransparencyMonthsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all monthly transparency records
+ */
+
+export function useListTransparencyMonths<TData = Awaited<ReturnType<typeof listTransparencyMonths>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTransparencyMonths>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTransparencyMonthsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetTransparencyTotalsUrl = () => {
+
+
+
+
+  return `/api/transparency/totals`
+}
+
+/**
+ * @summary Get all-time aggregate donation and expense totals
+ */
+export const getTransparencyTotals = async ( options?: RequestInit): Promise<TransparencyTotals> => {
+
+  return customFetch<TransparencyTotals>(getGetTransparencyTotalsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTransparencyTotalsQueryKey = () => {
+    return [
+    `/api/transparency/totals`
+    ] as const;
+    }
+
+
+export const getGetTransparencyTotalsQueryOptions = <TData = Awaited<ReturnType<typeof getTransparencyTotals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTransparencyTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTransparencyTotalsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTransparencyTotals>>> = ({ signal }) => getTransparencyTotals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTransparencyTotals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTransparencyTotalsQueryResult = NonNullable<Awaited<ReturnType<typeof getTransparencyTotals>>>
+export type GetTransparencyTotalsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get all-time aggregate donation and expense totals
+ */
+
+export function useGetTransparencyTotals<TData = Awaited<ReturnType<typeof getTransparencyTotals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTransparencyTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTransparencyTotalsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

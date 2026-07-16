@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,8 @@ import { z } from "zod/v4";
  *
  * All monetary amounts are stored as integer cents to avoid floating-point
  * rounding issues (e.g. $12.50 → 1250).
+ *
+ * The (period_year, period_month) pair is unique — only one record per month.
  */
 export const transparencyMonthsTable = pgTable("transparency_months", {
   id: serial("id").primaryKey(),
@@ -21,7 +23,9 @@ export const transparencyMonthsTable = pgTable("transparency_months", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("transparency_months_year_month_unique").on(t.periodYear, t.periodMonth),
+]);
 
 export const insertTransparencyMonthSchema = createInsertSchema(transparencyMonthsTable).omit({
   id: true,

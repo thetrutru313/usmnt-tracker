@@ -734,6 +734,36 @@ export const ListScheduleEventsResponse = zod.object({
 
 
 /**
+ * @summary List all monthly transparency records
+ */
+export const ListTransparencyMonthsResponse = zod.object({
+  "months": zod.array(zod.object({
+  "id": zod.number(),
+  "periodYear": zod.number(),
+  "periodMonth": zod.number(),
+  "expensesCents": zod.number(),
+  "donationsCents": zod.number(),
+  "goalFoundationCents": zod.number(),
+  "invoiceUrl": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional()
+}))
+})
+
+
+/**
+ * @summary Get all-time aggregate donation and expense totals
+ */
+export const GetTransparencyTotalsResponse = zod.object({
+  "totalExpensesCents": zod.number(),
+  "totalDonationsCents": zod.number(),
+  "totalGoalFoundationCents": zod.number(),
+  "monthCount": zod.number()
+})
+
+
+/**
  * @summary Global search across players and clubs
  */
 export const SearchQueryParams = zod.object({

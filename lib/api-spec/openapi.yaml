@@ -28,6 +28,8 @@ tags:
     description: Search operations
   - name: schedule
     description: USMNT schedule operations
+  - name: transparency
+    description: Transparency and donations operations
 paths:
   /healthz:
     get:
@@ -250,6 +252,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScheduleEventsResult"
+
+  /transparency:
+    get:
+      operationId: listTransparencyMonths
+      tags: [transparency]
+      summary: List all monthly transparency records
+      responses:
+        "200":
+          description: Monthly transparency records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransparencyMonthsResult"
+
+  /transparency/totals:
+    get:
+      operationId: getTransparencyTotals
+      tags: [transparency]
+      summary: Get all-time aggregate donation and expense totals
+      responses:
+        "200":
+          description: Aggregate totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransparencyTotals"
 
   /search:
     get:
@@ -919,3 +947,36 @@ components:
         country: { type: string }
         logoUrl: { type: ["string", "null"] }
         playerCount: { type: integer }
+
+    TransparencyMonth:
+      type: object
+      required: [id, periodYear, periodMonth, expensesCents, donationsCents, goalFoundationCents]
+      properties:
+        id: { type: integer }
+        periodYear: { type: integer }
+        periodMonth: { type: integer }
+        expensesCents: { type: integer }
+        donationsCents: { type: integer }
+        goalFoundationCents: { type: integer }
+        invoiceUrl: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TransparencyTotals:
+      type: object
+      required: [totalExpensesCents, totalDonationsCents, totalGoalFoundationCents, monthCount]
+      properties:
+        totalExpensesCents: { type: integer }
+        totalDonationsCents: { type: integer }
+        totalGoalFoundationCents: { type: integer }
+        monthCount: { type: integer }
+
+    TransparencyMonthsResult:
+      type: object
+      required: [months]
+      properties:
+        months:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransparencyMonth"

@@ -52,3 +52,6 @@ export * from './transfer';
 export * from './transferPerformanceTrend';
 export * from './transferStatus';
 export * from './transferTransferType';
+export * from './transparencyMonth';
+export * from './transparencyMonthsResult';
+export * from './transparencyTotals';

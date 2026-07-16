@@ -14,6 +14,7 @@ import Transfers from '@/pages/Transfers';
 import Rankings from '@/pages/Rankings';
 import Schedule from '@/pages/Schedule';
 import About from '@/pages/About';
+import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -28,21 +29,27 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/players" component={Players} />
-        <Route path="/players/:id" component={PlayerProfile} />
-        <Route path="/fixtures" component={Fixtures} />
-        <Route path="/news" component={News} />
-        <Route path="/injuries" component={Injuries} />
-        <Route path="/transfers" component={Transfers} />
-        <Route path="/rankings" component={Rankings} />
-        <Route path="/schedule" component={Schedule} />
-        <Route path="/about" component={About} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      {/* Admin panel — no Layout wrapper, full-page experience */}
+      <Route path="/admin" component={Admin} />
+      <Route>
+        <Layout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/players" component={Players} />
+            <Route path="/players/:id" component={PlayerProfile} />
+            <Route path="/fixtures" component={Fixtures} />
+            <Route path="/news" component={News} />
+            <Route path="/injuries" component={Injuries} />
+            <Route path="/transfers" component={Transfers} />
+            <Route path="/rankings" component={Rankings} />
+            <Route path="/schedule" component={Schedule} />
+            <Route path="/about" component={About} />
+            <Route component={NotFound} />
+          </Switch>
+        </Layout>
+      </Route>
+    </Switch>
   );
 }
 

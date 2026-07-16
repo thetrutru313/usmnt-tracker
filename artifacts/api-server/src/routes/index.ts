@@ -10,6 +10,8 @@ import rankingsRouter from "./rankings";
 import searchRouter from "./search";
 import adminRouter from "./admin";
 import scheduleRouter from "./schedule";
+import transparencyRouter from "./transparency";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -24,5 +26,7 @@ router.use(rankingsRouter);
 router.use(searchRouter);
 router.use(adminRouter);
 router.use(scheduleRouter);
+router.use(transparencyRouter);
+router.use(storageRouter);
 
 export default router;
