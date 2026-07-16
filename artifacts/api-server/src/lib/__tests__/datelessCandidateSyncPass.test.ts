@@ -32,7 +32,7 @@
  * alone.
  */
 
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Shared mock state — vi.hoisted so factories run before vi.mock calls.
@@ -84,7 +84,7 @@ vi.mock("../apiFootballSync", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { syncPlayerClubs } from "../playerClubSync";
+import { syncPlayerClubs, KNOWN_PLAYER_IDS } from "../playerClubSync";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -344,5 +344,108 @@ describe("syncPlayerClubs — DATELESS SURNAME-FALLBACK CANDIDATE REJECTED path 
         "mismatched-initial candidate must be rejected and the player left unresolved.",
       ].join(" "),
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario C — two-pass null-pin override
+// ---------------------------------------------------------------------------
+//
+// Run 1: dateless candidate wins and its id is written to the DB.
+// Between runs: a human reviewer adds a null pin to KNOWN_PLAYER_IDS after
+// seeing the DATELESS CANDIDATE MATCHED warning.
+// Run 2: applyKnownPlayerIdOverrides sees the null pin and calls
+// db.update({ apiFootballPlayerId: null }) to clear the previously-written id.
+// Cleanup: the test removes the temporary null pin so it doesn't leak.
+//
+// This guards the ordering contract: KNOWN_PLAYER_IDS must be checked (and
+// able to clear) an id that was written by the dateless-match path on the
+// prior run.  A future refactor that moves applyKnownPlayerIdOverrides after
+// the search step — or skips it when the player already has an id — would
+// silently break this invariant.
+// ---------------------------------------------------------------------------
+
+describe("syncPlayerClubs — null pin in KNOWN_PLAYER_IDS clears a dateless match written on the previous run", () => {
+  afterEach(() => {
+    // Remove the temporary null pin so it does not leak into other tests
+    // or persist in the module-level KNOWN_PLAYER_IDS export.
+    delete (KNOWN_PLAYER_IDS as Record<string, number | null>)[PLAYER.name];
+  });
+
+  it("run 1 writes the dateless id; run 2 with a null pin clears it via applyKnownPlayerIdOverrides", async () => {
+    // ── RUN 1 ──────────────────────────────────────────────────────────────
+    // The outer beforeEach already set up mockDb and mockAfFetch for the
+    // Scenario A setup (PLAYER, CLUB, DATELESS_CANDIDATE) — run 1 reuses that.
+    await syncPlayerClubs();
+
+    // Confirm run 1 wrote apiFootballPlayerId = 99001.
+    const run1IdWritten = mockDb.update.mock.results.some((result) => {
+      if (result.type !== "return") return false;
+      const setCalls: unknown[][] = (result.value as { set: { mock: { calls: unknown[][] } } }).set.mock.calls;
+      return setCalls.some(
+        (setArgs) =>
+          setArgs[0] != null &&
+          typeof setArgs[0] === "object" &&
+          (setArgs[0] as Record<string, unknown>).apiFootballPlayerId === DATELESS_CANDIDATE.player.id,
+      );
+    });
+    expect(
+      run1IdWritten,
+      `Expected run 1 to write apiFootballPlayerId=${DATELESS_CANDIDATE.player.id} for the dateless candidate`,
+    ).toBe(true);
+
+    // ── Between runs: add null pin ──────────────────────────────────────────
+    // Simulate a reviewer pinning the player to null after seeing the warning.
+    (KNOWN_PLAYER_IDS as Record<string, number | null>)[PLAYER.name] = null;
+
+    // Reset mocks for run 2, simulating the DB state that was persisted by run 1.
+    vi.clearAllMocks();
+    mockDb.update.mockImplementation(() => ({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+    }));
+    mockDb.delete.mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+    mockDb.insert.mockImplementation(() => ({ values: vi.fn().mockResolvedValue(undefined) }));
+
+    // The DB now returns PLAYER with the id that run 1 wrote.
+    mockDb.select
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue(
+          makeFromResult([{ ...PLAYER, apiFootballPlayerId: DATELESS_CANDIDATE.player.id }]),
+        ),
+      })
+      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([CLUB])) })
+      .mockReturnValue({ from: vi.fn().mockReturnValue(makeFromResult([])) });
+
+    // afFetch routing for run 2 (applyKnownPlayerIdOverrides short-circuits
+    // before the search runs, so these should not be reached for PLAYER).
+    mockAfFetch.mockImplementation((url: string) => {
+      if (url.includes("/players/squads"))   return Promise.resolve([{ players: [] }]);
+      if (url.includes("/players/profiles")) return Promise.resolve([DATELESS_CANDIDATE]);
+      if (url.includes("/transfers"))        return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    // ── RUN 2 ──────────────────────────────────────────────────────────────
+    await syncPlayerClubs();
+
+    // applyKnownPlayerIdOverrides must have called db.update with
+    // { apiFootballPlayerId: null } to clear the dateless id.
+    const run2IdCleared = mockDb.update.mock.results.some((result) => {
+      if (result.type !== "return") return false;
+      const setCalls: unknown[][] = (result.value as { set: { mock: { calls: unknown[][] } } }).set.mock.calls;
+      return setCalls.some(
+        (setArgs) =>
+          setArgs[0] != null &&
+          typeof setArgs[0] === "object" &&
+          (setArgs[0] as Record<string, unknown>).apiFootballPlayerId === null,
+      );
+    });
+    expect(
+      run2IdCleared,
+      [
+        "Expected run 2 to call db.update with apiFootballPlayerId=null,",
+        `clearing the dateless match (id=${DATELESS_CANDIDATE.player.id}) via the null pin in KNOWN_PLAYER_IDS.`,
+      ].join(" "),
+    ).toBe(true);
   });
 });
