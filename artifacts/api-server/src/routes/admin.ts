@@ -5,6 +5,7 @@ import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
+import { syncPlayerClubs } from "../lib/playerClubSync";
 import { syncApiFootballFixtures, syncNationalTeamFixtures } from "../lib/apiFootballSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
@@ -257,6 +258,25 @@ router.post("/admin/trigger-sync", async (req, res): Promise<void> => {
   res.json({ ok: true, scope });
   syncPlayerStatsAndInjuries(12, playerIds).catch((err) =>
     logger.error({ err }, "Admin trigger-sync failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-club-sync
+ * Triggers syncPlayerClubs for all players, bypassing the 23-hour cooldown.
+ * Use when a player's club assignment needs to be refreshed immediately —
+ * e.g. after a transfer window move that the scheduled sync hasn't caught yet.
+ * Returns immediately; sync runs in the background.
+ */
+router.post("/admin/trigger-club-sync", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  logger.info("Admin: trigger-club-sync started");
+  res.json({ ok: true });
+  syncPlayerClubs().catch((err) =>
+    logger.error({ err }, "Admin trigger-club-sync failed"),
   );
 });
 
