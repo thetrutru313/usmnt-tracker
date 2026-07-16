@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable } from "@workspace/db";
 import { eq, desc, isNull, isNotNull } from "drizzle-orm";
@@ -37,7 +38,13 @@ function requireAdminToken(req: Request, res: Response, next: NextFunction): voi
   }
   const auth = req.headers["authorization"] ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (token !== secret) {
+  // Use constant-time comparison to prevent timing side-channel attacks where
+  // an attacker could infer the correct token prefix by measuring response times.
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(secret);
+  const tokenMatch =
+    tokenBuf.length === secretBuf.length && timingSafeEqual(tokenBuf, secretBuf);
+  if (!tokenMatch) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -171,12 +178,15 @@ router.post("/admin/player-candidates/:id/promote", async (req, res): Promise<vo
     res.json({ ok: true, playerId: newPlayerId });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Most likely a slug or API ID conflict
+    // Most likely a slug or API ID conflict — log the raw DB error server-side
+    // but return only a sanitized message to the caller so internal schema
+    // details (table names, constraint names, conflicting values) are not exposed.
     if (msg.includes("unique") || msg.includes("duplicate")) {
-      res.status(409).json({ error: "A player with this name or API ID already exists in the pool", detail: msg });
+      logger.warn({ err, candidateId: id }, "Admin: promote failed — unique constraint violation");
+      res.status(409).json({ error: "A player with this name or API ID already exists in the pool" });
     } else {
       logger.error({ err, candidateId: id }, "Admin: promote failed");
-      res.status(500).json({ error: "Promote failed", detail: msg });
+      res.status(500).json({ error: "Promote failed" });
     }
   }
 });
