@@ -37,7 +37,7 @@ interface TransparencyMonth {
   expensesCents: number;
   donationsCents: number;
   goalFoundationCents: number;
-  invoiceUrl: string | null;
+  invoiceUrls: { label: string; url: string }[];
   notes: string | null;
 }
 
@@ -434,16 +434,21 @@ export default function Transparency() {
                         ${dollars(m.goalFoundationCents)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {m.invoiceUrl ? (
-                          <a
-                            href={`${API_BASE}/api/transparency/invoice${m.invoiceUrl.replace(/^\/objects/, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-                          >
-                            View
-                            <ExternalLink size={11} />
-                          </a>
+                        {m.invoiceUrls?.length > 0 ? (
+                          <div className="flex flex-col items-end gap-1">
+                            {m.invoiceUrls.map((inv, i) => (
+                              <a
+                                key={i}
+                                href={`${API_BASE}/api/transparency/invoice${inv.url.replace(/^\/objects/, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                              >
+                                {inv.label}
+                                <ExternalLink size={10} />
+                              </a>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground/50">—</span>
                         )}

@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,7 +19,7 @@ export const transparencyMonthsTable = pgTable("transparency_months", {
   expensesCents: integer("expenses_cents").notNull().default(0),
   donationsCents: integer("donations_cents").notNull().default(0),
   goalFoundationCents: integer("goal_foundation_cents").notNull().default(0),
-  invoiceUrl: text("invoice_url"),
+  invoiceUrls: jsonb("invoice_urls").$type<{ label: string; url: string }[]>().notNull().default([]),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

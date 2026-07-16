@@ -131,7 +131,7 @@ router.post("/admin/transparency", requireAdminPassword, async (req, res): Promi
     expensesCents?: number;
     donationsCents?: number;
     goalFoundationCents?: number;
-    invoiceUrl?: string | null;
+    invoiceUrls?: { label: string; url: string }[];
     notes?: string | null;
   };
 
@@ -149,7 +149,7 @@ router.post("/admin/transparency", requireAdminPassword, async (req, res): Promi
         expensesCents: body.expensesCents ?? 0,
         donationsCents: body.donationsCents ?? 0,
         goalFoundationCents: body.goalFoundationCents ?? 0,
-        invoiceUrl: body.invoiceUrl ?? null,
+        invoiceUrls: body.invoiceUrls ?? [],
         notes: body.notes ?? null,
       })
       .returning();
@@ -181,7 +181,7 @@ router.put("/admin/transparency/:id", requireAdminPassword, async (req, res): Pr
     expensesCents?: number;
     donationsCents?: number;
     goalFoundationCents?: number;
-    invoiceUrl?: string | null;
+    invoiceUrls?: { label: string; url: string }[];
     notes?: string | null;
   };
 
@@ -191,7 +191,7 @@ router.put("/admin/transparency/:id", requireAdminPassword, async (req, res): Pr
       expensesCents: body.expensesCents,
       donationsCents: body.donationsCents,
       goalFoundationCents: body.goalFoundationCents,
-      invoiceUrl: body.invoiceUrl,
+      invoiceUrls: body.invoiceUrls,
       notes: body.notes,
       updatedAt: new Date(),
     })

@@ -5,16 +5,18 @@ import {
   Pencil,
   Trash2,
   FileUp,
-  ChevronDown,
-  ChevronUp,
   X,
-  Check,
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface InvoiceEntry {
+  label: string;
+  url: string;
+}
 
 interface TransparencyMonth {
   id: number;
@@ -23,7 +25,7 @@ interface TransparencyMonth {
   expensesCents: number;
   donationsCents: number;
   goalFoundationCents: number;
-  invoiceUrl: string | null;
+  invoiceUrls: InvoiceEntry[];
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -36,8 +38,7 @@ interface MonthFormState {
   donationsCents: string;
   goalFoundationCents: string;
   notes: string;
-  invoiceFile: File | null;
-  invoiceUrl: string | null;
+  invoices: InvoiceEntry[];
 }
 
 const MONTH_NAMES = [
@@ -292,8 +293,7 @@ const emptyForm = (): MonthFormState => ({
   donationsCents: "",
   goalFoundationCents: "",
   notes: "",
-  invoiceFile: null,
-  invoiceUrl: null,
+  invoices: [],
 });
 
 function fromMonth(m: TransparencyMonth): MonthFormState {
@@ -304,15 +304,14 @@ function fromMonth(m: TransparencyMonth): MonthFormState {
     donationsCents: dollars(m.donationsCents),
     goalFoundationCents: dollars(m.goalFoundationCents),
     notes: m.notes ?? "",
-    invoiceFile: null,
-    invoiceUrl: m.invoiceUrl,
+    invoices: m.invoiceUrls ?? [],
   };
 }
 
 interface MonthFormProps {
   initial: MonthFormState;
   token: string;
-  onSave: (data: Omit<MonthFormState, "invoiceFile">) => void;
+  onSave: (data: MonthFormState) => void;
   onCancel: () => void;
   onUnauthorized: () => void;
   isNew: boolean;
@@ -321,32 +320,47 @@ interface MonthFormProps {
 
 function MonthForm({ initial, token, onSave, onCancel, onUnauthorized, isNew, isSaving }: MonthFormProps) {
   const [form, setForm] = React.useState<MonthFormState>(initial);
+  const [addingInvoice, setAddingInvoice] = React.useState(false);
+  const [pendingLabel, setPendingLabel] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState("");
 
-  function set(key: keyof MonthFormState, value: string | null) {
+  function set(key: keyof MonthFormState, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function removeInvoice(index: number) {
+    setForm((f) => ({ ...f, invoices: f.invoices.filter((_, i) => i !== index) }));
+  }
+
+  function updateInvoiceLabel(index: number, label: string) {
+    setForm((f) => ({
+      ...f,
+      invoices: f.invoices.map((inv, i) => (i === index ? { ...inv, label } : inv)),
+    }));
+  }
+
+  async function handleAddInvoiceFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setUploadError("");
     try {
-      // Step 1: get presigned URL
       const { uploadUrl, objectPath } = await apiFetch("/admin/transparency/upload-url", token, {
         method: "POST",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       }) as { uploadUrl: string; objectPath: string };
-      // Step 2: PUT directly to GCS
       const put = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": file.type },
         body: file,
       });
       if (!put.ok) throw new Error("Upload to GCS failed");
-      setForm((f) => ({ ...f, invoiceFile: file, invoiceUrl: objectPath }));
+      const label = pendingLabel.trim() || file.name;
+      setForm((f) => ({ ...f, invoices: [...f.invoices, { label, url: objectPath }] }));
+      setAddingInvoice(false);
+      setPendingLabel("");
+      e.target.value = "";
     } catch (err) {
       if (err instanceof SessionExpiredError) {
         clearSession();
@@ -361,9 +375,7 @@ function MonthForm({ initial, token, onSave, onCancel, onUnauthorized, isNew, is
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { invoiceFile: _unused, ...rest } = form;
-    void _unused;
-    onSave(rest);
+    onSave(form);
   }
 
   return (
@@ -425,20 +437,76 @@ function MonthForm({ initial, token, onSave, onCancel, onUnauthorized, isNew, is
           className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
         />
       </div>
-      <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Invoice (optional)</label>
-        <div className="flex items-center gap-3">
-          <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-xs font-medium cursor-pointer hover:bg-sidebar-accent transition-colors ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
-            <FileUp size={14} />
-            {uploading ? "Uploading…" : form.invoiceUrl ? "Replace file" : "Upload file"}
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={handleFileChange} />
-          </label>
-          {form.invoiceUrl && (
-            <span className="text-xs text-green-400 flex items-center gap-1">
-              <Check size={12} /> Uploaded
-            </span>
-          )}
-        </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">Invoices (optional)</label>
+        {form.invoices.map((inv, i) => (
+          <div key={i} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card/50">
+            <input
+              type="text"
+              value={inv.label}
+              onChange={(e) => updateInvoiceLabel(i, e.target.value)}
+              className="flex-1 min-w-0 px-2 py-1 rounded border border-border bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+              placeholder="Label"
+            />
+            <a
+              href={`${API_BASE}/api/transparency/invoice${inv.url.replace(/^\/objects/, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              View ↗
+            </a>
+            <button
+              type="button"
+              onClick={() => removeInvoice(i)}
+              className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              title="Remove"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
+        {addingInvoice ? (
+          <div className="flex items-center gap-2 p-2 rounded-lg border border-primary/30 bg-primary/5">
+            <input
+              list="invoice-label-suggestions"
+              type="text"
+              value={pendingLabel}
+              onChange={(e) => setPendingLabel(e.target.value)}
+              placeholder="Label (e.g. API costs, Replit…)"
+              className="flex-1 min-w-0 px-2 py-1 rounded border border-border bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+              autoFocus
+            />
+            <datalist id="invoice-label-suggestions">
+              <option value="API costs" />
+              <option value="Replit" />
+              <option value="BMAC donations" />
+              <option value="Goal Foundation" />
+            </datalist>
+            <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-medium cursor-pointer hover:bg-sidebar-accent transition-colors shrink-0 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+              <FileUp size={12} />
+              {uploading ? "Uploading…" : "Choose file"}
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={handleAddInvoiceFile} />
+            </label>
+            <button
+              type="button"
+              onClick={() => { setAddingInvoice(false); setPendingLabel(""); setUploadError(""); }}
+              className="shrink-0 p-1 rounded hover:bg-sidebar-accent text-muted-foreground transition-colors"
+              title="Cancel"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingInvoice(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+          >
+            <Plus size={12} />
+            Add invoice
+          </button>
+        )}
         {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
       </div>
       <div className="flex items-center gap-2 pt-1">
@@ -537,7 +605,7 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
   const months = data ?? [];
 
   const saveMutation = useMutation({
-    mutationFn: async ({ id, form }: { id: number | null; form: Omit<MonthFormState, "invoiceFile"> }) => {
+    mutationFn: async ({ id, form }: { id: number | null; form: MonthFormState }) => {
       const body = {
         periodYear: parseInt(form.periodYear),
         periodMonth: parseInt(form.periodMonth),
@@ -545,7 +613,7 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
         donationsCents: cents(form.donationsCents),
         goalFoundationCents: cents(form.goalFoundationCents),
         notes: form.notes || null,
-        invoiceUrl: form.invoiceUrl,
+        invoiceUrls: form.invoices,
       };
       if (id === null) {
         await apiFetch("/admin/transparency", token, { method: "POST", body: JSON.stringify(body) });
@@ -712,31 +780,17 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
                         <span>Expenses: <span className="text-foreground font-mono">${dollars(m.expensesCents)}</span></span>
                         <span>Donations: <span className="text-green-400 font-mono">${dollars(m.donationsCents)}</span></span>
                         <span>Goal Foundation: <span className="text-primary font-mono">${dollars(m.goalFoundationCents)}</span></span>
-                        {m.invoiceUrl && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(`${API_BASE}/api/storage${m.invoiceUrl}`, {
-                                  headers: { Authorization: `Bearer ${token}` },
-                                });
-                                if (res.status === 401) {
-                                  handleUnauthorized();
-                                  return;
-                                }
-                                if (!res.ok) throw new Error("Failed to fetch invoice");
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, "_blank");
-                                setTimeout(() => URL.revokeObjectURL(url), 10000);
-                              } catch {
-                                alert("Failed to open invoice.");
-                              }
-                            }}
+                        {m.invoiceUrls?.map((inv, i) => (
+                          <a
+                            key={i}
+                            href={`${API_BASE}/api/transparency/invoice${inv.url.replace(/^\/objects/, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-primary underline underline-offset-2 text-xs"
                           >
-                            Invoice ↗
-                          </button>
-                        )}
+                            {inv.label} ↗
+                          </a>
+                        ))}
                       </div>
                       {m.notes && <p className="text-xs text-muted-foreground mt-1 italic">{m.notes}</p>}
                     </div>
