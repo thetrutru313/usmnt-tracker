@@ -246,8 +246,20 @@ export interface AggregatedSeasonStats {
  * the player's on-file club is dropped too, so a national-team appearance
  * can never contribute to a "club season" row regardless of league name.
  */
-export function aggregateSeasonBlocks(allBlocks: AfSeasonStatBlock[], clubTeamId: number | null): AggregatedSeasonStats | null {
-  const blocks = allBlocks.filter((b) => !isFriendlyLeague(b.league.name) && (clubTeamId == null || b.team.id === clubTeamId));
+/**
+ * @param teamFilter
+ *   - `number`       — include only blocks for that specific team (current-club mode)
+ *   - `Set<number>`  — include blocks for any team in the set (all-clubs mode for history)
+ *   - `null`         — include all non-friendly blocks regardless of team (no longer used
+ *                      in production paths; kept for tests that pre-date the Set variant)
+ */
+export function aggregateSeasonBlocks(allBlocks: AfSeasonStatBlock[], teamFilter: number | Set<number> | null): AggregatedSeasonStats | null {
+  const blocks = allBlocks.filter((b) => {
+    if (isFriendlyLeague(b.league.name)) return false;
+    if (teamFilter === null) return true;
+    if (typeof teamFilter === "number") return b.team.id === teamFilter;
+    return teamFilter.has(b.team.id);
+  });
   if (blocks.length === 0) return null;
 
   let minutes = 0;
@@ -702,6 +714,11 @@ export async function syncPlayerStatsAndInjuries(
   const players = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
 
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
+  // Set of every API-Football team ID that maps to a tracked club. Used by
+  // aggregateSeasonBlocks when building season_all rows so that stats from a
+  // player's prior clubs are retained after a transfer while national-team
+  // blocks (e.g. USMNT — not a row in clubsTable) remain excluded.
+  const allClubTeamIds = new Set(clubs.map((c) => c.apiFootballTeamId).filter((id): id is number => id != null));
 
   await ensurePlayerApiFootballIds(players, clubsById);
 
@@ -846,8 +863,20 @@ export async function syncPlayerStatsAndInjuries(
         // most recent becomes "season" and the next-most-recent "previous_season".
         const seasonYears = seasonYearCandidates();
         const blocksByYear = await Promise.all(seasonYears.map((y) => fetchSeasonStats(player.apiFootballPlayerId!, y)));
+        // Current-club filter: used for the primary season/previous_season rows
+        // and the form-tier calculation, where mixing prior-club data into the
+        // season baseline would skew the delta for a player who just transferred.
         const withData = seasonYears
           .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, clubTeamId) }))
+          .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
+          .sort((a, b) => b.year - a.year);
+        // All-clubs variant: used only for the season_all history dropdown.
+        // Filters to any team ID present in our clubs table so prior-club stats
+        // are preserved after a transfer (e.g. Tillman PSV→Leverkusen keeps his
+        // PSV 2024/25 season) while national-team blocks are still excluded
+        // (USMNT is not a row in clubsTable, so its blocks are dropped here too).
+        const withDataAllClubs = seasonYears
+          .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, allClubTeamIds) }))
           .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
           .sort((a, b) => b.year - a.year);
 
@@ -882,8 +911,9 @@ export async function syncPlayerStatsAndInjuries(
         }
         // Keep every season-year that returned real data (not just the
         // latest two) so the player profile's club-season selector has more
-        // than just "current"/"previous" to choose from.
-        await replaceSeasonHistoryRows(player.id, withData);
+        // than just "current"/"previous" to choose from. Uses the all-clubs
+        // variant so prior-club seasons survive a transfer.
+        await replaceSeasonHistoryRows(player.id, withDataAllClubs);
 
         // Update form tier now that we have all three pieces: last5 ratings
         // from match logs, previous5 ratings (trajectory), and season avg
