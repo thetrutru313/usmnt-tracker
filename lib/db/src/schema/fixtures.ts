@@ -5,9 +5,6 @@ import { clubsTable } from "./clubs";
 
 export const fixturesTable = pgTable("fixtures", {
   id: serial("id").primaryKey(),
-  // Sportmonks fixture id — unused while that sync is disabled, kept for a
-  // future switch back. Null for seeded/manual/API-Football rows.
-  sportmonksFixtureId: integer("sportmonks_fixture_id").unique(),
   // API-Football fixture id, when this row came from the live sync — lets the
   // sync upsert instead of duplicating on every run. Null for seeded rows.
   apiFootballFixtureId: integer("api_football_fixture_id").unique(),

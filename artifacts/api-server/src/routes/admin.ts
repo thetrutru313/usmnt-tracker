@@ -5,7 +5,7 @@ import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
-import { syncSportmonksFixtures } from "../lib/sportmonksSync";
+import { syncApiFootballFixtures } from "../lib/apiFootballSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -263,14 +263,14 @@ router.post("/admin/trigger-sync", async (req, res): Promise<void> => {
 /**
  * POST /admin/trigger-fixtures-sync
  * Body (optional): { clubIds?: number[] }
- * Triggers syncSportmonksFixtures scoped to the given club IDs (or all clubs
+ * Triggers syncApiFootballFixtures scoped to the given club IDs (or all clubs
  * if clubIds is omitted). Returns immediately; sync runs in the background.
  * Use clubIds to seed fixtures for newly-added clubs without re-syncing every
- * club and burning Sportmonks quota unnecessarily.
+ * club and burning API-Football quota unnecessarily.
  */
 router.post("/admin/trigger-fixtures-sync", async (req, res): Promise<void> => {
-  if (!process.env["SPORTMONKS_API_TOKEN"]) {
-    res.status(503).json({ error: "SPORTMONKS_API_TOKEN not configured" });
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
     return;
   }
   const clubIds: number[] | undefined = Array.isArray(req.body?.clubIds)
@@ -279,7 +279,7 @@ router.post("/admin/trigger-fixtures-sync", async (req, res): Promise<void> => {
   const scope = clubIds ? `${clubIds.length} clubs` : "all clubs";
   logger.info({ scope, clubIds }, "Admin: trigger-fixtures-sync started");
   res.json({ ok: true, scope });
-  syncSportmonksFixtures(clubIds).catch((err) =>
+  syncApiFootballFixtures(clubIds).catch((err) =>
     logger.error({ err }, "Admin trigger-fixtures-sync failed"),
   );
 });

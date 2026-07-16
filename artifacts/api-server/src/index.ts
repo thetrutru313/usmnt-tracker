@@ -6,9 +6,6 @@ import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
-// Sportmonks club-fixtures sync (./lib/sportmonksSync.ts) is implemented but
-// intentionally not started — the user upgraded API-Football instead, which
-// is now live. See replit.md and .agents/memory/usmnt-tracker.md.
 
 const rawPort = process.env["PORT"];
 

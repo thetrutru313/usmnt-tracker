@@ -345,12 +345,18 @@ export async function backfillLegacyFixturePlayerClubIds(): Promise<{ backfilled
   return { backfilled };
 }
 
-export async function syncApiFootballFixtures(): Promise<{ clubsSynced: number; fixturesUpserted: number; fixturesReconciled: number; fixturesRemoved: number; failures: number }> {
+export async function syncApiFootballFixtures(
+  /** When provided, only syncs fixtures for the given club DB ids. Clubs
+   *  outside this list are skipped entirely, incurring zero additional API
+   *  calls. The hourly scheduled run omits this parameter to sync all clubs. */
+  clubIds?: number[],
+): Promise<{ clubsSynced: number; fixturesUpserted: number; fixturesReconciled: number; fixturesRemoved: number; failures: number }> {
   await backfillLegacyFixturePlayerClubIds();
 
-  const clubs = await db
+  const allClubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
+  const clubs = clubIds ? allClubs.filter((c) => clubIds.includes(c.id)) : allClubs;
   const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId }).from(playersTable);
   const playersByClub = new Map<number, typeof players>();
   for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
