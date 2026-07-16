@@ -436,7 +436,7 @@ export default function Transparency() {
                       <TableCell className="text-right">
                         {m.invoiceUrl ? (
                           <a
-                            href={m.invoiceUrl}
+                            href={`${API_BASE}/api/transparency/invoice${m.invoiceUrl.replace(/^\/objects/, "")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"

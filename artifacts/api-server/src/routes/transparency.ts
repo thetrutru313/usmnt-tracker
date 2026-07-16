@@ -3,7 +3,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { db, transparencyMonthsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 
@@ -68,6 +68,40 @@ router.get("/transparency/totals", async (_req, res): Promise<void> => {
     totalGoalFoundationCents: totals?.totalGoalFoundationCents ?? 0,
     monthCount: totals?.monthCount ?? 0,
   });
+});
+
+/**
+ * GET /transparency/invoice/*objectPath
+ * Public endpoint — streams an uploaded invoice file (PDF or image) directly
+ * from GCS without requiring admin auth. Invoices are intentionally public so
+ * visitors can verify the transparency records.
+ */
+router.get("/transparency/invoice/*objectPath", async (req: Request, res: Response): Promise<void> => {
+  const service = new ObjectStorageService();
+  try {
+    const suffix = (req.params as Record<string, string>)["objectPath"] ?? "";
+    const objectPath = `/objects/${suffix}`;
+    const file = await service.getObjectEntityFile(objectPath);
+    const response = await service.downloadObject(file, /* cacheTtlSec */ 3600);
+
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    // Override cache-control: invoices are public and immutable once uploaded.
+    res.setHeader("Cache-Control", "public, max-age=3600, immutable");
+    const nodeBody = response.body;
+    if (!nodeBody) {
+      res.status(404).end();
+      return;
+    }
+    const { Readable } = await import("node:stream");
+    Readable.fromWeb(nodeBody as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Invoice not found" });
+    } else {
+      logger.error({ err }, "Transparency: failed to serve invoice");
+      res.status(500).json({ error: "Failed to serve invoice" });
+    }
+  }
 });
 
 // ── Admin write endpoints ─────────────────────────────────────────────────────
