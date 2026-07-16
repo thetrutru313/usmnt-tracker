@@ -76,10 +76,25 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   "Cavan Sullivan": 462853,
   // Not yet indexed in API-Football — common surnames cause false positive
   // matches via surname search. Pin to null until a verified id is known.
-  // Cruz Medina: age-tolerance edge-case matched a Chilean C. Medina (born 2001).
+  //
+  // Cruz Medina: verified 2026-07-16 against /players/squads?team=1596 (San
+  // Jose Earthquakes) and /players/profiles?search=Medina — not present in
+  // either. No USA-nationality "C. Medina" of the right age exists in the
+  // index. Previously the age-tolerance check matched a Chilean C. Medina
+  // (born 2001) — the pin prevents that false-positive from re-emerging.
+  // To lift: verify against the 2026-27 San Jose squad once published, or
+  // search /players/profiles?search=Medina and confirm birth date, then
+  // replace null with the verified number and run trigger-sync for player 66.
   "Cruz Medina": null,
-  // Manu Romero: "G. Romero USA, birth=None" was the sole USA-nationality hit,
-  // winning the unambiguous-surname fallback despite the initial mismatch.
+  // Manu Romero: verified 2026-07-16 against /players/squads?team=7926 (Real
+  // Madrid U19) and /players/profiles?search=Romero — not present in either.
+  // USA-nationality hits are C. Romero, J. Romero, G. Romero (no birth date),
+  // Charlie Romero — none match "M. Romero". Previously "G. Romero USA,
+  // birth=None" was winning the unambiguous-surname fallback due to initial
+  // mismatch; the pin prevents that from recurring.
+  // To lift: verify against the 2026-27 Real Madrid U19 squad once published,
+  // or search /players/profiles?search=Romero and confirm birth date, then
+  // replace null with the verified number and run trigger-sync for player 73.
   "Manu Romero": null,
 };
 
