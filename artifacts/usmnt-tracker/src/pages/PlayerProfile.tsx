@@ -1,9 +1,9 @@
-import { useGetPlayer } from "@workspace/api-client-react";
+import { useGetPlayer, useListNews } from "@workspace/api-client-react";
 import { useParams } from "wouter";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
 import { PoolTierIcon, POOL_TIER_STYLES } from "@/components/FixtureCard";
 import type { PoolTier } from "@/components/FixtureCard";
@@ -26,6 +26,11 @@ export default function PlayerProfile() {
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const [matchFilter, setMatchFilter] = useState<"all" | "club" | "usmnt">("all");
+
+  const { data: transferNews } = useListNews(
+    { playerId, category: "Transfer Rumors", limit: 3 },
+    { query: { enabled: !!playerId } as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  );
 
   // The generated hook's `query` option type omits `Partial<>`, so a bare
   // `{ enabled }` object doesn't structurally satisfy it even though the
@@ -457,6 +462,41 @@ export default function PlayerProfile() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Transfer News */}
+          {transferNews && transferNews.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
+                  <Newspaper size={16} className="text-muted-foreground" />
+                  Transfer News
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {transferNews.map(article => (
+                    <a
+                      key={article.id}
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start justify-between gap-2 px-4 py-3 hover:bg-muted/30 transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-xs font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                          {article.headline}
+                        </p>
+                        <p className="text-[10px] font-mono text-muted-foreground">
+                          {article.source} · {format(new Date(article.publishedAt), "MMM d")}
+                        </p>
+                      </div>
+                      <ExternalLink size={12} className="text-muted-foreground shrink-0 mt-0.5 group-hover:text-primary transition-colors" />
+                    </a>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Upcoming Fixtures */}
           {player.upcomingFixtures && player.upcomingFixtures.length > 0 && (
