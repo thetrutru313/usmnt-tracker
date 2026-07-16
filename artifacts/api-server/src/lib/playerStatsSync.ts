@@ -390,9 +390,16 @@ export function computeFormTier(
   let score = 50 * seasonDelta;
   if (prev5?.avgRating != null) score += 30 * (last5.avgRating - prev5.avgRating);
 
+  // Trajectory gate: "rising" and "on_fire" require the last-5 average to be
+  // at least as high as the prior-5 average. Without this, a player with a
+  // very low season baseline (dragged down by a bad early stretch) can score
+  // into "rising" even while every recent game is worse than the five before
+  // it. When the trajectory is downward, cap the tier at "steady".
+  const trajectoryIsDown = prev5?.avgRating != null && last5.avgRating < prev5.avgRating;
+
   let trend: PerformanceTrend;
-  if (score >= 25) trend = "on_fire";
-  else if (score >= 12) trend = "rising";
+  if (!trajectoryIsDown && score >= 25) trend = "on_fire";
+  else if (!trajectoryIsDown && score >= 12) trend = "rising";
   else if (score > -12) trend = "steady";
   else if (score > -25) trend = "falling";
   else trend = "ice_cold";

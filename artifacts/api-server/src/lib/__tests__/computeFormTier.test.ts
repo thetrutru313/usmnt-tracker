@@ -188,6 +188,60 @@ describe("computeFormTier — trajectory term (with prev5)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Trajectory gate — last5 < prev5 must never produce rising / on_fire
+// ---------------------------------------------------------------------------
+describe("computeFormTier — trajectory gate (last5 < prev5 cannot be rising/on_fire)", () => {
+  it("caps at steady when season delta is large-positive but trajectory is downward", () => {
+    // season avg 6.0, prior-5 7.5, last-5 6.8
+    // score = 50*(6.8−6.0) + 30*(6.8−7.5) = 40 − 21 = +19 → would be rising without gate
+    // gate: last5 (6.8) < prev5 (7.5) → cap at steady
+    const last5 = makeStats({ avgRating: 6.8 });
+    const prev5 = makeStats({ avgRating: 7.5 });
+    expect(computeFormTier(last5, prev5, 6.0)).toEqual({ trend: "steady", trending: false });
+  });
+
+  it("caps at steady when score would reach on_fire but trajectory is downward", () => {
+    // season avg 5.5, prior-5 8.0, last-5 7.0
+    // score = 50*(7.0−5.5) + 30*(7.0−8.0) = 75 − 30 = +45 → would be on_fire without gate
+    // gate: last5 (7.0) < prev5 (8.0) → cap at steady
+    const last5 = makeStats({ avgRating: 7.0 });
+    const prev5 = makeStats({ avgRating: 8.0 });
+    expect(computeFormTier(last5, prev5, 5.5)).toEqual({ trend: "steady", trending: false });
+  });
+
+  it("still reaches falling when trajectory is downward and score is negative", () => {
+    // season avg 7.5, prior-5 7.8, last-5 6.7
+    // score = 50*(6.7−7.5) + 30*(6.7−7.8) = −40 − 33 = −73 → ice_cold
+    // gate does NOT affect falling/ice_cold — only blocks rising/on_fire
+    const last5 = makeStats({ avgRating: 6.7 });
+    const prev5 = makeStats({ avgRating: 7.8 });
+    expect(computeFormTier(last5, prev5, 7.5)).toEqual({ trend: "ice_cold", trending: false });
+  });
+
+  it("gate is inactive when prev5 is null — no trajectory data, no penalty", () => {
+    // Without prev5, there is no trajectory to evaluate; season delta alone drives the tier
+    // score = 50*(6.8−6.0) = +40 → on_fire (no gate applies)
+    const last5 = makeStats({ avgRating: 6.8 });
+    expect(computeFormTier(last5, null, 6.0)).toEqual({ trend: "on_fire", trending: true });
+  });
+
+  it("gate is inactive when prev5.avgRating is null", () => {
+    // prev5 exists but has no rating — trajectory term is skipped, so gate also skips
+    const last5 = makeStats({ avgRating: 6.8 });
+    const prev5 = makeStats({ avgRating: null });
+    expect(computeFormTier(last5, prev5, 6.0)).toEqual({ trend: "on_fire", trending: true });
+  });
+
+  it("rising is still awarded when last5 equals prev5 exactly (flat trajectory)", () => {
+    // Boundary: last5 === prev5 → trajectoryIsDown is false → gate inactive
+    // score = 50*(7.3−7.0) + 30*(7.3−7.3) = 15 + 0 = 15 → rising
+    const last5 = makeStats({ avgRating: 7.3 });
+    const prev5 = makeStats({ avgRating: 7.3 });
+    expect(computeFormTier(last5, prev5, 7.0)).toEqual({ trend: "rising", trending: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // "trending" flag — must be true for on_fire and rising only
 // ---------------------------------------------------------------------------
 describe("computeFormTier — trending flag", () => {
