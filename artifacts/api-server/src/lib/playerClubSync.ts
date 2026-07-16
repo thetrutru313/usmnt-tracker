@@ -676,19 +676,23 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
       }
 
       const isLoan = (latest.type ?? "").toLowerCase().includes("loan");
+      // Prefer the API's teams.out.name (who they left) over the current DB
+      // club — if the DB club was wrong at sync time, currentClub?.name would
+      // record the transfer direction backwards.
+      const fromClubName = latest.teams.out.name || currentClub?.name || "Unknown";
       await db.update(playersTable).set({ clubId: newClub.id }).where(eq(playersTable.id, player.id));
       await db.insert(transfersTable).values({
         playerId: player.id,
-        fromClub: currentClub?.name ?? latest.teams.out.name,
+        fromClub: fromClubName,
         toClub: newClub.name,
         transferType: isLoan ? "loan" : "transfer",
         fee: !isLoan ? (latest.type ?? null) : null,
         status: "confirmed",
         announcedAt: new Date(latest.date),
-        summary: `${player.name} moved from ${currentClub?.name ?? latest.teams.out.name} to ${newClub.name} (synced from API-Football transfer history).`,
+        summary: `${player.name} moved from ${fromClubName} to ${newClub.name} (synced from API-Football transfer history).`,
       });
       clubsUpdated++;
-      logger.info({ player: player.name, from: currentClub?.name, to: newClub.name }, "Player club updated via API-Football sync");
+      logger.info({ player: player.name, from: fromClubName, to: newClub.name }, "Player club updated via API-Football sync");
     } catch (err) {
       failures++;
       logger.warn({ err, player: player.name }, "API-Football transfers fetch failed — keeping last known club");
