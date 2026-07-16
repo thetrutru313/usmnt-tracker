@@ -3,7 +3,7 @@ import { useListFixtures } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
-import { FixtureCard, type PoolTier } from "@/components/FixtureCard";
+import { FixtureCard, PoolTierIcon, type PoolTier } from "@/components/FixtureCard";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -28,7 +28,8 @@ function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string
           className="justify-start flex-nowrap gap-1"
         >
           {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap">
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1">
+              {f.value !== "all" && <PoolTierIcon tier={f.value} />}
               {f.label}
             </ToggleGroupItem>
           ))}

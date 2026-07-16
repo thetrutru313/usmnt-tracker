@@ -6,8 +6,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Search, SlidersHorizontal, Shield, Swords, Goal } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-type PoolTier = "core" | "inMix" | "prospect";
+import { PoolTierIcon, type PoolTier } from "@/components/FixtureCard";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -73,7 +72,8 @@ export default function Players() {
           className="justify-start flex-nowrap gap-1"
         >
           {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap">
+            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1">
+              {f.value !== "all" && <PoolTierIcon tier={f.value} />}
               {f.label}
             </ToggleGroupItem>
           ))}
