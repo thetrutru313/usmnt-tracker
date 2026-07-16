@@ -297,3 +297,93 @@ describe("stale form badge — no match logs at new club after transfer", () => 
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Exception-path guard
+// ---------------------------------------------------------------------------
+// Verifies that a stale form badge is cleared even when the season-stats API
+// call throws (e.g. rate-limit error) after the last5 row has been deleted.
+//
+// Without the early reset added alongside deleteStatsRow("last5"), the
+// club-level catch block would swallow the exception and the player's
+// performanceTrend would remain at whatever stale value was written by a
+// prior sync run. With the fix the reset is written before any fetch that
+// could throw, so the badge is always cleared when last5 is absent.
+// ---------------------------------------------------------------------------
+
+describe("stale form badge — reset survives season-stats API exception", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedSetCalls.length = 0;
+    capturedWhereCallsForStatsDelete.length = 0;
+
+    mockResolveTeamId.mockResolvedValue(NEW_CLUB_TEAM_ID);
+    mockEnsurePlayerApiFootballIds.mockResolvedValue(undefined);
+
+    // First afFetch call is for national-team injuries (returns []).
+    // Second call is for club fixtures (returns [] → no match logs → last5 = null).
+    // Third+ calls are for season stats and THROW to simulate an API error.
+    mockAfFetch
+      .mockResolvedValueOnce([]) // national-team injuries
+      .mockResolvedValueOnce([]) // club fixtures
+      .mockRejectedValue(new Error("API rate limit")); // season-stats fetch
+
+    mockDb.select
+      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([CLUB])) })
+      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([PLAYER])) })
+      .mockReturnValue({ from: vi.fn().mockReturnValue(makeFromResult([])) });
+
+    mockDb.delete.mockImplementation((table: unknown) => ({
+      where: vi.fn().mockImplementation((condition: unknown) => {
+        if (table === tPlayerStats) {
+          capturedWhereCallsForStatsDelete.push(condition);
+        }
+        return Promise.resolve(undefined);
+      }),
+    }));
+    mockDb.insert.mockImplementation(() => ({ values: vi.fn().mockResolvedValue(undefined) }));
+    mockDb.update.mockImplementation(() => ({
+      set: vi.fn().mockImplementation((data: unknown) => {
+        capturedSetCalls.push(data);
+        return { where: vi.fn().mockResolvedValue(undefined) };
+      }),
+    }));
+  });
+
+  it("writes performanceTrend = 'steady' before the season-stats fetch throws", async () => {
+    // The club-level catch swallows the API error and increments failures.
+    // Despite the failure, the early reset (added alongside deleteStatsRow)
+    // must have fired before the exception was thrown.
+    await syncPlayerStatsAndInjuries(1);
+
+    const trendUpdates = (capturedSetCalls as Array<Record<string, unknown>>).filter(
+      (data) => "performanceTrend" in data,
+    );
+
+    expect(
+      trendUpdates.length,
+      "expected at least one db.update(playersTable).set({ performanceTrend }) — the early reset must fire before the API call that throws",
+    ).toBeGreaterThanOrEqual(1);
+
+    // Every trend write must be "steady" — no stale non-steady value should survive.
+    for (const write of trendUpdates) {
+      expect(write.performanceTrend, "all trend writes after last5 delete must be steady").toBe("steady");
+      expect(write.trending).toBe(false);
+    }
+  });
+
+  it("deletes the last5 row even when season-stats fetch throws", async () => {
+    await syncPlayerStatsAndInjuries(1);
+
+    function includesValue(condition: unknown, target: unknown): boolean {
+      if (condition == null || typeof condition !== "object") return false;
+      const c = condition as Record<string, unknown>;
+      if ("_eq" in c) return (c._eq as unknown[]).includes(target);
+      if ("_and" in c) return (c._and as unknown[]).some((sub) => includesValue(sub, target));
+      return false;
+    }
+
+    const last5Deleted = capturedWhereCallsForStatsDelete.some((cond) => includesValue(cond, "last5"));
+    expect(last5Deleted, "last5 stats row must be deleted even when season-stats fetch throws").toBe(true);
+  });
+});

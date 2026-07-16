@@ -795,6 +795,13 @@ export async function syncPlayerStatsAndInjuries(
           await upsertStatsRow(player.id, "last5", `${currentSeason}`, last5, cleanSheets);
         } else {
           await deleteStatsRow(player.id, "last5");
+          // Reset the form badge immediately — before any season-stat fetches that
+          // could throw. If an API error fires below and the club-level catch fires,
+          // the trend will already be cleared rather than left stale from a prior run.
+          // The definitive write at the end of this player block (after season stats)
+          // will overwrite this, but with the same value (computeFormTier returns
+          // "steady"/false whenever last5 is null).
+          await db.update(playersTable).set({ performanceTrend: "steady", trending: false }).where(eq(playersTable.id, player.id));
         }
         const prev5 = aggregateFromMatchLogs(logs.slice(5, 10));
         if (prev5) {
