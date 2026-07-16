@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff } from "lucide-react"
+import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
@@ -33,6 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { label: "Transfers", path: "/transfers", icon: RefreshCw },
     { label: "Rankings", path: "/rankings", icon: Trophy },
     { label: "Schedule", path: "/schedule", icon: CalendarRange },
+    { label: "About", path: "/about", icon: Info },
   ]
 
   return (

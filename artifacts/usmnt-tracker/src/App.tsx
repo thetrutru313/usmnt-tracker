@@ -13,6 +13,7 @@ import Injuries from '@/pages/Injuries';
 import Transfers from '@/pages/Transfers';
 import Rankings from '@/pages/Rankings';
 import Schedule from '@/pages/Schedule';
+import About from '@/pages/About';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ function Router() {
         <Route path="/transfers" component={Transfers} />
         <Route path="/rankings" component={Rankings} />
         <Route path="/schedule" component={Schedule} />
+        <Route path="/about" component={About} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
