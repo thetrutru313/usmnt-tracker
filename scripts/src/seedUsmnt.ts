@@ -6,7 +6,6 @@ import {
   fixturePlayersTable,
   newsArticlesTable,
   newsArticlePlayersTable,
-  transfersTable,
   nationalTeamWindowsTable,
 } from "@workspace/db";
 
@@ -461,43 +460,6 @@ async function main() {
   }
 
 
-  // ---- Transfers ----
-  const transferDefs: {
-    player: string;
-    fromClub: string;
-    toClub: string;
-    transferType: "transfer" | "loan" | "contract_extension";
-    fee: string | null;
-    status: "confirmed" | "rumor";
-    probabilityScore: number | null;
-    daysAgo: number;
-    summary: string;
-  }[] = [
-    { player: "Chris Richards", fromClub: "Crystal Palace", toClub: "Crystal Palace", transferType: "contract_extension", fee: null, status: "confirmed", probabilityScore: null, daysAgo: 1, summary: "Richards signed a new three-year deal keeping him at Selhurst Park through 2028." },
-    { player: "Folarin Balogun", fromClub: "AS Monaco", toClub: "Undisclosed Ligue 1 club", transferType: "transfer", fee: "€25M (est.)", status: "rumor", probabilityScore: 42, daysAgo: 2, summary: "Reports suggest Balogun could seek a move away from Monaco in search of regular minutes ahead of the World Cup." },
-    { player: "Malik Tillman", fromClub: "PSV Eindhoven", toClub: "PSV Eindhoven", transferType: "contract_extension", fee: null, status: "rumor", probabilityScore: 68, daysAgo: 4, summary: "PSV are reportedly preparing an improved contract to ward off interest from Bundesliga and Premier League suitors." },
-    { player: "Ricardo Pepi", fromClub: "PSV Eindhoven", toClub: "Bundesliga club (unnamed)", transferType: "transfer", fee: "€30M (est.)", status: "rumor", probabilityScore: 35, daysAgo: 6, summary: "Scouts from at least two Bundesliga clubs have been tracking Pepi's scoring form this season." },
-    { player: "Djordje Mihailovic", fromClub: "AZ Alkmaar", toClub: "Eredivisie rival", transferType: "loan", fee: null, status: "rumor", probabilityScore: 18, daysAgo: 9, summary: "Unconfirmed reports suggest a loan swap is being discussed, though AZ have downplayed the speculation." },
-    { player: "Benjamin Cremaschi", fromClub: "Inter Miami CF", toClub: "Inter Miami CF", transferType: "contract_extension", fee: null, status: "confirmed", probabilityScore: null, daysAgo: 12, summary: "Inter Miami confirmed a contract extension for Cremaschi through the 2027 season with a club option for 2028." },
-  ];
-
-  for (const t of transferDefs) {
-    const player = playerByName.get(t.player)!;
-    const announcedAt = new Date("2026-07-13T12:00:00Z");
-    announcedAt.setUTCDate(announcedAt.getUTCDate() - t.daysAgo);
-    await db.insert(transfersTable).values({
-      playerId: player.id,
-      fromClub: t.fromClub,
-      toClub: t.toClub,
-      transferType: t.transferType,
-      fee: t.fee,
-      status: t.status,
-      probabilityScore: t.probabilityScore,
-      announcedAt: announcedAt,
-      summary: t.summary,
-    });
-  }
-
   // ---- National Team Windows ----
   // Post-World Cup, the next two official FIFA windows are a CONCACAF
   // Nations League group-stage window (first up) and a friendly window
@@ -517,7 +479,7 @@ async function main() {
     },
   ]);
 
-  console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles, ${transferDefs.length} transfers. Player stats/match logs/injuries are populated by the live API-Football sync, not seeded.`);
+  console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles. Transfers are populated by the live API-Football sync, not seeded.`);
   process.exit(0);
 }
 

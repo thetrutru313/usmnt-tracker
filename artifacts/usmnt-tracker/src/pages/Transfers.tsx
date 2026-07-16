@@ -32,7 +32,7 @@ export default function Transfers() {
           <RefreshCw className="text-primary" size={28} />
           Transfer Hub
         </h1>
-        <p className="text-muted-foreground text-sm">Confirmed moves, loans, and credible rumors.</p>
+        <p className="text-muted-foreground text-sm">Confirmed moves and loans from the API-Football feed.</p>
       </div>
 
       <div className="space-y-12">
