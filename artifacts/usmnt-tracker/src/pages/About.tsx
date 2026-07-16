@@ -61,7 +61,7 @@ const pages = [
     icon: Activity,
     label: "Dashboard",
     blurb:
-      "Your at-a-glance view of everything happening right now. See upcoming USMNT fixtures, recent results, the latest player news, and a quick snapshot of the pool across all tiers.",
+      "Your at-a-glance view of everything happening right now. See upcoming matches containing USMNT players, recent results, the latest player news, and a quick snapshot of the pool across all tiers.",
   },
   {
     icon: User2,
@@ -79,7 +79,7 @@ const pages = [
     icon: Calendar,
     label: "Fixtures",
     blurb:
-      "All USMNT match results and upcoming fixtures pulled from the live feed. Click a match to see which tracked players appeared and how they performed.",
+      "All match results containing USMNT players, pulled from the live feed. Each fixture shows the broadcast channel so you always know exactly where to catch the game.",
   },
   {
     icon: CalendarRange,
@@ -109,7 +109,7 @@ const pages = [
     icon: Trophy,
     label: "Rankings",
     blurb:
-      "Club-level context for the players you're tracking — league standings, Champions League positions, and relegation battles. A player's environment matters as much as their numbers.",
+      "Dynamic leaderboards built from recent club performance data. See who's putting up the best individual ratings this week, who's logging the most minutes, and which players are trending upward fastest — useful at-a-glance context for any call-up conversation.",
   },
 ];
 
@@ -452,7 +452,7 @@ export default function About() {
               APIs, Replit, and hosting. If donations exceed those expenses,
               every additional dollar will be donated to the{" "}
               <a
-                href="https://goalfoundation.org"
+                href="https://goal-foundation.com"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
