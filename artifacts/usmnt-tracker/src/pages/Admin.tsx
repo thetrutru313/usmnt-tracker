@@ -10,6 +10,7 @@ import {
   X,
   Check,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -48,6 +49,8 @@ const STORAGE_KEY = "usmnt_admin_token";
 const STORAGE_TS_KEY = "usmnt_admin_token_ts";
 /** How long a saved session stays valid. Adjust as needed. */
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** Show the expiry warning banner when this many milliseconds remain. */
+const WARN_BEFORE_MS = 30 * 60 * 1000; // 30 minutes
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -73,6 +76,105 @@ function clearSession(): void {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(STORAGE_TS_KEY);
   sessionStorage.removeItem(STORAGE_KEY);
+}
+
+// ─── Session expiry hook ───────────────────────────────────────────────────────
+
+/**
+ * Returns the number of minutes remaining in the current session, or null if
+ * there is no active session. Recalculates every 60 seconds.
+ */
+function useSessionExpiry(): number | null {
+  const [minutesLeft, setMinutesLeft] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    function check() {
+      const ts = localStorage.getItem(STORAGE_TS_KEY);
+      if (!ts) { setMinutesLeft(null); return; }
+      const remaining = SESSION_EXPIRY_MS - (Date.now() - parseInt(ts, 10));
+      setMinutesLeft(Math.max(0, Math.floor(remaining / 60_000)));
+    }
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  return minutesLeft;
+}
+
+// ─── Re-auth modal ─────────────────────────────────────────────────────────────
+
+function ReAuthModal({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await apiFetch("/admin/transparency/verify", password, { method: "POST" });
+      saveSession(password);
+      onSuccess();
+    } catch {
+      setError("Incorrect password.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-sm">Re-authenticate</h2>
+          <button
+            onClick={onCancel}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Enter your admin password to extend your session by 24 hours.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="password"
+            autoFocus
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loading || !password}
+              className="flex-1 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {loading ? "Checking…" : "Extend Session"}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-sidebar-accent transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function cents(val: string): number {
@@ -334,6 +436,21 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
+  const [bannerDismissed, setBannerDismissed] = React.useState(false);
+  const [showReAuth, setShowReAuth] = React.useState(false);
+
+  const minutesLeft = useSessionExpiry();
+  const warnThresholdMinutes = Math.ceil(WARN_BEFORE_MS / 60_000);
+  const isExpiringSoon = minutesLeft !== null && minutesLeft <= warnThresholdMinutes;
+
+  // Reset the dismissed flag whenever the session is extended (minutesLeft jumps back up).
+  React.useEffect(() => {
+    if (minutesLeft !== null && minutesLeft > warnThresholdMinutes) {
+      setBannerDismissed(false);
+    }
+  // warnThresholdMinutes is a constant derived from module-level constants, safe to omit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minutesLeft]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-transparency"],
@@ -386,21 +503,61 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Re-auth modal */}
+      {showReAuth && (
+        <ReAuthModal
+          onSuccess={() => {
+            setShowReAuth(false);
+            setBannerDismissed(false); // banner will hide naturally since minutesLeft resets
+          }}
+          onCancel={() => setShowReAuth(false)}
+        />
+      )}
+
       {/* Header */}
-      <header className="h-14 flex items-center px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
-        <div className="flex items-center gap-2 text-primary font-bold text-sm uppercase tracking-wider">
-          <ShieldCheck size={16} />
-          Admin Panel
+      <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
+        <div className="h-14 flex items-center px-6">
+          <div className="flex items-center gap-2 text-primary font-bold text-sm uppercase tracking-wider">
+            <ShieldCheck size={16} />
+            Admin Panel
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <a href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Back to app</a>
+            <button
+              onClick={onLogout}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <a href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Back to app</a>
-          <button
-            onClick={onLogout}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
+
+        {/* Session expiry warning banner */}
+        {isExpiringSoon && !bannerDismissed && (
+          <div className="flex items-center gap-3 px-6 py-2.5 bg-amber-500/10 border-t border-amber-500/20 text-amber-500 text-xs">
+            <AlertTriangle size={14} className="shrink-0" />
+            <span className="flex-1">
+              Your session expires in{" "}
+              <span className="font-semibold">
+                {minutesLeft === 0 ? "less than a minute" : `${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}`}
+              </span>
+              . Re-authenticate to avoid losing unsaved work.
+            </span>
+            <button
+              onClick={() => setShowReAuth(true)}
+              className="shrink-0 px-3 py-1 rounded-md bg-amber-500 text-white font-semibold hover:bg-amber-400 transition-colors"
+            >
+              Extend session
+            </button>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="shrink-0 p-1 rounded-md text-amber-500 hover:text-amber-400 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="max-w-4xl mx-auto p-6 space-y-8">
