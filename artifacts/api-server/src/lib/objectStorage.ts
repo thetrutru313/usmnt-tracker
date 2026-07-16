@@ -159,6 +159,31 @@ export class ObjectStorageService {
     return objectFile;
   }
 
+  /**
+   * Returns a short-lived signed GET URL for a private object entity.
+   * Prefer this over getObjectEntityFile + downloadObject for invoice serving —
+   * the Replit sidecar signs GET URLs directly via its HTTP API, which is more
+   * reliable in this environment than the GCS SDK's credential flow that backs
+   * file.exists() / file.createReadStream().
+   */
+  async getObjectEntityDownloadUrl(objectPath: string, ttlSec = 300): Promise<string> {
+    if (!objectPath.startsWith('/objects/')) {
+      throw new ObjectNotFoundError();
+    }
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) {
+      throw new ObjectNotFoundError();
+    }
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) {
+      entityDir = `${entityDir}/`;
+    }
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+    return signObjectURL({ bucketName, objectName, method: 'GET', ttlSec });
+  }
+
   normalizeObjectEntityPath(rawPath: string): string {
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;

@@ -38,18 +38,8 @@ router.get("/storage/objects/*objectPath", async (req: Request, res: Response): 
 
   try {
     const objectPath = `/objects/${(req.params as Record<string, string>)["objectPath"] ?? ""}`;
-    const file = await service.getObjectEntityFile(objectPath);
-    const response = await service.downloadObject(file);
-
-    // Forward headers and stream body
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-    const nodeBody = response.body;
-    if (!nodeBody) {
-      res.status(404).end();
-      return;
-    }
-    const { Readable } = await import("node:stream");
-    Readable.fromWeb(nodeBody as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+    const signedUrl = await service.getObjectEntityDownloadUrl(objectPath, /* ttlSec */ 300);
+    res.redirect(302, signedUrl);
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "Not found" });

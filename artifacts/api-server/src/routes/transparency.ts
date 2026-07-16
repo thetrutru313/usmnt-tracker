@@ -81,19 +81,11 @@ router.get("/transparency/invoice/*objectPath", async (req: Request, res: Respon
   try {
     const suffix = (req.params as Record<string, string>)["objectPath"] ?? "";
     const objectPath = `/objects/${suffix}`;
-    const file = await service.getObjectEntityFile(objectPath);
-    const response = await service.downloadObject(file, /* cacheTtlSec */ 3600);
-
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-    // Override cache-control: invoices are public and immutable once uploaded.
-    res.setHeader("Cache-Control", "public, max-age=3600, immutable");
-    const nodeBody = response.body;
-    if (!nodeBody) {
-      res.status(404).end();
-      return;
-    }
-    const { Readable } = await import("node:stream");
-    Readable.fromWeb(nodeBody as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+    // Redirect to a short-lived signed GET URL rather than proxying through the
+    // GCS SDK. The sidecar's signed-URL API is reliable in this environment;
+    // the SDK's file.exists() / createReadStream() credential flow is not.
+    const signedUrl = await service.getObjectEntityDownloadUrl(objectPath, /* ttlSec */ 300);
+    res.redirect(302, signedUrl);
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "Invoice not found" });
