@@ -116,11 +116,15 @@ async function applyKnownPlayerIdOverrides(players: PlayerRow[]): Promise<void> 
     if (known === null) {
       // Explicitly unresolvable — clear any previously-wrong id that auto-resolution
       // may have written so future syncs don't use a false-positive match.
-      if (player.apiFootballPlayerId != null) {
-        await db.update(playersTable).set({ apiFootballPlayerId: null }).where(eq(playersTable.id, player.id));
-        player.apiFootballPlayerId = null;
-        logger.info({ player: player.name }, "Cleared false-positive API-Football id (pinned to null in KNOWN_PLAYER_IDS)");
-      }
+      // Also clear photoUrl: even if the id is already null, a stale photo URL
+      // written before the null pin landed would remain visible on the profile
+      // page. Clearing both fields together is idempotent (null → null is safe).
+      await db
+        .update(playersTable)
+        .set({ apiFootballPlayerId: null, photoUrl: null })
+        .where(eq(playersTable.id, player.id));
+      player.apiFootballPlayerId = null;
+      logger.info({ player: player.name }, "Cleared false-positive API-Football id and photo URL (pinned to null in KNOWN_PLAYER_IDS)");
       continue;
     }
 
