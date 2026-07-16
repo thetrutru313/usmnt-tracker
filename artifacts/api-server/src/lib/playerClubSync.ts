@@ -50,7 +50,14 @@ type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId
  * this doubles as a lookup for the case where the row's id gets cleared
  * (e.g. a reseed) — checked before the squad/search resolution steps.
  */
-export const KNOWN_PLAYER_IDS: Record<string, number> = {
+/**
+ * Pinned player ↔ API-Football id map.
+ * - number  → use this id (even if a different id is already stored)
+ * - null    → player is not yet indexed in API-Football (or has a common
+ *             surname that causes false positives). Skip auto-resolution
+ *             entirely and keep api_football_player_id as NULL.
+ */
+export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   "Yunus Musah": 162106,
   "Diego Kochen": 383647,
   "Gaga Slonina": 201711,
@@ -67,6 +74,13 @@ export const KNOWN_PLAYER_IDS: Record<string, number> = {
   // nationality, which is all the search fallback checked). That wrong id
   // was surfacing as his photo showing a different, unrelated person.
   "Cavan Sullivan": 462853,
+  // Not yet indexed in API-Football — common surnames cause false positive
+  // matches via surname search. Pin to null until a verified id is known.
+  // Cruz Medina: age-tolerance edge-case matched a Chilean C. Medina (born 2001).
+  "Cruz Medina": null,
+  // Manu Romero: "G. Romero USA, birth=None" was the sole USA-nationality hit,
+  // winning the unambiguous-surname fallback despite the initial mismatch.
+  "Manu Romero": null,
 };
 
 /**
@@ -80,7 +94,20 @@ export const KNOWN_PLAYER_IDS: Record<string, number> = {
 async function applyKnownPlayerIdOverrides(players: PlayerRow[]): Promise<void> {
   for (const player of players) {
     const known = KNOWN_PLAYER_IDS[player.name];
-    if (!known || player.apiFootballPlayerId === known) continue;
+    if (known === undefined) continue; // not in map — let auto-resolution proceed
+
+    if (known === null) {
+      // Explicitly unresolvable — clear any previously-wrong id that auto-resolution
+      // may have written so future syncs don't use a false-positive match.
+      if (player.apiFootballPlayerId != null) {
+        await db.update(playersTable).set({ apiFootballPlayerId: null }).where(eq(playersTable.id, player.id));
+        player.apiFootballPlayerId = null;
+        logger.info({ player: player.name }, "Cleared false-positive API-Football id (pinned to null in KNOWN_PLAYER_IDS)");
+      }
+      continue;
+    }
+
+    if (player.apiFootballPlayerId === known) continue;
     await db.update(playersTable).set({ apiFootballPlayerId: known }).where(eq(playersTable.id, player.id));
     player.apiFootballPlayerId = known;
   }
@@ -282,6 +309,10 @@ export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById
   await resolvePlayerIdsViaSquads(players, clubsById);
   for (const player of players) {
     if (player.apiFootballPlayerId) continue;
+    // Skip players explicitly pinned to null — they are not yet indexed in
+    // API-Football (or have a surname so common that search always false-positives).
+    // `applyKnownPlayerIdOverrides` already cleared any bad id; don't re-search.
+    if (KNOWN_PLAYER_IDS[player.name] === null) continue;
     player.apiFootballPlayerId = await resolvePlayerIdBySearch(player);
   }
   await syncResolvedPlayerPhotos(players);

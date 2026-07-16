@@ -231,6 +231,8 @@ export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   // Search field may only contain alpha-numeric characters and spaces").
   "Atlético Madrid": "Atletico Madrid",
   "Lyngby Boldklub": "Lyngby",
+  "Los Angeles FC": "Los Angeles FC",
+  "LA Galaxy": "Galaxy",
 };
 
 let usmntTeamId: number | null = null;

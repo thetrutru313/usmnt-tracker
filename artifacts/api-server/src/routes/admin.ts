@@ -4,6 +4,7 @@ import { eq, desc, isNull, isNotNull } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
+import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -232,6 +233,30 @@ router.post("/admin/backfill-dob", async (_req, res): Promise<void> => {
     }
     logger.info({ updated, failed, total: players.length }, "Admin: DOB backfill complete");
   })().catch((err) => logger.error({ err }, "Admin: DOB backfill crashed"));
+});
+
+/**
+ * POST /admin/trigger-sync
+ * Body (optional): { playerIds?: number[] }
+ * Triggers syncPlayerStatsAndInjuries scoped to the given player IDs (or the
+ * full pool if playerIds is omitted). Returns immediately; sync runs in the
+ * background. Use playerIds to sync only newly-added players without burning
+ * API quota on the rest of the pool.
+ */
+router.post("/admin/trigger-sync", async (req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  const playerIds: number[] | undefined = Array.isArray(req.body?.playerIds)
+    ? (req.body.playerIds as unknown[]).filter((v): v is number => typeof v === "number")
+    : undefined;
+  const scope = playerIds ? `${playerIds.length} players` : "full pool";
+  logger.info({ scope, playerIds }, "Admin: trigger-sync started");
+  res.json({ ok: true, scope });
+  syncPlayerStatsAndInjuries(12, playerIds).catch((err) =>
+    logger.error({ err }, "Admin trigger-sync failed"),
+  );
 });
 
 export default router;

@@ -671,11 +671,18 @@ export interface PlayerStatsSyncResult {
  * across every tracked player at that club, keeping the per-player API-call
  * cost manageable under the 7s/request throttle (see apiFootballSync.ts).
  */
-export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<PlayerStatsSyncResult> {
+export async function syncPlayerStatsAndInjuries(
+  fixturesPerClub = 12,
+  /** When provided, only syncs the given player IDs — all others are skipped entirely,
+   *  incurring zero additional API calls. The daily scheduled run omits this parameter
+   *  to sync the full pool; callers that insert a small batch of new players should pass
+   *  their ids here to avoid redundant per-player API quota consumption. */
+  playerIds?: number[],
+): Promise<PlayerStatsSyncResult> {
   const clubs: ClubRow[] = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
-  const players: PlayerRow[] = await db
+  const allPlayers: PlayerRow[] = await db
     .select({
       id: playersTable.id,
       name: playersTable.name,
@@ -688,6 +695,12 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
       marketValueUsd: playersTable.marketValueUsd,
     })
     .from(playersTable);
+
+  // Scope to the requested subset when a filter is provided. Clubs whose entire
+  // player list is excluded will have an empty playersByClub entry and are
+  // naturally skipped by the club loop below — no special handling needed.
+  const players = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
+
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
 
   await ensurePlayerApiFootballIds(players, clubsById);
