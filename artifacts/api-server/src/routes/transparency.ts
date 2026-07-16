@@ -79,7 +79,8 @@ router.get("/transparency/totals", async (_req, res): Promise<void> => {
 router.get("/transparency/invoice/*objectPath", async (req: Request, res: Response): Promise<void> => {
   const service = new ObjectStorageService();
   try {
-    const suffix = (req.params as Record<string, string>)["objectPath"] ?? "";
+    const raw = (req.params as Record<string, string | string[]>)["objectPath"] ?? "";
+    const suffix = Array.isArray(raw) ? raw.join('/') : String(raw);
     const objectPath = `/objects/${suffix}`;
     // Redirect to a short-lived signed GET URL rather than proxying through the
     // GCS SDK. The sidecar's signed-URL API is reliable in this environment;

@@ -37,7 +37,9 @@ router.get("/storage/objects/*objectPath", async (req: Request, res: Response): 
   }
 
   try {
-    const objectPath = `/objects/${(req.params as Record<string, string>)["objectPath"] ?? ""}`;
+    const rawParam = (req.params as Record<string, string | string[]>)["objectPath"] ?? "";
+    const suffix = Array.isArray(rawParam) ? rawParam.join('/') : String(rawParam);
+    const objectPath = `/objects/${suffix}`;
     const signedUrl = await service.getObjectEntityDownloadUrl(objectPath, /* ttlSec */ 300);
     res.redirect(302, signedUrl);
   } catch (err) {
