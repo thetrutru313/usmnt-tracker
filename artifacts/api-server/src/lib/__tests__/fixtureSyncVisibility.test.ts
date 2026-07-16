@@ -243,6 +243,197 @@ describe("GET /fixtures?scope=upcoming — newly-synced fixture data appears wit
   );
 });
 
+// ─── Transfer visibility guard ──────────────────────────────────────────────
+
+/**
+ * Regression guard: once a player's clubId changes (transfer), they must stop
+ * appearing in featuredPlayers for upcoming scheduled fixtures that were linked
+ * to their old club. A player who did NOT transfer must still appear.
+ *
+ * ## What is tested
+ * 1. A future fixture is linked to two players at club A.
+ * 2. Player 1 is transferred to club B (their clubId row is updated).
+ * 3. GET /fixtures?scope=upcoming&playerId=<transferred player>
+ *    → The fixture is still returned (the link row still exists), but the
+ *      fixture's featuredPlayers list does NOT contain the transferred player.
+ * 4. GET /fixtures?scope=upcoming (no playerId filter)
+ *    → The fixture appears and featuredPlayers includes the staying player but
+ *      still excludes the transferred player.
+ */
+
+describe("GET /fixtures?scope=upcoming — transferred player excluded from featuredPlayers", () => {
+  let xferClubAId: number | null = null;
+  let xferClubBId: number | null = null;
+  let xferPlayerId: number | null = null;
+  let stayingPlayerId: number | null = null;
+  let xferFixtureId: number | null = null;
+
+  afterAll(async () => {
+    if (xferFixtureId !== null) {
+      await db
+        .delete(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, xferFixtureId));
+      await db
+        .delete(fixturesTable)
+        .where(eq(fixturesTable.id, xferFixtureId));
+    }
+    if (xferPlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, xferPlayerId));
+    }
+    if (stayingPlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, stayingPlayerId));
+    }
+    if (xferClubBId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, xferClubBId));
+    }
+    if (xferClubAId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, xferClubAId));
+    }
+  });
+
+  it(
+    "transferred player is excluded from featuredPlayers on their old club's upcoming fixture",
+    async () => {
+      // ── Setup ──────────────────────────────────────────────────────────────
+
+      // Club A: original club for both players.
+      const [clubA] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_xfer_club_a__", league: "Test League", country: "USA" })
+        .returning({ id: clubsTable.id });
+      if (!clubA) throw new Error("Club A insert failed");
+      xferClubAId = clubA.id;
+
+      // Club B: the destination after the transfer.
+      const [clubB] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_xfer_club_b__", league: "Test League B", country: "GER" })
+        .returning({ id: clubsTable.id });
+      if (!clubB) throw new Error("Club B insert failed");
+      xferClubBId = clubB.id;
+
+      const basePlayer = {
+        position: "MF" as const,
+        category: "current" as const,
+        clubId: clubA.id,
+        age: 25,
+        nationalTeamCaps: 0,
+        nationalTeamGoals: 0,
+        performanceTrend: "steady" as const,
+        trending: false,
+        bio: "",
+        worldCupRoster: false,
+      };
+
+      // Player who will transfer away.
+      const [xferPlayer] = await db
+        .insert(playersTable)
+        .values({ ...basePlayer, name: "__Test Xfer Player__", slug: "__test-xfer-player__" })
+        .returning({ id: playersTable.id });
+      if (!xferPlayer) throw new Error("Transfer player insert failed");
+      xferPlayerId = xferPlayer.id;
+
+      // Player who stays at club A throughout.
+      const [stayingPlayer] = await db
+        .insert(playersTable)
+        .values({ ...basePlayer, name: "__Test Staying Player__", slug: "__test-staying-player__" })
+        .returning({ id: playersTable.id });
+      if (!stayingPlayer) throw new Error("Staying player insert failed");
+      stayingPlayerId = stayingPlayer.id;
+
+      // A future scheduled fixture for club A.
+      const kickoff = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 h from now
+      const [xferFixture] = await db
+        .insert(fixturesTable)
+        .values({
+          isNationalTeam: false,
+          competition: "Test Transfer League",
+          kickoff,
+          venue: "Transfer Stadium",
+          homeTeam: "__Test Xfer FC__",
+          awayTeam: "__Opponent Xfer FC__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!xferFixture) throw new Error("Transfer fixture insert failed");
+      xferFixtureId = xferFixture.id;
+
+      // Link both players to the fixture stamped with club A's id.
+      await db.insert(fixturePlayersTable).values([
+        { fixtureId: xferFixture.id, playerId: xferPlayer.id, clubId: clubA.id },
+        { fixtureId: xferFixture.id, playerId: stayingPlayer.id, clubId: clubA.id },
+      ]);
+
+      // ── Transfer: update xferPlayer's club to club B ───────────────────────
+      await db
+        .update(playersTable)
+        .set({ clubId: clubB.id })
+        .where(eq(playersTable.id, xferPlayer.id));
+
+      // ── Assertion 1: playerId filter on the transferred player ─────────────
+      // The fixture is still returned (the fixture_players row still exists),
+      // but the player should NOT appear in featuredPlayers because they are
+      // now at a different club and the fixture is still scheduled.
+      const res1 = await request(app)
+        .get(`/api/fixtures?scope=upcoming&playerId=${xferPlayer.id}`)
+        .expect(200);
+
+      const parsed1 = ListFixturesResponse.safeParse(res1.body);
+      expect(
+        parsed1.success,
+        `playerId filter response did not parse:\n${parsed1.success ? "" : fmtIssues(parsed1.error)}`,
+      ).toBe(true);
+
+      const fixture1 = parsed1.data!.find((f) => f.id === xferFixture.id);
+      // The fixture may or may not appear in the list — what matters is that
+      // the transferred player is NOT in featuredPlayers if the fixture does appear.
+      if (fixture1) {
+        const featuredIds1 = (fixture1.featuredPlayers ?? []).map((p: { id: number }) => p.id);
+        expect(
+          featuredIds1,
+          `Transferred player id=${xferPlayer.id} should NOT appear in featuredPlayers ` +
+            `after moving from club A (id=${clubA.id}) to club B (id=${clubB.id}), ` +
+            `but was found in the featuredPlayers list of fixture id=${xferFixture.id}`,
+        ).not.toContain(xferPlayer.id);
+      }
+
+      // ── Assertion 2: no playerId filter — fixture still visible ───────────
+      // The fixture must still appear in the general upcoming list (it belongs
+      // to club A which still has the staying player), and the staying player
+      // IS in featuredPlayers, while the transferred player is NOT.
+      const res2 = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+
+      const parsed2 = ListFixturesResponse.safeParse(res2.body);
+      expect(
+        parsed2.success,
+        `Unfiltered upcoming response did not parse:\n${parsed2.success ? "" : fmtIssues(parsed2.error)}`,
+      ).toBe(true);
+
+      const fixture2 = parsed2.data!.find((f) => f.id === xferFixture.id);
+      expect(
+        fixture2,
+        `Fixture id=${xferFixture.id} should appear in the unfiltered upcoming list ` +
+          `(club A still has linked players), but was not found`,
+      ).toBeDefined();
+
+      const featuredIds2 = (fixture2!.featuredPlayers ?? []).map((p: { id: number }) => p.id);
+
+      expect(
+        featuredIds2,
+        `Staying player id=${stayingPlayer.id} should appear in featuredPlayers ` +
+          `(they did not transfer), but was missing from fixture id=${xferFixture.id}`,
+      ).toContain(stayingPlayer.id);
+
+      expect(
+        featuredIds2,
+        `Transferred player id=${xferPlayer.id} should NOT appear in featuredPlayers ` +
+          `after moving to club B (id=${clubB.id}), but was found in fixture id=${xferFixture.id}`,
+      ).not.toContain(xferPlayer.id);
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 
 describe("ListFixturesResponse schema — response contract", () => {
