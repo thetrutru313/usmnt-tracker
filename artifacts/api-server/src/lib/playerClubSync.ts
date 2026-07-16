@@ -286,8 +286,27 @@ async function resolvePlayerIdBySearch(
       isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : allInitialCandidates;
 
     // Strongest signal: surname + initial, preferring USA nationality.
-    let match =
-      effectiveInitialCandidates.find(isUSANationality) ?? (effectiveInitialCandidates.length === 1 ? effectiveInitialCandidates[0] : undefined);
+    // Guard: if multiple USA-nationality candidates all pass the surname+initial+age
+    // filters (e.g. two brothers or unrelated players sharing a common surname and
+    // first initial), we cannot pick one without guessing — leave unresolved.
+    const usaEffectiveCandidates = effectiveInitialCandidates.filter(isUSANationality);
+    let match: AfPlayerProfile | undefined;
+    if (usaEffectiveCandidates.length === 1) {
+      match = usaEffectiveCandidates[0];
+    } else if (usaEffectiveCandidates.length === 0) {
+      // No USA candidates — accept a sole non-USA candidate (e.g. a foreign-league
+      // prospect whose club is not in the USA) or leave ambiguous if multiple.
+      match = effectiveInitialCandidates.length === 1 ? effectiveInitialCandidates[0] : undefined;
+    } else {
+      // usaEffectiveCandidates.length > 1 — ambiguous, leave unresolved.
+      logger.warn(
+        {
+          player: player.name,
+          ambiguousCandidates: usaEffectiveCandidates.map((r) => ({ id: r.player.id, name: r.player.name, birth: r.player.birth?.date })),
+        },
+        "Resolver: multiple USA-nationality candidates match surname+initial+age — leaving unresolved to avoid picking the wrong person",
+      );
+    }
 
     if (isUSADomestic && allInitialCandidates.length > 0 && usaInitialCandidates.length > 0 && allInitialCandidates.length !== effectiveInitialCandidates.length) {
       logger.info(

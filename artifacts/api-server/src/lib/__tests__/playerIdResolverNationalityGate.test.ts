@@ -276,6 +276,34 @@ describe("resolvePlayerIdBySearch — USA-domestic nationality gate", () => {
     expect(player.apiFootballPlayerId).toBe(9001);
   });
 
+  it("returns null when two USA-nationality candidates both match surname, initial, and age (ambiguous — must not guess)", async () => {
+    // Scenario: two prospects share the surname "Testdupe" and first initial "A",
+    // and both are within the ±3-year age window of our on-file player.
+    // The resolver must leave the player unresolved rather than silently picking one.
+    const player = { id: 300, name: "Alex Testdupe", clubId: 2, apiFootballPlayerId: null, age: 21 };
+    expect(KNOWN_PLAYER_IDS["Alex Testdupe"]).toBeUndefined();
+
+    const clubsById = new Map([
+      [2, { id: 2, name: "San Jose Earthquakes", apiFootballTeamId: null, country: "USA" }],
+    ]);
+
+    // Two USA-nationality candidates — same surname, same initial "A", both age-consistent.
+    const candidateA = makeCandidate({ id: 11001, firstname: "Alex", lastname: "Testdupe", nationality: "USA", birthDate: "2005-03-10" }); // age ~21 — within ±3
+    const candidateB = makeCandidate({ id: 11002, firstname: "Aaron", lastname: "Testdupe", nationality: "USA", birthDate: "2003-07-22" }); // age ~23 — within ±3
+
+    mockAfFetch.mockImplementation((url: string) => {
+      if (url.includes("/players/profiles")) return Promise.resolve([candidateA, candidateB]);
+      return Promise.resolve(emptySquadResponse());
+    });
+
+    const players = [player];
+    await ensurePlayerApiFootballIds(players, clubsById);
+
+    // Both candidates are USA-nationality, same initial, age-consistent — ambiguous.
+    // Resolver must NOT pick either; player stays unresolved.
+    expect(player.apiFootballPlayerId).toBeNull();
+  });
+
   it("does NOT apply the nationality gate for a non-USA-domestic club", async () => {
     // Same two candidates as the gate test, but club is based in Germany —
     // both initial-match candidates are in play; the USA candidate still wins
