@@ -81,11 +81,15 @@ async function resolveTeamId(club: { id: number; name: string; sportmonksTeamId:
  * tracked player. National-team fixtures (World Cup qualifiers etc.) stay
  * curated/seeded — Sportmonks club fixtures are the part that changes weekly
  * and is impractical to hand-maintain.
+ *
+ * @param clubIds - Optional list of DB club IDs to sync. When omitted, all
+ *   clubs are synced (the normal scheduled-sync path).
  */
-export async function syncSportmonksFixtures(): Promise<{ clubsSynced: number; fixturesUpserted: number; failures: number }> {
-  const clubs = await db
+export async function syncSportmonksFixtures(clubIds?: number[]): Promise<{ clubsSynced: number; fixturesUpserted: number; failures: number }> {
+  const allClubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, sportmonksTeamId: clubsTable.sportmonksTeamId })
     .from(clubsTable);
+  const clubs = clubIds ? allClubs.filter((c) => clubIds.includes(c.id)) : allClubs;
   const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId }).from(playersTable);
   const playersByClub = new Map<number, number[]>();
   for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p.id]);

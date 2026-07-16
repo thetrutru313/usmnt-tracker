@@ -5,6 +5,7 @@ import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
+import { syncSportmonksFixtures } from "../lib/sportmonksSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -256,6 +257,30 @@ router.post("/admin/trigger-sync", async (req, res): Promise<void> => {
   res.json({ ok: true, scope });
   syncPlayerStatsAndInjuries(12, playerIds).catch((err) =>
     logger.error({ err }, "Admin trigger-sync failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-fixtures-sync
+ * Body (optional): { clubIds?: number[] }
+ * Triggers syncSportmonksFixtures scoped to the given club IDs (or all clubs
+ * if clubIds is omitted). Returns immediately; sync runs in the background.
+ * Use clubIds to seed fixtures for newly-added clubs without re-syncing every
+ * club and burning Sportmonks quota unnecessarily.
+ */
+router.post("/admin/trigger-fixtures-sync", async (req, res): Promise<void> => {
+  if (!process.env["SPORTMONKS_API_TOKEN"]) {
+    res.status(503).json({ error: "SPORTMONKS_API_TOKEN not configured" });
+    return;
+  }
+  const clubIds: number[] | undefined = Array.isArray(req.body?.clubIds)
+    ? (req.body.clubIds as unknown[]).filter((v): v is number => typeof v === "number")
+    : undefined;
+  const scope = clubIds ? `${clubIds.length} clubs` : "all clubs";
+  logger.info({ scope, clubIds }, "Admin: trigger-fixtures-sync started");
+  res.json({ ok: true, scope });
+  syncSportmonksFixtures(clubIds).catch((err) =>
+    logger.error({ err }, "Admin trigger-fixtures-sync failed"),
   );
 });
 
