@@ -45,7 +45,35 @@ const MONTH_NAMES = [
 ];
 
 const STORAGE_KEY = "usmnt_admin_token";
+const STORAGE_TS_KEY = "usmnt_admin_token_ts";
+/** How long a saved session stays valid. Adjust as needed. */
+const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// ─── Session helpers ───────────────────────────────────────────────────────────
+
+function saveSession(token: string): void {
+  localStorage.setItem(STORAGE_KEY, token);
+  localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
+}
+
+function loadSession(): string | null {
+  const token = localStorage.getItem(STORAGE_KEY);
+  const ts = localStorage.getItem(STORAGE_TS_KEY);
+  if (!token || !ts) return null;
+  if (Date.now() - parseInt(ts, 10) > SESSION_EXPIRY_MS) {
+    clearSession();
+    return null;
+  }
+  return token;
+}
+
+function clearSession(): void {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_TS_KEY);
+  sessionStorage.removeItem(STORAGE_KEY);
+}
 
 function cents(val: string): number {
   return Math.round(parseFloat(val || "0") * 100);
@@ -85,7 +113,7 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
     setLoading(true);
     try {
       await apiFetch("/admin/transparency/verify", password, { method: "POST" });
-      sessionStorage.setItem(STORAGE_KEY, password);
+      saveSession(password);
       onSuccess(password);
     } catch {
       setError("Incorrect password.");
@@ -518,12 +546,10 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const [token, setToken] = React.useState<string | null>(
-    () => sessionStorage.getItem(STORAGE_KEY)
-  );
+  const [token, setToken] = React.useState<string | null>(loadSession);
 
   function handleLogout() {
-    sessionStorage.removeItem(STORAGE_KEY);
+    clearSession();
     setToken(null);
   }
 
