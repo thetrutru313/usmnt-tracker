@@ -105,12 +105,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </h2>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs font-mono font-medium">
-              <span className="w-2 h-2 rounded-full bg-primary live-pulse"></span>
-              <span className="text-muted-foreground hidden sm:inline-block">LIVE UPDATES</span>
-            </div>
-          </div>
         </header>
 
         <div className="flex-1 overflow-auto">
