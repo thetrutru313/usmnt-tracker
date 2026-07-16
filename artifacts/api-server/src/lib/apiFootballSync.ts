@@ -1,6 +1,17 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
+import {
+  type AfFixture,
+  FINISHED_STATUSES,
+  mapStatus,
+  reconcileClubFixtures,
+} from "./fixtureReconciliation.js";
+
+// Re-export so existing callers (usmntSync, playerStatsSync, etc.) keep working.
+export { FINISHED_STATUSES };
+export type { AfFixture, ReconcileClubFixturesInput } from "./fixtureReconciliation.js";
+export { reconcileClubFixtures } from "./fixtureReconciliation.js";
 
 const BASE_URL = "https://v3.football.api-sports.io";
 // Pro plan allows 30 requests/minute (1 every 2s). The original 7s interval
@@ -64,21 +75,6 @@ export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
 
 interface AfTeamSearchResult {
   team: { id: number; name: string; logo: string | null; national?: boolean };
-}
-
-interface AfFixture {
-  fixture: {
-    id: number;
-    date: string; // ISO 8601 with offset
-    status: { short: string }; // e.g. NS (not started), FT (finished), PST (postponed)
-    venue: { name: string | null };
-  };
-  league: { name: string };
-  teams: {
-    home: { id: number; name: string; logo: string | null };
-    away: { id: number; name: string; logo: string | null };
-  };
-  goals: { home: number | null; away: number | null };
 }
 
 // API-Football's fixtures endpoint doesn't return US broadcast info on our
@@ -200,16 +196,6 @@ const RESERVE_TEAM_PATTERN = /\b(u1[5-9]|u2[0-3]|reserves?|development squad|aca
 
 function isReserveOrYouthTeam(name: string): boolean {
   return RESERVE_TEAM_PATTERN.test(name.trim());
-}
-
-export const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
-const POSTPONED_STATUSES = new Set(["PST", "CANC", "ABD"]);
-
-function mapStatus(short: string): string {
-  if (FINISHED_STATUSES.has(short)) return "finished";
-  if (POSTPONED_STATUSES.has(short)) return "postponed";
-  if (short === "1H" || short === "2H" || short === "HT" || short === "ET" || short === "LIVE") return "live";
-  return "scheduled";
 }
 
 // API-Football's search matches on short/informal names, not full official
@@ -431,88 +417,9 @@ export async function syncApiFootballFixtures(
     const removalsTrustworthy = anySeasonFetchSucceeded && !anySeasonFetchFailed;
     const freshById = new Map(seasonFixtures.map((f) => [f.fixture.id, f]));
     const clubPlayerIds = (playersByClub.get(club.id) ?? []).map((p) => p.id);
-    if (clubPlayerIds.length > 0) {
-      const trackedRows = await db
-        .select({
-          id: fixturesTable.id,
-          apiFootballFixtureId: fixturesTable.apiFootballFixtureId,
-          homeTeam: fixturesTable.homeTeam,
-          awayTeam: fixturesTable.awayTeam,
-          kickoff: fixturesTable.kickoff,
-        })
-        .from(fixturesTable)
-        .innerJoin(fixturePlayersTable, eq(fixturePlayersTable.fixtureId, fixturesTable.id))
-        .where(and(inArray(fixturePlayersTable.playerId, clubPlayerIds), eq(fixturesTable.status, "scheduled")));
-
-      const trackedFixtures = new Map(trackedRows.map((row) => [row.id, row]));
-      for (const tracked of trackedFixtures.values()) {
-        if (tracked.apiFootballFixtureId === null) continue;
-        const fresh = freshById.get(tracked.apiFootballFixtureId);
-        if (fresh) {
-          const freshStatus = mapStatus(fresh.fixture.status.short);
-          if (freshStatus !== "scheduled") {
-            await db
-              .update(fixturesTable)
-              .set({ status: freshStatus, homeScore: fresh.goals.home, awayScore: fresh.goals.away })
-              .where(eq(fixturesTable.id, tracked.id));
-            logger.info(
-              {
-                fixtureId: tracked.id,
-                apiFootballFixtureId: tracked.apiFootballFixtureId,
-                homeTeam: tracked.homeTeam,
-                awayTeam: tracked.awayTeam,
-                newStatus: freshStatus,
-              },
-              "Reconciled fixture that was stuck as 'scheduled' to the provider's current status",
-            );
-            fixturesReconciled++;
-          }
-        } else if (!removalsTrustworthy) {
-          // A season fetch failed this run, so we can't tell whether this
-          // fixture is genuinely gone or just missing because of that
-          // failure. Leave it alone — a future run with a clean fetch will
-          // resolve it correctly.
-          continue;
-        } else if (tracked.kickoff.getTime() >= now) {
-          // Missing from a fully-successful fetch, but still in the future —
-          // too risky to delete a fixture that hasn't happened yet on a
-          // single "not found" signal (could be a provider hiccup or a
-          // fixture rescheduled outside the season window we queried).
-          // Flag it for review instead; if it's genuinely gone, it'll also be
-          // missing once its kickoff has passed, and will be removed then.
-          logger.warn(
-            {
-              fixtureId: tracked.id,
-              apiFootballFixtureId: tracked.apiFootballFixtureId,
-              homeTeam: tracked.homeTeam,
-              awayTeam: tracked.awayTeam,
-              kickoff: tracked.kickoff,
-              club: club.name,
-            },
-            "Tracked upcoming fixture is missing from API-Football's fresh pull — flagging for review, not removing",
-          );
-        } else {
-          // Kickoff has already passed and a fully-successful fetch no
-          // longer lists this fixture at all — e.g. a bracket match already
-          // decided elsewhere. Safe to remove rather than leaving a match on
-          // the Dashboard/Fixtures pages that will never actually happen.
-          await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, tracked.id));
-          await db.delete(fixturesTable).where(eq(fixturesTable.id, tracked.id));
-          logger.warn(
-            {
-              fixtureId: tracked.id,
-              apiFootballFixtureId: tracked.apiFootballFixtureId,
-              homeTeam: tracked.homeTeam,
-              awayTeam: tracked.awayTeam,
-              kickoff: tracked.kickoff,
-              club: club.name,
-            },
-            "Removed stale past-kickoff fixture no longer confirmed by API-Football",
-          );
-          fixturesRemoved++;
-        }
-      }
-    }
+    const reconciled = await reconcileClubFixtures({ club, clubPlayerIds, freshById, removalsTrustworthy, now });
+    fixturesReconciled += reconciled.fixturesReconciled;
+    fixturesRemoved += reconciled.fixturesRemoved;
 
     for (const f of upcoming) {
       const broadcast = broadcastFor(f.league.name);

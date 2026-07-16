@@ -42,6 +42,7 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { ListFixturesResponse } from "@workspace/api-zod";
+import { reconcileClubFixtures } from "../fixtureReconciliation.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -429,6 +430,188 @@ describe("GET /fixtures?scope=upcoming — transferred player excluded from feat
         `Transferred player id=${xferPlayer.id} should NOT appear in featuredPlayers ` +
           `after moving to club B (id=${clubB.id}), but was found in fixture id=${xferFixture.id}`,
       ).not.toContain(xferPlayer.id);
+    },
+    30_000,
+  );
+});
+
+// ─── Stale-fixture removal guard ────────────────────────────────────────────
+
+/**
+ * Regression guard: confirms that when the fixtures-sync reconciliation
+ * identifies a past-kickoff "scheduled" fixture that is no longer present in
+ * the provider's fresh pull, it deletes both the fixture row and its
+ * fixture_players link, and the fixture is no longer returned by
+ * GET /fixtures?scope=upcoming.
+ *
+ * ## What is tested
+ * 1. A fixture with a past kickoff (status="scheduled", apiFootballFixtureId
+ *    set) is inserted along with a fixture_players link.
+ * 2. The reconciliation deletion path is exercised directly — using the exact
+ *    same delete queries the sync's reconciliation block uses — simulating the
+ *    case where the fixture is absent from the provider's fresh list and
+ *    removals are trustworthy (all season fetches succeeded).
+ * 3. The fixture row is no longer present in the DB.
+ * 4. The fixture_players link is no longer present in the DB.
+ * 5. GET /fixtures?scope=upcoming no longer returns the stale row.
+ */
+
+describe("Stale fixture removal — past-kickoff scheduled fixture is deleted when absent from fresh pull", () => {
+  let staleClubId: number | null = null;
+  let stalePlayerId: number | null = null;
+  let staleFixtureId: number | null = null;
+
+  afterAll(async () => {
+    // Belt-and-suspenders cleanup: the test should have deleted the fixture
+    // and link, but guard against test failure leaving orphaned rows.
+    if (staleFixtureId !== null) {
+      await db
+        .delete(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, staleFixtureId));
+      await db.delete(fixturesTable).where(eq(fixturesTable.id, staleFixtureId));
+    }
+    if (stalePlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, stalePlayerId));
+    }
+    if (staleClubId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, staleClubId));
+    }
+  });
+
+  it(
+    "deletes the fixture row and fixture_players link, and removes it from /fixtures?scope=upcoming",
+    async () => {
+      // ── Setup ──────────────────────────────────────────────────────────────
+
+      const [club] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_stale_removal_club__", league: "Test League", country: "USA" })
+        .returning({ id: clubsTable.id, name: clubsTable.name });
+      if (!club) throw new Error("Club insert failed");
+      staleClubId = club.id;
+
+      const [player] = await db
+        .insert(playersTable)
+        .values({
+          name: "__Test Stale Removal Player__",
+          slug: "__test-stale-removal-player__",
+          position: "FW" as const,
+          category: "current" as const,
+          clubId: club.id,
+          age: 27,
+          nationalTeamCaps: 0,
+          nationalTeamGoals: 0,
+          performanceTrend: "steady" as const,
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+      if (!player) throw new Error("Player insert failed");
+      stalePlayerId = player.id;
+
+      // Insert a past-kickoff fixture with apiFootballFixtureId set.
+      // A non-null apiFootballFixtureId is required for the reconciliation block
+      // to consider the row — fixtures without an API id are seeded rows and
+      // are skipped (see the `if (tracked.apiFootballFixtureId === null) continue`
+      // guard inside syncApiFootballFixtures).
+      const pastKickoff = new Date(Date.now() - 48 * 60 * 60 * 1000); // 48 h ago
+      const [staleFixture] = await db
+        .insert(fixturesTable)
+        .values({
+          apiFootballFixtureId: 9_999_001, // arbitrary; not in any real season fetch
+          isNationalTeam: false,
+          competition: "Ended Season League",
+          kickoff: pastKickoff,
+          venue: "Old Stadium",
+          homeTeam: "__Stale Home FC__",
+          awayTeam: "__Stale Away FC__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!staleFixture) throw new Error("Stale fixture insert failed");
+      staleFixtureId = staleFixture.id;
+
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: staleFixture.id, playerId: player.id, clubId: club.id });
+
+      // ── Pre-reconciliation checks ─────────────────────────────────────────
+
+      // Confirm both the fixture row and its fixture_players link are in the
+      // DB before reconciliation runs, so we know the removal actually fired
+      // and didn't just skip because the rows were already absent.
+      const beforeRows = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, staleFixture.id));
+      expect(beforeRows).toHaveLength(1);
+
+      const beforeLinks = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, staleFixture.id));
+      expect(beforeLinks).toHaveLength(1);
+
+      // ── Invoke the real reconciliation logic ──────────────────────────────
+      // Pass an empty freshById (simulating the provider returning zero
+      // fixtures for this club's season — e.g. the season has ended and the
+      // stale fixture is no longer listed). removalsTrustworthy=true mirrors
+      // the state after all season-fetch attempts succeeded without error.
+      // now is captured after the past kickoff so the "future kickoff" guard
+      // does NOT fire and the removal branch executes instead.
+      const result = await reconcileClubFixtures({
+        club: { id: club.id, name: club.name },
+        clubPlayerIds: [player.id],
+        freshById: new Map(), // empty — stale fixture absent from provider list
+        removalsTrustworthy: true,
+        now: Date.now(),
+      });
+
+      expect(
+        result.fixturesRemoved,
+        `reconcileClubFixtures should have reported 1 removed fixture but reported ${result.fixturesRemoved}`,
+      ).toBe(1);
+
+      // ── Post-reconciliation: fixture row is gone from the DB ──────────────
+      const afterRows = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, staleFixture.id));
+      expect(
+        afterRows,
+        `Fixture id=${staleFixture.id} should have been deleted by reconcileClubFixtures ` +
+          `(past kickoff, absent from fresh provider list) but still exists in the DB`,
+      ).toHaveLength(0);
+
+      // ── Post-reconciliation: fixture_players link is gone from the DB ─────
+      const afterLinks = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, staleFixture.id));
+      expect(
+        afterLinks,
+        `fixture_players link for fixture id=${staleFixture.id} should have been deleted ` +
+          `by reconcileClubFixtures but still exists in the DB`,
+      ).toHaveLength(0);
+
+      // Clear module-level ID so afterAll does not attempt a redundant delete.
+      staleFixtureId = null;
+
+      // ── Post-reconciliation: fixture no longer returned by the API ─────────
+      const res = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `/fixtures?scope=upcoming response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === staleFixture.id);
+      expect(
+        found,
+        `Stale fixture id=${staleFixture.id} (past kickoff, removed by reconcileClubFixtures) ` +
+          `still appears in GET /fixtures?scope=upcoming — the endpoint is returning deleted rows`,
+      ).toBeUndefined();
     },
     30_000,
   );
