@@ -1178,6 +1178,242 @@ describe("Stale fixture removal — both clubs' stale fixtures deleted in a mult
   );
 });
 
+// ─── Future-missing → past-missing two-run lifecycle guard ──────────────────
+
+/**
+ * Regression guard: confirms the warn-then-delete lifecycle for a fixture that
+ * is absent from the provider's fresh pull.
+ *
+ * ## Background
+ * When the reconciliation block encounters a tracked fixture that is missing
+ * from the provider's fresh list, it takes different actions depending on the
+ * fixture's kickoff:
+ *
+ *   - Kickoff still in the future → log a warning, do NOT delete. A provider
+ *     hiccup could cause a transient absence; deleting on a single miss would
+ *     leave players with a phantom gap in their upcoming schedule.
+ *   - Kickoff already in the past → delete both the fixture row and its
+ *     fixture_players link. A past fixture that the provider no longer lists
+ *     is genuinely gone and must not accumulate as a phantom.
+ *
+ * Without this test, the warn-then-delete path could silently regress and
+ * leave phantom fixtures in the DB indefinitely.
+ *
+ * ## What is tested
+ * 1. A fixture is inserted with a near-future kickoff and an
+ *    `apiFootballFixtureId` absent from the fresh pull.
+ * 2. Run 1: `reconcileClubFixtures` is called with `now` set to the present
+ *    (kickoff is still in the future) → fixture is NOT deleted.
+ * 3. The fixture's kickoff is backdated to 48 h ago (simulating time passing).
+ * 4. Run 2: `reconcileClubFixtures` is called again with the new `now`
+ *    (kickoff is now in the past) → fixture IS deleted.
+ * 5. GET /fixtures?scope=upcoming no longer returns the row.
+ */
+
+describe("Fixture reconciliation — future-missing fixture is warned (run 1) then deleted (run 2) once kickoff passes", () => {
+  let phantomClubId: number | null = null;
+  let phantomPlayerId: number | null = null;
+  let phantomFixtureId: number | null = null;
+
+  afterAll(async () => {
+    // Belt-and-suspenders cleanup in case the test fails mid-way.
+    if (phantomFixtureId !== null) {
+      await db
+        .delete(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, phantomFixtureId));
+      await db.delete(fixturesTable).where(eq(fixturesTable.id, phantomFixtureId));
+    }
+    if (phantomPlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, phantomPlayerId));
+    }
+    if (phantomClubId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, phantomClubId));
+    }
+  });
+
+  it(
+    "warns on run 1 (future kickoff) and deletes on run 2 (past kickoff) when fixture is absent from fresh pull",
+    async () => {
+      // ── Setup ──────────────────────────────────────────────────────────────
+
+      const [club] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_phantom_lifecycle_club__", league: "Test League", country: "USA" })
+        .returning({ id: clubsTable.id, name: clubsTable.name });
+      if (!club) throw new Error("Club insert failed");
+      phantomClubId = club.id;
+
+      const [player] = await db
+        .insert(playersTable)
+        .values({
+          name: "__Test Phantom Lifecycle Player__",
+          slug: "__test-phantom-lifecycle-player__",
+          position: "MF" as const,
+          category: "current" as const,
+          clubId: club.id,
+          age: 24,
+          nationalTeamCaps: 0,
+          nationalTeamGoals: 0,
+          performanceTrend: "steady" as const,
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+      if (!player) throw new Error("Player insert failed");
+      phantomPlayerId = player.id;
+
+      // Insert a future fixture with apiFootballFixtureId set.
+      // The apiFootballFixtureId is absent from every freshById map we pass
+      // below, simulating the provider not returning this fixture.
+      const futureKickoff = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 h from now
+      const [phantom] = await db
+        .insert(fixturesTable)
+        .values({
+          apiFootballFixtureId: 9_997_001, // arbitrary; not in any real season fetch
+          isNationalTeam: false,
+          competition: "Phantom Lifecycle League",
+          kickoff: futureKickoff,
+          venue: "Phantom Stadium",
+          homeTeam: "__Phantom Home FC__",
+          awayTeam: "__Phantom Away FC__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!phantom) throw new Error("Phantom fixture insert failed");
+      phantomFixtureId = phantom.id;
+
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: phantom.id, playerId: player.id, clubId: club.id });
+
+      // ── Pre-run checks: confirm rows are present ───────────────────────────
+
+      const beforeFixture = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, phantom.id));
+      expect(beforeFixture).toHaveLength(1);
+
+      const beforeLink = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, phantom.id));
+      expect(beforeLink).toHaveLength(1);
+
+      // ── Run 1: kickoff is still in the future — must NOT delete ───────────
+      // Pass `now` as the current timestamp. The fixture's kickoff is 48 h
+      // ahead, so `tracked.kickoff.getTime() >= now` is true and the warn
+      // branch fires instead of the delete branch.
+      const run1 = await reconcileClubFixtures({
+        club: { id: club.id, name: club.name },
+        clubPlayerIds: [player.id],
+        freshById: new Map(), // empty — fixture absent from provider list
+        removalsTrustworthy: true,
+        now: Date.now(),
+      });
+
+      expect(
+        run1.fixturesRemoved,
+        `Run 1: reconcileClubFixtures should NOT have removed the fixture (kickoff is still future) ` +
+          `but reported fixturesRemoved=${run1.fixturesRemoved}`,
+      ).toBe(0);
+
+      // Confirm the fixture row still exists in the DB after run 1.
+      const afterRun1Fixture = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, phantom.id));
+      expect(
+        afterRun1Fixture,
+        `Run 1: fixture id=${phantom.id} should still be in the DB after warn-only reconciliation ` +
+          `(kickoff not yet past), but it was deleted`,
+      ).toHaveLength(1);
+
+      // Confirm the fixture_players link still exists after run 1.
+      const afterRun1Link = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, phantom.id));
+      expect(
+        afterRun1Link,
+        `Run 1: fixture_players link for fixture id=${phantom.id} should still exist after warn-only reconciliation ` +
+          `(kickoff not yet past), but it was deleted`,
+      ).toHaveLength(1);
+
+      // ── Backdate the kickoff: simulate time passing ────────────────────────
+      // Update the kickoff to 48 h in the past so the next reconciliation pass
+      // treats it as a past-kickoff missing fixture and removes it.
+      const pastKickoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      await db
+        .update(fixturesTable)
+        .set({ kickoff: pastKickoff })
+        .where(eq(fixturesTable.id, phantom.id));
+
+      // ── Run 2: kickoff is now in the past — must delete ───────────────────
+      // The kickoff is now 48 h ago, so `tracked.kickoff.getTime() >= now`
+      // is false and the delete branch fires.
+      const run2 = await reconcileClubFixtures({
+        club: { id: club.id, name: club.name },
+        clubPlayerIds: [player.id],
+        freshById: new Map(), // still empty — fixture still absent from provider list
+        removalsTrustworthy: true,
+        now: Date.now(),
+      });
+
+      expect(
+        run2.fixturesRemoved,
+        `Run 2: reconcileClubFixtures should have removed 1 fixture (kickoff now in the past) ` +
+          `but reported fixturesRemoved=${run2.fixturesRemoved}`,
+      ).toBe(1);
+
+      // ── Post-run-2: fixture row is gone from the DB ───────────────────────
+
+      const afterRun2Fixture = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(eq(fixturesTable.id, phantom.id));
+      expect(
+        afterRun2Fixture,
+        `Run 2: fixture id=${phantom.id} should have been deleted by reconcileClubFixtures ` +
+          `(kickoff now past, still absent from fresh provider list) but still exists in the DB`,
+      ).toHaveLength(0);
+
+      // ── Post-run-2: fixture_players link is gone from the DB ─────────────
+
+      const afterRun2Link = await db
+        .select({ fixtureId: fixturePlayersTable.fixtureId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, phantom.id));
+      expect(
+        afterRun2Link,
+        `Run 2: fixture_players link for fixture id=${phantom.id} should have been deleted ` +
+          `by reconcileClubFixtures but still exists in the DB`,
+      ).toHaveLength(0);
+
+      // Clear the ID so afterAll does not attempt a redundant delete.
+      phantomFixtureId = null;
+
+      // ── GET /fixtures?scope=upcoming no longer returns the row ─────────────
+
+      const res = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `/fixtures?scope=upcoming response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === phantom.id);
+      expect(
+        found,
+        `Phantom fixture id=${phantom.id} (deleted by run 2 of reconcileClubFixtures after kickoff passed) ` +
+          `still appears in GET /fixtures?scope=upcoming — the endpoint is returning deleted rows`,
+      ).toBeUndefined();
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 
 describe("ListFixturesResponse schema — response contract", () => {
