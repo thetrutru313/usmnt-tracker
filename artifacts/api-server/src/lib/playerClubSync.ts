@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, transfersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 
@@ -717,7 +717,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
         status: "confirmed",
         announcedAt: new Date(latest.date),
         summary: `${player.name} moved from ${fromClubName} to ${newClub.name} (synced from API-Football transfer history).`,
-      });
+      }).onConflictDoNothing();
       clubsUpdated++;
       logger.info({ player: player.name, from: fromClubName, to: newClub.name }, "Player club updated via API-Football sync");
     } catch (err) {
