@@ -259,12 +259,15 @@ async function resolvePlayerIdBySearch(
         .includes(surname);
     const isInitialMatch = (r: AfPlayerProfile) => normalizeName(r.player.firstname ?? "")[0] === firstInitial;
     const isUSANationality = (r: AfPlayerProfile) => r.player.nationality === "USA";
+    /** True when the candidate has a birth date AND that age is within tolerance of our player's on-file age. */
     const isAgeConsistent = (r: AfPlayerProfile) => {
       if (player.age == null) return true; // no on-file age to check against — don't reject on this alone
       const candidateAge = ageFromBirthDate(r.player.birth?.date);
-      if (candidateAge == null) return true; // API-Football didn't report a birth date — can't check, don't reject
+      if (candidateAge == null) return true; // API-Football didn't report a birth date — passes filter but is lower confidence (see hasBirthDate)
       return Math.abs(candidateAge - player.age) <= AGE_TOLERANCE_YEARS;
     };
+    /** True when the candidate has a confirmed birth date in API-Football (regardless of age match). */
+    const hasBirthDate = (r: AfPlayerProfile) => ageFromBirthDate(r.player.birth?.date) != null;
 
     const rejectedForAge = results.filter((r) => isSurnameMatch(r) && !isAgeConsistent(r));
     if (rejectedForAge.length > 0) {
@@ -276,11 +279,29 @@ async function resolvePlayerIdBySearch(
 
     const surnameCandidates = results.filter((r) => isSurnameMatch(r) && isAgeConsistent(r));
 
+    // Split surname candidates by birth-date confidence: "confident" = has a
+    // birth date that passed the age check, "dateless" = no birth date on file
+    // (age-consistent by default but unverifiable).  Dateless candidates are
+    // lower-confidence and only enter the initial-match pool when no
+    // age-confirmed candidate with the same initial also exists — this is the
+    // core fix for the Manu Romero class of wrong match (birth=None, passes
+    // every gate, wins on unambiguous surname alone).
+    const confidentSurnameCandidates = surnameCandidates.filter(hasBirthDate);
+    const datelessSurnameCandidates  = surnameCandidates.filter((r) => !hasBirthDate(r));
+
+    const confidentInitialCandidates = confidentSurnameCandidates.filter(isInitialMatch);
+    const datelessInitialCandidates  = datelessSurnameCandidates.filter(isInitialMatch);
+
     // Build the initial-match pool.  For USA-domestic clubs, apply the
     // nationality gate: if any USA-nationality candidate also matches the
     // initial, restrict the pool to USA-only so a non-USA player with the
     // same initial cannot win the tie-break.
-    const allInitialCandidates = surnameCandidates.filter(isInitialMatch);
+    //
+    // Confidence preference: if there are any age-confirmed candidates with a
+    // matching initial, exclude dateless ones from the pool entirely so they
+    // cannot win the tie-break over a person whose age we can actually verify.
+    const allInitialCandidates =
+      confidentInitialCandidates.length > 0 ? confidentInitialCandidates : datelessInitialCandidates;
     const usaInitialCandidates = allInitialCandidates.filter(isUSANationality);
     const effectiveInitialCandidates =
       isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : allInitialCandidates;
@@ -315,6 +336,22 @@ async function resolvePlayerIdBySearch(
       );
     }
 
+    // When a dateless candidate is the sole winner and our player has an
+    // on-file age, emit a prominent warning: we cannot verify age-consistency,
+    // so the match is lower-confidence than usual.
+    if (match && !hasBirthDate(match) && player.age != null) {
+      logger.warn(
+        {
+          player: player.name,
+          onFileAge: player.age,
+          candidateId: match.player.id,
+          candidateName: match.player.name,
+          candidateNationality: match.player.nationality,
+        },
+        "DATELESS CANDIDATE MATCHED — API-Football has no birth date for this candidate; age cannot be verified. If the photo or stats look wrong, add a null pin to KNOWN_PLAYER_IDS.",
+      );
+    }
+
     if (!match) {
       // No first-initial match — likely a nickname vs. legal-name mismatch
       // rather than the wrong player, since the surname search already
@@ -332,7 +369,20 @@ async function resolvePlayerIdBySearch(
       // clubs we therefore require the initial to match even in this fallback;
       // if it doesn't we log a prominent warning and leave the player unresolved
       // rather than silently accepting the wrong person.
-      const usaSurnameCandidates = surnameCandidates.filter(isUSANationality);
+      //
+      // Confidence preference in surname fallback: prefer a candidate with a
+      // confirmed birth date over a dateless one. If the only unambiguous
+      // surname match is dateless and our player has an on-file age, reject it
+      // rather than silently accepting an unverifiable match.
+      const usaConfidentSurnameCandidates = confidentSurnameCandidates.filter(isUSANationality);
+      const usaDatelessSurnameCandidates  = datelessSurnameCandidates.filter(isUSANationality);
+
+      // Prefer age-confirmed candidates; fall back to dateless only when no
+      // confident candidate is unambiguously unique.
+      const usaSurnameCandidates =
+        usaConfidentSurnameCandidates.length > 0 ? usaConfidentSurnameCandidates : usaDatelessSurnameCandidates;
+      const effectiveSurnameCandidates =
+        confidentSurnameCandidates.length > 0 ? confidentSurnameCandidates : datelessSurnameCandidates;
 
       const candidateBlockedByInitial = (candidate: AfPlayerProfile): boolean => {
         if (!isUSADomestic) return false;
@@ -341,8 +391,8 @@ async function resolvePlayerIdBySearch(
       };
 
       let candidate: AfPlayerProfile | undefined;
-      if (surnameCandidates.length === 1) {
-        candidate = surnameCandidates[0];
+      if (effectiveSurnameCandidates.length === 1) {
+        candidate = effectiveSurnameCandidates[0];
       } else if (usaSurnameCandidates.length === 1) {
         candidate = usaSurnameCandidates[0];
       }
@@ -360,10 +410,30 @@ async function resolvePlayerIdBySearch(
             },
             "USA-domestic initial gate (surname fallback): rejected unambiguous surname match because candidate's first initial disagrees — leaving unresolved to avoid a Manu-Romero-style wrong match",
           );
+        } else if (!hasBirthDate(candidate) && player.age != null) {
+          // The only unambiguous match has no birth date and we have an on-file
+          // age — too risky to accept silently. Log and leave unresolved so an
+          // admin can verify and pin in KNOWN_PLAYER_IDS.
+          logger.warn(
+            {
+              player: player.name,
+              onFileAge: player.age,
+              candidateId: candidate.player.id,
+              candidateName: candidate.player.name,
+              candidateNationality: candidate.player.nationality,
+            },
+            "DATELESS SURNAME-FALLBACK CANDIDATE REJECTED — player has an on-file age but the only unambiguous surname match has no birth date; leaving unresolved. Verify via /players/teams?player=<id> and pin in KNOWN_PLAYER_IDS if correct.",
+          );
         } else {
           match = candidate;
+          const isDatelessMatch = !hasBirthDate(candidate);
           logger.info(
-            { player: player.name, matchedName: match.player.name, matchedFirstname: match.player.firstname },
+            {
+              player: player.name,
+              matchedName: match.player.name,
+              matchedFirstname: match.player.firstname,
+              ...(isDatelessMatch ? { dateless: true, warning: "No birth date on file — age could not be verified" } : {}),
+            },
             "Matched via unambiguous surname rather than first-initial — likely a nickname vs. legal-name mismatch",
           );
         }
