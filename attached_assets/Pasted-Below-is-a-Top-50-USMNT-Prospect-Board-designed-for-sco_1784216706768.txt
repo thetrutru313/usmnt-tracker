@@ -1,0 +1,116 @@
+Below is a **Top 50 USMNT Prospect Board** designed for scouting rather than current USMNT quality. It combines consensus from:
+
+* US Soccer Collective Top 50 rankings
+* ESPN U21 prospect rankings
+* r/ussoccer and r/usmnt discussions
+* Americans Abroad reporting
+* Tactical Manager TV, 11 Yanks, Scuffed, Yank Report, Orange Slices, and Brian Sciaretta's reporting. ([ussoccercollective.com][1])
+
+### Tier 1 — Elite (Potential future USMNT starters)
+
+| Rank | Player          | Pos | Club               | Birth Yr | Dual Nat       |
+| ---- | --------------- | --- | ------------------ | -------- | -------------- |
+| 1    | Cavan Sullivan  | AM  | Philadelphia Union | 2009     | No             |
+| 2    | Noahkai Banks   | CB  | Augsburg           | 2006     | Germany        |
+| 3    | Diego Kochen    | GK  | Barcelona          | 2006     | Peru/Venezuela |
+| 4    | Mathis Albert   | W   | Borussia Dortmund  | 2009     | Germany        |
+| 5    | Damion Downs    | ST  | Köln               | 2004     | Germany        |
+| 6    | Cole Campbell   | RW  | Borussia Dortmund  | 2006     | Iceland        |
+| 7    | Alex Freeman    | RB  | Orlando City       | 2004     | No             |
+| 8    | Keyrol Figueroa | ST  | Liverpool          | 2006     | Honduras       |
+| 9    | Zavier Gozo     | W   | Real Salt Lake     | 2007     | No             |
+| 10   | Josh Wynder     | CB  | Benfica            | 2005     | No             |
+
+---
+
+### Tier 2 — High-Level Prospects
+
+11. Neil Pierre (CB, Philadelphia Union)
+12. Rokas Pukštas (CM, Hajduk Split)
+13. Benjamin Cremaschi (CM, Inter Miami)
+14. Adrian Gill (CM, Barcelona Atlètic)
+15. Taha Habroune (CM, Columbus Crew)
+16. Pedro Soma (DM, Cornellà)
+17. Niko Tsakiris (CM, San Jose)
+18. Julian Hall (ST, NY Red Bulls)
+19. Frankie Westfield (RB, Philadelphia)
+20. Christian McFarlane (LB, Manchester City)
+
+---
+
+### Tier 3 — First-Team Professional Prospects
+
+21. Paxten Aaronson
+22. Quinn Sullivan
+23. Jude Wellings
+24. Peyton Miller
+25. Matai Akinmboni
+26. Fidel Barajas
+27. Adrian Simon Gill
+28. Cruz Medina
+29. Brooklyn Raines
+30. Sergio Oregel Jr.
+
+---
+
+### Tier 4 — MLS NEXT / Europe Breakout Candidates
+
+31. David Vazquez
+32. Cavan Sullivan's brother Quinn Sullivan (still U23 value)
+33. Manu Romero
+34. Dino Klapija
+35. Austyn Jones
+36. Tyler Meiser
+37. Owen Presthus
+38. Julian Eyestone
+39. Chris Brady
+40. Gaga Slonina
+
+---
+
+### Tier 5 — Long-Term Watch List
+
+41. Montrell Culbreath
+42. Hezarkhani
+43. Jude Terry
+44. Leonardo Prescott
+45. Mathis Albert (if tracking by age class, otherwise replace with another academy player)
+46. Xanti Oyharçabal
+47. Bora Aydinlik
+48. Christian Kofane (U.S.-eligible discussions remain speculative; verify eligibility before surfacing prominently)
+49. Ruben Ramos Jr.
+50. Leo Duru
+
+## Highest-priority dual-national tracker
+
+If your app is specifically about **recruiting battles**, I'd give these players the highest monitoring priority:
+
+| Player              | Eligible For                              | Commitment Risk |                  |
+| ------------------- | ----------------------------------------- | --------------- | ---------------- |
+| Noahkai Banks       | Germany / USA                             | 🔴 Very High    |                  |
+| Damion Downs        | Germany / USA                             | 🔴 Very High    |                  |
+| Cole Campbell       | Iceland / USA                             | 🟠 High         |                  |
+| Diego Kochen        | Peru / Venezuela / USA                    | 🟠 High         |                  |
+| Keyrol Figueroa     | Honduras / USA                            | 🟠 High         |                  |
+| Christian McFarlane | England / Jamaica / USA                   | 🟠 High         |                  |
+| Dino Klapija        | Croatia / Bosnia / Kosovo / Albania / USA | 🟡 Medium       |                  |
+| Bora Aydinlik       | Turkey / USA                              | 🟡 Medium       |                  |
+| Austyn Jones        | Netherlands / USA                         | 🟡 Medium       |                  |
+| Xanti Oyharçabal    | France / Colombia / USA                   | 🟡 Medium       | ([Wikipedia][2]) |
+
+For an app, I'd also recommend assigning each prospect:
+
+* **Potential** (1–100)
+* **USMNT Readiness**
+* **Dual-National Risk**
+* **Club Trajectory**
+* **Transfer Buzz**
+* **Senior Minutes**
+* **Reddit Hype Score**
+* **YouTube Hype Score**
+* **Scout Confidence**
+
+That combination lets you rank players not only by talent, but also by how likely they are to become impactful USMNT contributors or recruiting priorities.
+
+[1]: https://www.ussoccercollective.com/rankings/top-50?utm_source=chatgpt.com "US/SC – Top 50 USMNT Prospects"
+[2]: https://en.wikipedia.org/wiki/List_of_United_States_men%27s_national_soccer_team_dual_nationals?utm_source=chatgpt.com "List of United States men's national soccer team dual nationals"
