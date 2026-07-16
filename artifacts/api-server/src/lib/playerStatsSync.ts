@@ -722,6 +722,21 @@ export async function syncPlayerStatsAndInjuries(
 
   await ensurePlayerApiFootballIds(players, clubsById);
 
+  // Safety-net pre-reset: set every syncing player's performance_trend to
+  // 'steady' before any club loop runs. If a club block throws and the
+  // per-player definitive write (at the end of each player block) never
+  // executes, the player lands on 'steady' rather than carrying a stale
+  // badge from a prior sync run. The per-player computeFormTier write later
+  // in the loop overwrites this with the correct value for players whose
+  // sync completes cleanly.
+  if (players.length > 0) {
+    const playerIdList = players.map((p) => p.id);
+    await db
+      .update(playersTable)
+      .set({ performanceTrend: "steady", trending: false })
+      .where(inArray(playersTable.id, playerIdList));
+  }
+
   const playersByClub = new Map<number, PlayerRow[]>();
   for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
 
