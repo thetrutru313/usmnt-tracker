@@ -202,11 +202,14 @@ describe("USA-domestic initial gate — nickname player whose stored initial dis
     );
     expect(gateWarning).toBeDefined();
 
-    // The logged metadata should identify the player and the disagreeing initials.
+    // The logged metadata should identify the player and the disagreeing initials,
+    // plus the candidate id — enough for an admin to action the stuck prospect.
     const meta = gateWarning?.[0] as Record<string, unknown>;
     expect(meta).toMatchObject({
       player: "Gaga Testslonina",
       ourInitial: "g",
+      candidateInitial: "n",
+      candidateId: 201711,
     });
   });
 

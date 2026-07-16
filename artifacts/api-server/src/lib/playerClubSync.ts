@@ -399,10 +399,12 @@ async function resolvePlayerIdBySearch(
 
       if (candidate) {
         if (candidateBlockedByInitial(candidate)) {
+          const candidateInitial = normalizeName(candidate.player.firstname ?? "")[0] ?? null;
           logger.warn(
             {
               player: player.name,
               ourInitial: firstInitial,
+              candidateInitial,
               candidateId: candidate.player.id,
               candidateName: candidate.player.name,
               candidateFirstname: candidate.player.firstname,
