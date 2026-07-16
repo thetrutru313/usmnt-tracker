@@ -1414,6 +1414,163 @@ describe("Fixture reconciliation — future-missing fixture is warned (run 1) th
   );
 });
 
+// ─── Live national-team fixture transfer-preservation guard ──────────────────
+
+/**
+ * Regression guard: a national-team fixture whose status is "live" (or
+ * "in_progress") must keep showing every player linked to it even if that
+ * player has since transferred to a different club.
+ *
+ * ## What is tested
+ * 1. A fixture with isNationalTeam=true and status="live" is inserted.
+ * 2. A player is linked to it with clubId=null in fixture_players (the curated
+ *    national-team link pattern).
+ * 3. The player's clubId is updated (simulating a club transfer mid-match).
+ * 4. GET /fixtures (no scope filter) returns the fixture and the player IS
+ *    still present in featuredPlayers.
+ *
+ * ## Why this matters
+ * The isStaleClubLink guard in getFeaturedPlayersForFixtures only activates
+ * when linkClubId !== null AND fixtureStatus === "scheduled". National-team
+ * links always have linkClubId=null, so neither condition applies for live
+ * fixtures. This test explicitly exercises that combination to prevent a
+ * future refactor from accidentally narrowing the null-clubId guard and
+ * dropping players from in-progress national-team fixtures.
+ */
+
+describe("GET /fixtures — live national-team fixture keeps player in featuredPlayers after club transfer", () => {
+  let liveNtClubAId: number | null = null;
+  let liveNtClubBId: number | null = null;
+  let liveNtPlayerId: number | null = null;
+  let liveNtFixtureId: number | null = null;
+
+  afterAll(async () => {
+    if (liveNtFixtureId !== null) {
+      await db
+        .delete(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, liveNtFixtureId));
+      await db
+        .delete(fixturesTable)
+        .where(eq(fixturesTable.id, liveNtFixtureId));
+    }
+    if (liveNtPlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, liveNtPlayerId));
+    }
+    if (liveNtClubBId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, liveNtClubBId));
+    }
+    if (liveNtClubAId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, liveNtClubAId));
+    }
+  });
+
+  it(
+    "player linked with clubId=null on a live national-team fixture still appears in featuredPlayers after a club transfer",
+    async () => {
+      // ── Setup ──────────────────────────────────────────────────────────────
+
+      // Club A: the player's club when the national-team fixture went live.
+      const [clubA] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_live_nt_club_a__", league: "Test Live NT League A", country: "USA" })
+        .returning({ id: clubsTable.id });
+      if (!clubA) throw new Error("Club A insert failed");
+      liveNtClubAId = clubA.id;
+
+      // Club B: the destination of the mid-match transfer.
+      const [clubB] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_live_nt_club_b__", league: "Test Live NT League B", country: "GER" })
+        .returning({ id: clubsTable.id });
+      if (!clubB) throw new Error("Club B insert failed");
+      liveNtClubBId = clubB.id;
+
+      // Player starts at club A.
+      const [player] = await db
+        .insert(playersTable)
+        .values({
+          name: "__Test Live NT Fixture Player__",
+          slug: "__test-live-nt-fixture-player__",
+          position: "MF" as const,
+          category: "current" as const,
+          clubId: clubA.id,
+          age: 23,
+          nationalTeamCaps: 15,
+          nationalTeamGoals: 3,
+          performanceTrend: "steady" as const,
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+      if (!player) throw new Error("Player insert failed");
+      liveNtPlayerId = player.id;
+
+      // Insert a national-team fixture with status="live" and a kickoff in the
+      // recent past (match started ~1 h ago). No scope filter is needed to
+      // retrieve it from GET /fixtures.
+      const kickoff = new Date(Date.now() - 60 * 60 * 1000); // 1 h ago
+      const [fixture] = await db
+        .insert(fixturesTable)
+        .values({
+          isNationalTeam: true,
+          competition: "USMNT Gold Cup",
+          kickoff,
+          venue: "Test Live NT Stadium",
+          homeTeam: "USA",
+          awayTeam: "__Live NT Opponent__",
+          status: "live",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixture) throw new Error("Live national-team fixture insert failed");
+      liveNtFixtureId = fixture.id;
+
+      // Link the player with clubId=null — the curated national-team pattern.
+      // isStaleClubLink can only fire when linkClubId !== null, so this link
+      // must always pass through regardless of the fixture's status or any
+      // club transfer.
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: fixture.id, playerId: player.id, clubId: null });
+
+      // ── Transfer: update the player's club to club B mid-match ────────────
+      await db
+        .update(playersTable)
+        .set({ clubId: clubB.id })
+        .where(eq(playersTable.id, player.id));
+
+      // ── Assertion: live national-team fixture still shows the player ───────
+      // No scope filter — returns all fixtures including those with past kickoffs.
+      const res = await request(app).get("/api/fixtures").expect(200);
+
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `/fixtures response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === fixture.id);
+      expect(
+        found,
+        `Live national-team fixture id=${fixture.id} (isNationalTeam=true, status="live") ` +
+          `was not returned by GET /fixtures — check that fixtures with past kickoffs ` +
+          `appear when no scope filter is provided`,
+      ).toBeDefined();
+
+      const featuredIds = (found!.featuredPlayers ?? []).map((p: { id: number }) => p.id);
+      expect(
+        featuredIds,
+        `Player id=${player.id} was linked to live national-team fixture id=${fixture.id} ` +
+          `with clubId=null and should appear in featuredPlayers even after transferring ` +
+          `from club A (id=${clubA.id}) to club B (id=${clubB.id}). ` +
+          `The isStaleClubLink guard must NOT activate for null-clubId links, ` +
+          `regardless of whether the fixture status is "scheduled" or "live".`,
+      ).toContain(player.id);
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 
 describe("ListFixturesResponse schema — response contract", () => {
