@@ -1,7 +1,14 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { afFetch, apiKey } from "../lib/apiFootballSync";
+import { ageFromBirthDate } from "../lib/playerClubSync";
+
+/** Minimal shape we need from the /players API-Football endpoint. */
+interface AfPlayerRecord {
+  player: { birth: { date: string | null } };
+}
 
 const router: IRouter = Router();
 
@@ -169,6 +176,62 @@ router.post("/admin/player-candidates/:id/promote", async (req, res): Promise<vo
       res.status(500).json({ error: "Promote failed", detail: msg });
     }
   }
+});
+
+/**
+ * POST /admin/backfill-dob
+ * For every player that has an api_football_player_id but no date_of_birth,
+ * fetches their birth date from API-Football (/players?id=&season=2026) and
+ * writes it to the DB. Runs in the background — returns immediately with the
+ * number of players queued. Check server logs for per-player progress.
+ */
+router.post("/admin/backfill-dob", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+
+  const players = await db
+    .select({ id: playersTable.id, name: playersTable.name, apiFootballPlayerId: playersTable.apiFootballPlayerId, age: playersTable.age })
+    .from(playersTable)
+    .where(isNotNull(playersTable.apiFootballPlayerId) && isNull(playersTable.dateOfBirth));
+
+  logger.info({ count: players.length }, "Admin: DOB backfill started");
+  res.json({ ok: true, queued: players.length });
+
+  // Run in background — afFetch is already rate-limited by the shared queue
+  // so calls go out at the correct pace without additional throttling here.
+  // Try seasons in descending order (same as the main playerStats sync) so
+  // players whose most recent activity is in a prior season still get a DOB.
+  const currentYear = new Date().getUTCFullYear();
+  const seasons = [currentYear, currentYear - 1, currentYear - 2];
+
+  (async () => {
+    let updated = 0;
+    let failed = 0;
+    for (const player of players) {
+      try {
+        let birthDate: string | null = null;
+        for (const season of seasons) {
+          const [data] = await afFetch<AfPlayerRecord[]>(`/players?id=${player.apiFootballPlayerId}&season=${season}`);
+          birthDate = data?.player?.birth?.date ?? null;
+          if (birthDate) break; // found it — no need to check older seasons
+        }
+        if (!birthDate) {
+          logger.debug({ playerId: player.id, name: player.name }, "DOB backfill: no birth date returned for any season");
+          continue;
+        }
+        const liveAge = ageFromBirthDate(birthDate) ?? player.age;
+        await db.update(playersTable).set({ dateOfBirth: birthDate, age: liveAge }).where(eq(playersTable.id, player.id));
+        logger.info({ playerId: player.id, name: player.name, birthDate, liveAge }, "DOB backfill: updated");
+        updated++;
+      } catch (err) {
+        logger.warn({ err, playerId: player.id, name: player.name }, "DOB backfill: fetch failed");
+        failed++;
+      }
+    }
+    logger.info({ updated, failed, total: players.length }, "Admin: DOB backfill complete");
+  })().catch((err) => logger.error({ err }, "Admin: DOB backfill crashed"));
 });
 
 export default router;
