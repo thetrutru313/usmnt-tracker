@@ -86,16 +86,6 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   // search /players/profiles?search=Medina and confirm birth date, then
   // replace null with the verified number and run trigger-sync for player 66.
   "Cruz Medina": null,
-  // Manu Romero: verified 2026-07-16 against /players/squads?team=7926 (Real
-  // Madrid U19) and /players/profiles?search=Romero — not present in either.
-  // USA-nationality hits are C. Romero, J. Romero, G. Romero (no birth date),
-  // Charlie Romero — none match "M. Romero". Previously "G. Romero USA,
-  // birth=None" was winning the unambiguous-surname fallback due to initial
-  // mismatch; the pin prevents that from recurring.
-  // To lift: verify against the 2026-27 Real Madrid U19 squad once published,
-  // or search /players/profiles?search=Romero and confirm birth date, then
-  // replace null with the verified number and run trigger-sync for player 73.
-  "Manu Romero": null,
 };
 
 /**
@@ -299,17 +289,53 @@ async function resolvePlayerIdBySearch(
       // rather than the wrong player, since the surname search already
       // narrowed the field. Only safe to accept without the initial check
       // when the surname match is unambiguous.
+      //
+      // USA-domestic initial gate: for players at USA-domestic clubs, an
+      // unambiguous surname match is NOT sufficient when the candidate's
+      // first initial also disagrees with ours. The Manu Romero case showed
+      // this exactly — "G. Romero USA, birth=None" was the only USA-nationality
+      // Romero in the index, so it won the unambiguous-surname path despite
+      // having the wrong initial ("G" vs our "M"). Without a birth date to
+      // check, neither the age filter nor the initial gate (which only applies
+      // to the initial-match pool above) could block it. For USA-domestic
+      // clubs we therefore require the initial to match even in this fallback;
+      // if it doesn't we log a prominent warning and leave the player unresolved
+      // rather than silently accepting the wrong person.
       const usaSurnameCandidates = surnameCandidates.filter(isUSANationality);
+
+      const candidateBlockedByInitial = (candidate: AfPlayerProfile): boolean => {
+        if (!isUSADomestic) return false;
+        const candidateInitial = normalizeName(candidate.player.firstname ?? "")[0];
+        return candidateInitial != null && candidateInitial !== firstInitial;
+      };
+
+      let candidate: AfPlayerProfile | undefined;
       if (surnameCandidates.length === 1) {
-        match = surnameCandidates[0];
+        candidate = surnameCandidates[0];
       } else if (usaSurnameCandidates.length === 1) {
-        match = usaSurnameCandidates[0];
+        candidate = usaSurnameCandidates[0];
       }
-      if (match) {
-        logger.info(
-          { player: player.name, matchedName: match.player.name, matchedFirstname: match.player.firstname },
-          "Matched via unambiguous surname rather than first-initial — likely a nickname vs. legal-name mismatch",
-        );
+
+      if (candidate) {
+        if (candidateBlockedByInitial(candidate)) {
+          logger.warn(
+            {
+              player: player.name,
+              ourInitial: firstInitial,
+              candidateId: candidate.player.id,
+              candidateName: candidate.player.name,
+              candidateFirstname: candidate.player.firstname,
+              candidateNationality: candidate.player.nationality,
+            },
+            "USA-domestic initial gate (surname fallback): rejected unambiguous surname match because candidate's first initial disagrees — leaving unresolved to avoid a Manu-Romero-style wrong match",
+          );
+        } else {
+          match = candidate;
+          logger.info(
+            { player: player.name, matchedName: match.player.name, matchedFirstname: match.player.firstname },
+            "Matched via unambiguous surname rather than first-initial — likely a nickname vs. legal-name mismatch",
+          );
+        }
       }
     }
 
