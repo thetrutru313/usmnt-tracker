@@ -562,14 +562,29 @@ async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<numbe
           };
 
           const surnameCandidates = results.filter((r) => isSurnameMatch(r) && isAgeConsistent(r));
-          const initialCandidates = surnameCandidates.filter(isInitialMatch);
+
+          // Split by birth-date confidence — mirrors the Task #155 fix in
+          // resolvePlayerIdBySearch.  Dateless candidates (no birth date on
+          // file) pass isAgeConsistent by default but their age cannot be
+          // verified, so they are lower-confidence.  Prefer age-confirmed
+          // candidates when building the initial-match pool; only fall back
+          // to dateless ones when no confirmed candidate exists.
+          const hasBirthDate = (r: AfPlayerProfile) => ageFromBirthDate(r.player.birth?.date) != null;
+          const confidentSurnameCandidates = surnameCandidates.filter(hasBirthDate);
+          const datelessSurnameCandidates  = surnameCandidates.filter((r) => !hasBirthDate(r));
+
+          const confidentInitialCandidates = confidentSurnameCandidates.filter(isInitialMatch);
+          const datelessInitialCandidates  = datelessSurnameCandidates.filter(isInitialMatch);
+
+          const allInitialCandidates =
+            confidentInitialCandidates.length > 0 ? confidentInitialCandidates : datelessInitialCandidates;
 
           // Apply the same USA-domestic nationality gate used in resolvePlayerIdBySearch.
           const isUSADomestic = club?.country === "USA";
           const isUSANationality = (r: AfPlayerProfile) => r.player.nationality === "USA";
-          const usaInitialCandidates = initialCandidates.filter(isUSANationality);
+          const usaInitialCandidates = allInitialCandidates.filter(isUSANationality);
           const effectiveInitialCandidates =
-            isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : initialCandidates;
+            isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : allInitialCandidates;
 
           let match: AfPlayerProfile | undefined;
           const usaEffective = effectiveInitialCandidates.filter(isUSANationality);
@@ -583,7 +598,7 @@ async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<numbe
             candidateId = match.player.id;
             candidateName = match.player.name;
             candidateBirth = match.player.birth?.date ?? null;
-            source = "profile search";
+            source = hasBirthDate(match) ? "profile search" : "profile search (dateless — age unverifiable)";
           }
         } catch (err) {
           logger.warn({ err, player: player.name }, "Null-pinned check: profile search failed");
@@ -592,6 +607,7 @@ async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<numbe
     }
 
     if (candidateId) {
+      const isDateless = candidateBirth == null;
       logger.warn(
         {
           player: player.name,
@@ -599,9 +615,14 @@ async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<numbe
           candidateName,
           candidateBirth,
           source,
+          ...(isDateless
+            ? { ageVerified: false, datelessWarning: "API-Football has no birth date for this candidate — age could not be verified; treat as lower-confidence and cross-check stats/photo before promoting" }
+            : { ageVerified: true }),
           action: "Verify via /players/teams?player=" + candidateId + " then update KNOWN_PLAYER_IDS to confirm",
         },
-        "NULL-PINNED PLAYER CANDIDATE FOUND — manual verification required before promoting to a confirmed pin",
+        isDateless
+          ? "NULL-PINNED PLAYER CANDIDATE FOUND (DATELESS — AGE UNVERIFIABLE) — manual verification required before promoting to a confirmed pin"
+          : "NULL-PINNED PLAYER CANDIDATE FOUND — manual verification required before promoting to a confirmed pin",
       );
     } else {
       logger.info({ player: player.name }, "Null-pinned check: player still not indexed in API-Football");
