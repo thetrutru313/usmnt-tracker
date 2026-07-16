@@ -32,7 +32,7 @@ interface AfTransfersResponse {
   transfers: AfTransfer[];
 }
 
-type ClubRow = { id: number; name: string; apiFootballTeamId: number | null };
+type ClubRow = { id: number; name: string; apiFootballTeamId: number | null; country?: string };
 type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number };
 
 /**
@@ -199,9 +199,18 @@ async function resolvePlayerIdsViaSquads(players: PlayerRow[], clubsById: Map<nu
  * indexes as "C. Sullivan" and is USA-nationality. Neither of those checks
  * catches a same-initial, same-surname person who is an entirely different
  * age (and gender). When our on-file `age` is known, candidates whose
- * API-Football birth date implies an age more than 6 years off are dropped
+ * API-Football birth date implies an age more than 3 years off are dropped
  * before the initial/nationality tie-break runs, so this class of mismatch
  * fails safe (unresolved) rather than confidently picking the wrong person.
+ *
+ * Secondary nationality gate (USA-domestic clubs only): when the player's
+ * on-file club is a USA-domestic league (country === "USA"), any non-USA
+ * candidate in the initial-match pool is silently dropped if at least one
+ * USA-nationality candidate with the same initial also exists. This prevents
+ * a Chilean/Mexican player with the same initial from winning the tie-break
+ * over the correct USA player — the tighter age window handles most cases,
+ * but the gate adds a second line of defence against future edge-cases where
+ * a foreign player happens to be within ±3 years of our prospect.
  */
 export function ageFromBirthDate(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
@@ -211,7 +220,14 @@ export function ageFromBirthDate(dateStr: string | null | undefined): number | n
   return Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
 }
 
-async function resolvePlayerIdBySearch(player: { id: number; name: string; age?: number }): Promise<number | null> {
+/** Age-consistency tolerance in years used by `resolvePlayerIdBySearch`. */
+export const AGE_TOLERANCE_YEARS = 3;
+
+async function resolvePlayerIdBySearch(
+  player: { id: number; name: string; age?: number },
+  opts?: { isUSADomestic?: boolean },
+): Promise<number | null> {
+  const isUSADomestic = opts?.isUSADomestic ?? false;
   const normalized = normalizeName(player.name).split(" ");
   const surname = normalized.at(-1);
   const firstInitial = normalized[0]?.[0];
@@ -225,11 +241,12 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string; age?:
         .filter(Boolean)
         .includes(surname);
     const isInitialMatch = (r: AfPlayerProfile) => normalizeName(r.player.firstname ?? "")[0] === firstInitial;
+    const isUSANationality = (r: AfPlayerProfile) => r.player.nationality === "USA";
     const isAgeConsistent = (r: AfPlayerProfile) => {
       if (player.age == null) return true; // no on-file age to check against — don't reject on this alone
       const candidateAge = ageFromBirthDate(r.player.birth?.date);
       if (candidateAge == null) return true; // API-Football didn't report a birth date — can't check, don't reject
-      return Math.abs(candidateAge - player.age) <= 6;
+      return Math.abs(candidateAge - player.age) <= AGE_TOLERANCE_YEARS;
     };
 
     const rejectedForAge = results.filter((r) => isSurnameMatch(r) && !isAgeConsistent(r));
@@ -242,18 +259,32 @@ async function resolvePlayerIdBySearch(player: { id: number; name: string; age?:
 
     const surnameCandidates = results.filter((r) => isSurnameMatch(r) && isAgeConsistent(r));
 
-    // Strongest signal: surname match plus a matching first-name initial,
-    // preferring USA nationality to break ties on common surnames.
+    // Build the initial-match pool.  For USA-domestic clubs, apply the
+    // nationality gate: if any USA-nationality candidate also matches the
+    // initial, restrict the pool to USA-only so a non-USA player with the
+    // same initial cannot win the tie-break.
+    const allInitialCandidates = surnameCandidates.filter(isInitialMatch);
+    const usaInitialCandidates = allInitialCandidates.filter(isUSANationality);
+    const effectiveInitialCandidates =
+      isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : allInitialCandidates;
+
+    // Strongest signal: surname + initial, preferring USA nationality.
     let match =
-      surnameCandidates.find((r) => isInitialMatch(r) && r.player.nationality === "USA") ??
-      surnameCandidates.find(isInitialMatch);
+      effectiveInitialCandidates.find(isUSANationality) ?? (effectiveInitialCandidates.length === 1 ? effectiveInitialCandidates[0] : undefined);
+
+    if (isUSADomestic && allInitialCandidates.length > 0 && usaInitialCandidates.length > 0 && allInitialCandidates.length !== effectiveInitialCandidates.length) {
+      logger.info(
+        { player: player.name, rejectedNonUSA: allInitialCandidates.filter((r) => !isUSANationality(r)).map((r) => ({ id: r.player.id, name: r.player.name, nationality: r.player.nationality })) },
+        "USA-domestic nationality gate: rejected non-USA initial-match candidate(s) because a USA-nationality match also exists",
+      );
+    }
 
     if (!match) {
       // No first-initial match — likely a nickname vs. legal-name mismatch
       // rather than the wrong player, since the surname search already
       // narrowed the field. Only safe to accept without the initial check
       // when the surname match is unambiguous.
-      const usaSurnameCandidates = surnameCandidates.filter((r) => r.player.nationality === "USA");
+      const usaSurnameCandidates = surnameCandidates.filter(isUSANationality);
       if (surnameCandidates.length === 1) {
         match = surnameCandidates[0];
       } else if (usaSurnameCandidates.length === 1) {
@@ -313,7 +344,8 @@ export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById
     // API-Football (or have a surname so common that search always false-positives).
     // `applyKnownPlayerIdOverrides` already cleared any bad id; don't re-search.
     if (KNOWN_PLAYER_IDS[player.name] === null) continue;
-    player.apiFootballPlayerId = await resolvePlayerIdBySearch(player);
+    const club = clubsById.get(player.clubId);
+    player.apiFootballPlayerId = await resolvePlayerIdBySearch(player, { isUSADomestic: club?.country === "USA" });
   }
   await syncResolvedPlayerPhotos(players);
 }
@@ -337,7 +369,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
     })
     .from(playersTable);
   const clubs: ClubRow[] = await db
-    .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
+    .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId, country: clubsTable.country })
     .from(clubsTable);
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
   const clubsByApiFootballId = new Map(clubs.filter((c): c is ClubRow & { apiFootballTeamId: number } => c.apiFootballTeamId != null).map((c) => [c.apiFootballTeamId, c]));
