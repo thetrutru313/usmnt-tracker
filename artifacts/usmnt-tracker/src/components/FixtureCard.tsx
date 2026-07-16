@@ -14,8 +14,8 @@ export const POOL_TIER_LABELS: Record<PoolTier, string> = {
 
 export const POOL_TIER_STYLES: Record<PoolTier, string> = {
   core: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
-  inMix: "bg-primary/5 text-foreground border-border hover:bg-primary/10 hover:border-primary/30",
-  prospect: "bg-muted text-muted-foreground border-border hover:bg-muted/70 hover:border-border",
+  inMix: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
+  prospect: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
 };
 
 /** Small tricolor icon shown before a player's name, indicating pool tier. */
@@ -32,13 +32,22 @@ export function PoolTierIcon({ tier }: { tier: PoolTier }) {
   }
   if (tier === "inMix") {
     return (
-      <span
-        className="w-1 h-3 rounded-sm shrink-0 bg-gradient-to-b from-primary via-white to-usmnt-blue"
+      <img
+        src={`${import.meta.env.BASE_URL}badges/shield-in-mix.png`}
+        alt=""
         aria-hidden="true"
+        className="w-3.5 h-3.5 object-contain shrink-0"
       />
     );
   }
-  return <Star size={12} strokeWidth={2} className="text-amber-500 fill-none shrink-0" aria-hidden="true" />;
+  return (
+    <img
+      src={`${import.meta.env.BASE_URL}badges/shield-prospect.png`}
+      alt=""
+      aria-hidden="true"
+      className="w-3.5 h-3.5 object-contain shrink-0"
+    />
+  );
 }
 
 export type FixtureCardFixture = {

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
+import { PoolTierIcon, POOL_TIER_STYLES } from "@/components/FixtureCard";
+import type { PoolTier } from "@/components/FixtureCard";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { formatKickoff } from "@/lib/formatTime";
@@ -82,12 +84,16 @@ export default function PlayerProfile() {
             
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <Badge variant={
-                  player.category === 'current' ? 'default' : 
-                  player.category === 'fringe' ? 'secondary' : 'outline'
-                } className="uppercase font-mono text-[10px] tracking-widest">
-                  {player.category === 'current' ? 'Core Squad' : player.category === 'fringe' ? 'In the Mix' : 'Prospect'}
-                </Badge>
+                {(() => {
+                  const tier: PoolTier = player.category === 'current' ? 'core' : player.category === 'fringe' ? 'inMix' : 'prospect';
+                  const label = player.category === 'current' ? 'Core Squad' : player.category === 'fringe' ? 'In the Mix' : 'Prospect';
+                  return (
+                    <Badge variant="outline" className={`uppercase font-mono text-[10px] tracking-widest flex items-center gap-1 ${POOL_TIER_STYLES[tier]}`}>
+                      <PoolTierIcon tier={tier} />
+                      {label}
+                    </Badge>
+                  );
+                })()}
                 {player.performanceTrend && (
                   <FormBadge trend={player.performanceTrend} />
                 )}
