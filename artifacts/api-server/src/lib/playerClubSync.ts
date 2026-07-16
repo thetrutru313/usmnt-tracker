@@ -86,6 +86,18 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   // search /players/profiles?search=Medina and confirm birth date, then
   // replace null with the verified number and run trigger-sync for player 66.
   "Cruz Medina": null,
+  // Manu Romero: verified 2026-07-16 against /players/profiles?search=Romero
+  // — no USA-nationality "M. Romero" exists in the index. The historical
+  // false-positive was id 171435 ("G. Romero" / Gregorio Romero, USA,
+  // no birth date on file), which the resolver's USA-domestic initial gate
+  // now blocks at runtime (first initial "g" ≠ "m"). The null pin adds a
+  // second layer of defence so that any future rollback of the initial-gate
+  // fix cannot silently re-match the wrong player.
+  // To lift: search /players/profiles?search=Romero once Manu Romero is
+  // indexed, confirm birth date and club history via /players/teams?player=<id>,
+  // then replace null with the verified number and run trigger-sync for the
+  // corresponding player row.
+  "Manu Romero": null,
 };
 
 /**
