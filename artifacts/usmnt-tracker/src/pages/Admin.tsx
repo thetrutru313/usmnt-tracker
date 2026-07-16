@@ -553,6 +553,22 @@ export default function Admin() {
     setToken(null);
   }
 
+  // Cross-tab logout: when another browser tab clears the token from
+  // localStorage (e.g. by calling clearSession()), the browser fires a
+  // StorageEvent on every OTHER tab sharing the same origin. We listen for
+  // that event and mirror the logout here so no tab silently keeps an
+  // invalidated session.
+  React.useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY && e.newValue === null) {
+        handleLogout();
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!token) {
     return <LoginForm onSuccess={setToken} />;
   }
