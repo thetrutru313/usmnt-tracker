@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { SearchQueryParams, SearchResponse } from "@workspace/api-zod";
 import { db, clubsTable, playersTable } from "@workspace/db";
 import { eq, ilike, sql } from "drizzle-orm";
-import { playerSummaryQuery } from "../lib/queries";
+import { playerSummaryQuery, resolveAge } from "../lib/queries";
 
 const router: IRouter = Router();
 
@@ -31,7 +31,11 @@ router.get("/search", async (req, res): Promise<void> => {
       .limit(10),
   ]);
 
-  res.json(SearchResponse.parse({ players, clubs: clubRows }));
+  const resolvedPlayers = players.map(({ dateOfBirth, age: storedAge, ...rest }) => ({
+    ...rest,
+    age: resolveAge(dateOfBirth, storedAge),
+  }));
+  res.json(SearchResponse.parse({ players: resolvedPlayers, clubs: clubRows }));
 });
 
 export default router;

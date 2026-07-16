@@ -8,20 +8,21 @@ import {
   playerSummaryQuery,
   playerSummaryColumns,
   computePoolTier,
+  resolveAge,
   transfersWithPlayerQuery,
   transfersTable,
   injuriesWithPlayerQuery,
   injuriesTable,
 } from "../lib/queries";
 
-/** Mirrors the `listPlayers` transform: replaces `worldCupRoster` with the derived `poolTier`. */
-function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number }>(
+/** Mirrors the `listPlayers` transform: resolves age from DOB, replaces `worldCupRoster` with the derived `poolTier`, and strips `dateOfBirth` from the response. */
+function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number; dateOfBirth?: string | null }>(
   rows: T[],
-): (Omit<T, "worldCupRoster"> & { poolTier: ReturnType<typeof computePoolTier> })[] {
-  return rows.map(({ worldCupRoster, ...rest }) => ({
-    ...rest,
-    poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: rest.nationalTeamCaps, age: rest.age }),
-  }));
+): (Omit<T, "worldCupRoster" | "dateOfBirth" | "age"> & { age: number; poolTier: ReturnType<typeof computePoolTier> })[] {
+  return rows.map(({ worldCupRoster, dateOfBirth, age: storedAge, ...rest }) => {
+    const age = resolveAge(dateOfBirth, storedAge);
+    return { ...rest, age, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: rest.nationalTeamCaps, age }) };
+  });
 }
 
 const router: IRouter = Router();

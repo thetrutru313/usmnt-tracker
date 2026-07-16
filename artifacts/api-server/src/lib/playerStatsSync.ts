@@ -19,6 +19,7 @@ type PlayerRow = {
   clubId: number;
   apiFootballPlayerId: number | null;
   age?: number;
+  dateOfBirth?: string | null;
   category?: string | null;
   nationalTeamCaps?: number | null;
   marketValueUsd?: number | null;
@@ -681,6 +682,7 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
       clubId: playersTable.clubId,
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
       age: playersTable.age,
+      dateOfBirth: playersTable.dateOfBirth,
       category: playersTable.category,
       nationalTeamCaps: playersTable.nationalTeamCaps,
       marketValueUsd: playersTable.marketValueUsd,
@@ -829,14 +831,21 @@ export async function syncPlayerStatsAndInjuries(fixturesPerClub = 12): Promise<
           .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
           .sort((a, b) => b.year - a.year);
 
-        // Keep `age` live from the same responses (no extra API call) —
-        // seed data otherwise freezes a player's age at whatever it was when
-        // added and it silently drifts stale as real birthdays pass.
+        // Keep `dateOfBirth` and `age` live from the same responses (no
+        // extra API call). Storing the raw birth date means age is always
+        // computable at query time and never silently drifts stale between
+        // sync runs as real birthdays pass.
         const birthDate = blocksByYear.map((b) => b.birthDate).find((d): d is string => d != null) ?? null;
         const liveAge = ageFromBirthDate(birthDate);
-        if (liveAge != null && liveAge !== player.age) {
-          await db.update(playersTable).set({ age: liveAge }).where(eq(playersTable.id, player.id));
-          player.age = liveAge;
+        const dobChanged = birthDate != null && birthDate !== player.dateOfBirth;
+        const ageChanged = liveAge != null && liveAge !== player.age;
+        if (dobChanged || ageChanged) {
+          const updates: Partial<{ dateOfBirth: string; age: number }> = {};
+          if (dobChanged) updates.dateOfBirth = birthDate!;
+          if (ageChanged) updates.age = liveAge!;
+          await db.update(playersTable).set(updates).where(eq(playersTable.id, player.id));
+          if (dobChanged) player.dateOfBirth = birthDate;
+          if (ageChanged) player.age = liveAge!;
         }
 
         const [current, previous] = withData;

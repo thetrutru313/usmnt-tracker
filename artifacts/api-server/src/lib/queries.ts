@@ -1,4 +1,18 @@
 import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+
+/**
+ * Compute a player's current age from their stored date-of-birth string,
+ * falling back to the stored integer age when DOB is unavailable.
+ * This keeps ages correct immediately after a birthday without waiting for
+ * the next sync cycle. Exported so route handlers can apply the same
+ * resolution to raw `playerSummaryColumns` results.
+ */
+export function resolveAge(dateOfBirth: string | null | undefined, storedAge: number): number {
+  if (!dateOfBirth) return storedAge;
+  const birth = new Date(dateOfBirth);
+  if (Number.isNaN(birth.getTime())) return storedAge;
+  return Math.floor((Date.now() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+}
 import {
   db,
   clubsTable,
@@ -43,6 +57,7 @@ export const playerSummaryColumns = {
   clubLogoUrl: clubsTable.logoUrl,
   photoUrl: playersTable.photoUrl,
   age: playersTable.age,
+  dateOfBirth: playersTable.dateOfBirth,
   marketValueUsd: playersTable.marketValueUsd,
   nationalTeamCaps: playersTable.nationalTeamCaps,
   nationalTeamGoals: playersTable.nationalTeamGoals,
@@ -70,7 +85,10 @@ export async function listPlayers(filter: {
 
   const query = playerSummaryQuery();
   const rows = conditions.length ? await query.where(and(...conditions)) : await query;
-  return rows.map(({ worldCupRoster, ...row }) => ({ ...row, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age: row.age }) }));
+  return rows.map(({ worldCupRoster, dateOfBirth, age: storedAge, ...row }) => {
+    const age = resolveAge(dateOfBirth, storedAge);
+    return { ...row, age, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age }) };
+  });
 }
 
 export async function getPlayerById(id: number) {
@@ -87,6 +105,7 @@ export async function getPlayerById(id: number) {
       clubLogoUrl: clubsTable.logoUrl,
       photoUrl: playersTable.photoUrl,
       age: playersTable.age,
+      dateOfBirth: playersTable.dateOfBirth,
       contractUntil: playersTable.contractUntil,
       marketValueUsd: playersTable.marketValueUsd,
       nationalTeamCaps: playersTable.nationalTeamCaps,
@@ -101,7 +120,9 @@ export async function getPlayerById(id: number) {
     .from(playersTable)
     .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
     .where(eq(playersTable.id, id));
-  return row;
+  if (!row) return undefined;
+  const { dateOfBirth, age: storedAge, ...rest } = row;
+  return { ...rest, age: resolveAge(dateOfBirth, storedAge) };
 }
 
 export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "previous5") {
@@ -221,10 +242,11 @@ export async function getFeaturedPlayersMap(playerIds: number[]) {
       worldCupRoster: playersTable.worldCupRoster,
       nationalTeamCaps: playersTable.nationalTeamCaps,
       age: playersTable.age,
+      dateOfBirth: playersTable.dateOfBirth,
     })
     .from(playersTable)
     .where(inArray(playersTable.id, playerIds));
-  return new Map(rows.map((r) => [r.id, { id: r.id, name: r.name, slug: r.slug, position: r.position, photoUrl: r.photoUrl, poolTier: computePoolTier(r) }]));
+  return new Map(rows.map((r) => [r.id, { id: r.id, name: r.name, slug: r.slug, position: r.position, photoUrl: r.photoUrl, poolTier: computePoolTier({ ...r, age: resolveAge(r.dateOfBirth, r.age) }) }]));
 }
 
 export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
@@ -247,6 +269,7 @@ export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
       worldCupRoster: playersTable.worldCupRoster,
       nationalTeamCaps: playersTable.nationalTeamCaps,
       age: playersTable.age,
+      dateOfBirth: playersTable.dateOfBirth,
     })
     .from(fixturePlayersTable)
     .innerJoin(playersTable, eq(fixturePlayersTable.playerId, playersTable.id))
@@ -262,7 +285,7 @@ export async function getFeaturedPlayersForFixtures(fixtureIds: number[]) {
     const isStaleClubLink = row.linkClubId !== null && row.fixtureStatus === "scheduled" && row.linkClubId !== row.currentClubId;
     if (isStaleClubLink) continue;
     const list = map.get(row.fixtureId) ?? [];
-    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl, poolTier: computePoolTier(row) });
+    list.push({ id: row.id, name: row.name, slug: row.slug, position: row.position, photoUrl: row.photoUrl, poolTier: computePoolTier({ ...row, age: resolveAge(row.dateOfBirth, row.age) }) });
     map.set(row.fixtureId, list);
   }
   return map;

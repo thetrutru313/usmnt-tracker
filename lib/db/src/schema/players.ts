@@ -24,6 +24,7 @@ export const playersTable = pgTable("players", {
   wikipediaTitle: text("wikipedia_title"),
   photoUrl: text("photo_url"),
   age: integer("age").notNull(),
+  dateOfBirth: text("date_of_birth"),
   contractUntil: date("contract_until", { mode: "string" }),
   marketValueUsd: doublePrecision("market_value_usd"),
   nationalTeamCaps: integer("national_team_caps").notNull().default(0),
