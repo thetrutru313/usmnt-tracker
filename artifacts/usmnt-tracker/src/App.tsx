@@ -14,6 +14,7 @@ import Transfers from '@/pages/Transfers';
 import Rankings from '@/pages/Rankings';
 import Schedule from '@/pages/Schedule';
 import About from '@/pages/About';
+import Transparency from '@/pages/Transparency';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
 
@@ -45,6 +46,7 @@ function Router() {
             <Route path="/rankings" component={Rankings} />
             <Route path="/schedule" component={Schedule} />
             <Route path="/about" component={About} />
+            <Route path="/transparency" component={Transparency} />
             <Route component={NotFound} />
           </Switch>
         </Layout>

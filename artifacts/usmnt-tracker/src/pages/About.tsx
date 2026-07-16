@@ -184,9 +184,11 @@ function TransparencySection() {
         <div className="flex items-center justify-center gap-2 text-muted-foreground">
           <BarChart2 size={22} />
         </div>
-        <p className="font-semibold text-sm">Monthly Transparency Report</p>
+        <p className="font-semibold text-sm">First report on its way</p>
         <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-          A breakdown of operating expenses, donations received, and Goal Foundation contributions will appear here. Coming soon.
+          A full month-by-month breakdown — operating expenses, donations
+          received, and Goal Foundation contributions — will appear here after
+          the first full month of tracking.
         </p>
       </div>
     );
