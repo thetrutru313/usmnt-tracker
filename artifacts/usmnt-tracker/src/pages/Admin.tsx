@@ -186,6 +186,14 @@ function dollars(cents: number): string {
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
+/** Thrown by apiFetch when the server returns 401 (token no longer valid). */
+class SessionExpiredError extends Error {
+  constructor() {
+    super("Session expired — please log in again.");
+    this.name = "SessionExpiredError";
+  }
+}
+
 function authHeaders(token: string) {
   return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 }
@@ -195,6 +203,9 @@ async function apiFetch(path: string, token: string, opts: RequestInit = {}) {
     ...opts,
     headers: { ...(opts.headers ?? {}), ...authHeaders(token) },
   });
+  if (res.status === 401) {
+    throw new SessionExpiredError();
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -288,11 +299,12 @@ interface MonthFormProps {
   token: string;
   onSave: (data: Omit<MonthFormState, "invoiceFile">) => void;
   onCancel: () => void;
+  onUnauthorized: () => void;
   isNew: boolean;
   isSaving: boolean;
 }
 
-function MonthForm({ initial, token, onSave, onCancel, isNew, isSaving }: MonthFormProps) {
+function MonthForm({ initial, token, onSave, onCancel, onUnauthorized, isNew, isSaving }: MonthFormProps) {
   const [form, setForm] = React.useState<MonthFormState>(initial);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState("");
@@ -321,6 +333,11 @@ function MonthForm({ initial, token, onSave, onCancel, isNew, isSaving }: MonthF
       if (!put.ok) throw new Error("Upload to GCS failed");
       setForm((f) => ({ ...f, invoiceFile: file, invoiceUrl: objectPath }));
     } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        clearSession();
+        onUnauthorized();
+        return;
+      }
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
@@ -452,6 +469,47 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minutesLeft]);
 
+  /**
+   * Shared 401 handler: clear the local session and return to the login screen.
+   * Called whenever any authenticated request comes back with a 401 — meaning
+   * the server-side password has changed and the stored token is no longer valid.
+   */
+  function handleUnauthorized() {
+    clearSession();
+    onLogout();
+  }
+
+  /**
+   * Validate the stored token immediately on mount and on every tab-focus
+   * event. Either path calls handleUnauthorized() on 401, ensuring that a
+   * rotated ADMIN_PASSWORD is enforced regardless of how the admin reached
+   * this panel (fresh page load, browser refresh, or returning to the tab).
+   */
+  React.useEffect(() => {
+    async function validate() {
+      try {
+        await apiFetch("/admin/transparency/verify", token, { method: "POST" });
+      } catch (err) {
+        if (err instanceof SessionExpiredError) {
+          handleUnauthorized();
+        }
+        // Any other error (network offline, server down) — leave the session
+        // intact so the admin isn't unexpectedly logged out by a blip.
+      }
+    }
+
+    // Run once on mount to catch a stale token from a previous session.
+    void validate();
+
+    // Re-run whenever the user switches back to this tab.
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") void validate();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-transparency"],
     queryFn: async () => {
@@ -486,6 +544,9 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
       setShowForm(false);
       setEditingId(null);
     },
+    onError: (err) => {
+      if (err instanceof SessionExpiredError) handleUnauthorized();
+    },
   });
 
   const deleteMutation = useMutation({
@@ -496,6 +557,9 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
       void queryClient.invalidateQueries({ queryKey: ["admin-transparency"] });
       void queryClient.invalidateQueries({ queryKey: ["transparency"] });
       setDeleteConfirmId(null);
+    },
+    onError: (err) => {
+      if (err instanceof SessionExpiredError) handleUnauthorized();
     },
   });
 
@@ -588,6 +652,7 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
               isSaving={saveMutation.isPending}
               onCancel={() => setShowForm(false)}
               onSave={(form) => saveMutation.mutate({ id: null, form })}
+              onUnauthorized={handleUnauthorized}
             />
           )}
 
@@ -619,6 +684,7 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
                   isSaving={saveMutation.isPending}
                   onCancel={() => setEditingId(null)}
                   onSave={(form) => saveMutation.mutate({ id: m.id, form })}
+                  onUnauthorized={handleUnauthorized}
                 />
               ) : (
                 <div className="rounded-xl border border-border bg-card p-4">
@@ -638,6 +704,10 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
                                 const res = await fetch(`${API_BASE}/api/storage${m.invoiceUrl}`, {
                                   headers: { Authorization: `Bearer ${token}` },
                                 });
+                                if (res.status === 401) {
+                                  handleUnauthorized();
+                                  return;
+                                }
                                 if (!res.ok) throw new Error("Failed to fetch invoice");
                                 const blob = await res.blob();
                                 const url = URL.createObjectURL(blob);
