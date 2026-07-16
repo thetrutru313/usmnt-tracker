@@ -617,6 +617,152 @@ describe("Stale fixture removal — past-kickoff scheduled fixture is deleted wh
   );
 });
 
+// ─── Finished-fixture transfer preservation guard ────────────────────────────
+
+/**
+ * Regression guard: a fixture whose status is "finished" must keep showing
+ * every player that was linked to it at match time, even if that player has
+ * since transferred to a different club.
+ *
+ * ## What is tested
+ * 1. A fixture with status "finished" and a past kickoff is inserted and linked
+ *    to a player at club A.
+ * 2. The player is transferred to club B (their clubId row is updated).
+ * 3. GET /fixtures (no scope — returns all fixtures including past ones)
+ *    → The fixture appears and the transferred player IS still in featuredPlayers.
+ *
+ * ## Why this matters
+ * getFeaturedPlayersForFixtures gates the stale-club-link exclusion on
+ * fixtureStatus === "scheduled". If that guard is ever loosened, historic
+ * records silently drop players. This test ensures the gate is respected.
+ */
+
+describe("GET /fixtures — finished fixture keeps transferred player in featuredPlayers", () => {
+  let finishedClubAId: number | null = null;
+  let finishedClubBId: number | null = null;
+  let finishedPlayerId: number | null = null;
+  let finishedFixtureId: number | null = null;
+
+  afterAll(async () => {
+    if (finishedFixtureId !== null) {
+      await db
+        .delete(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, finishedFixtureId));
+      await db
+        .delete(fixturesTable)
+        .where(eq(fixturesTable.id, finishedFixtureId));
+    }
+    if (finishedPlayerId !== null) {
+      await db.delete(playersTable).where(eq(playersTable.id, finishedPlayerId));
+    }
+    if (finishedClubBId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, finishedClubBId));
+    }
+    if (finishedClubAId !== null) {
+      await db.delete(clubsTable).where(eq(clubsTable.id, finishedClubAId));
+    }
+  });
+
+  it(
+    "transferred player still appears in featuredPlayers for a finished fixture",
+    async () => {
+      // ── Setup ──────────────────────────────────────────────────────────────
+
+      // Club A: where the player was when the match was played.
+      const [clubA] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_finished_club_a__", league: "Test Finished League", country: "USA" })
+        .returning({ id: clubsTable.id });
+      if (!clubA) throw new Error("Club A insert failed");
+      finishedClubAId = clubA.id;
+
+      // Club B: where the player moves after the match.
+      const [clubB] = await db
+        .insert(clubsTable)
+        .values({ name: "__test_finished_club_b__", league: "Test Finished League B", country: "GER" })
+        .returning({ id: clubsTable.id });
+      if (!clubB) throw new Error("Club B insert failed");
+      finishedClubBId = clubB.id;
+
+      // Player at club A at match time.
+      const [player] = await db
+        .insert(playersTable)
+        .values({
+          name: "__Test Finished Fixture Player__",
+          slug: "__test-finished-fixture-player__",
+          position: "FW" as const,
+          category: "current" as const,
+          clubId: clubA.id,
+          age: 26,
+          nationalTeamCaps: 0,
+          nationalTeamGoals: 0,
+          performanceTrend: "steady" as const,
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+      if (!player) throw new Error("Player insert failed");
+      finishedPlayerId = player.id;
+
+      // Insert a finished fixture with a past kickoff.
+      const pastKickoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+      const [fixture] = await db
+        .insert(fixturesTable)
+        .values({
+          isNationalTeam: false,
+          competition: "Test Finished League",
+          kickoff: pastKickoff,
+          venue: "Finished Stadium",
+          homeTeam: "__Test Finished FC__",
+          awayTeam: "__Opponent Finished FC__",
+          status: "finished",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixture) throw new Error("Fixture insert failed");
+      finishedFixtureId = fixture.id;
+
+      // Link the player to the finished fixture stamped with club A's id.
+      await db
+        .insert(fixturePlayersTable)
+        .values({ fixtureId: fixture.id, playerId: player.id, clubId: clubA.id });
+
+      // ── Transfer: move the player to club B after the match ────────────────
+      await db
+        .update(playersTable)
+        .set({ clubId: clubB.id })
+        .where(eq(playersTable.id, player.id));
+
+      // ── Assertion: finished fixture still shows the transferred player ──────
+      // No scope filter → all fixtures returned (past kickoff is not filtered out).
+      const res = await request(app).get("/api/fixtures").expect(200);
+
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `/fixtures response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === fixture.id);
+      expect(
+        found,
+        `Finished fixture id=${fixture.id} was not returned by GET /fixtures — ` +
+          `check that fixtures with past kickoffs appear when no scope is provided`,
+      ).toBeDefined();
+
+      const featuredIds = (found!.featuredPlayers ?? []).map((p: { id: number }) => p.id);
+      expect(
+        featuredIds,
+        `Transferred player id=${player.id} should still appear in featuredPlayers ` +
+          `for finished fixture id=${fixture.id} even after moving from club A (id=${clubA.id}) ` +
+          `to club B (id=${clubB.id}) — the status-gate in getFeaturedPlayersForFixtures ` +
+          `must only filter scheduled fixtures`,
+      ).toContain(player.id);
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 
 describe("ListFixturesResponse schema — response contract", () => {
