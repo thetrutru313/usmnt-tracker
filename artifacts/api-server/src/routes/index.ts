@@ -24,9 +24,9 @@ router.use(transfersRouter);
 router.use(dashboardRouter);
 router.use(rankingsRouter);
 router.use(searchRouter);
-router.use(adminRouter);
-router.use(scheduleRouter);
 router.use(transparencyRouter);
 router.use(storageRouter);
+router.use(adminRouter);
+router.use(scheduleRouter);
 
 export default router;

@@ -24,6 +24,7 @@ function requireAdminPassword(req: Request, res: Response, next: NextFunction): 
   const tokenBuf = Buffer.from(token);
   const passBuf = Buffer.from(password);
   const match = tokenBuf.length === passBuf.length && timingSafeEqual(tokenBuf, passBuf);
+
   if (!match) {
     res.status(401).json({ error: "Unauthorized" });
     return;
