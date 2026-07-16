@@ -482,6 +482,143 @@ export async function syncApiFootballFixtures(
   return { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures };
 }
 
+/**
+ * Syncs scores and statuses for seeded national-team fixtures
+ * (`is_national_team = true`) where USA is a participant. Because seeded rows
+ * have no `api_football_fixture_id`, matching is done by kickoff date (±1 day)
+ * against the USMNT's fixture list from API-Football. On first successful
+ * match, the `api_football_fixture_id` is written back so future runs can join
+ * directly without the date scan.
+ */
+export async function syncNationalTeamFixtures(): Promise<{
+  fixturesChecked: number;
+  fixturesUpdated: number;
+  idsBound: number;
+  failures: number;
+}> {
+  const teamId = await resolveUsmntTeamId();
+  if (!teamId) {
+    logger.warn("NT fixture sync: could not resolve USMNT team id — skipping");
+    return { fixturesChecked: 0, fixturesUpdated: 0, idsBound: 0, failures: 1 };
+  }
+
+  // Fetch the current and previous season so fixtures right around a calendar
+  // boundary (e.g. a Dec qualifier whose season label is the prior year) are
+  // still caught.
+  const currentYear = new Date().getUTCFullYear();
+  let afFixtures: AfFixture[] = [];
+  for (const season of [currentYear, currentYear - 1]) {
+    try {
+      const fetched = await afFetch<AfFixture[]>(`/fixtures?team=${teamId}&season=${season}`);
+      afFixtures = afFixtures.concat(fetched);
+    } catch (err) {
+      logger.warn({ err, season }, "NT fixture sync: API-Football fetch failed for season");
+    }
+  }
+
+  if (afFixtures.length === 0) {
+    logger.warn("NT fixture sync: no fixtures returned from API-Football for USMNT");
+    return { fixturesChecked: 0, fixturesUpdated: 0, idsBound: 0, failures: 1 };
+  }
+
+  // Keyed by API-Football fixture id for O(1) lookups once an id is bound.
+  const afByFixtureId = new Map<number, AfFixture>(afFixtures.map((f) => [f.fixture.id, f]));
+
+  // Load every seeded national-team fixture — only rows with no
+  // api_football_fixture_id still need the date-based scan; already-bound
+  // rows use the id directly.
+  const seededRows = await db
+    .select({
+      id: fixturesTable.id,
+      apiFootballFixtureId: fixturesTable.apiFootballFixtureId,
+      homeTeam: fixturesTable.homeTeam,
+      awayTeam: fixturesTable.awayTeam,
+      kickoff: fixturesTable.kickoff,
+      status: fixturesTable.status,
+      homeScore: fixturesTable.homeScore,
+      awayScore: fixturesTable.awayScore,
+    })
+    .from(fixturesTable)
+    .where(eq(fixturesTable.isNationalTeam, true));
+
+  // Only act on rows where USA is a participant (the table may also contain
+  // opponent-only fixtures for context, but we can only update what we can
+  // correctly match via the USMNT fixture list).
+  const usaRows = seededRows.filter((f) => f.homeTeam === "USA" || f.awayTeam === "USA");
+
+  let fixturesUpdated = 0;
+  let idsBound = 0;
+  let failures = 0;
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  for (const row of usaRows) {
+    try {
+      let afMatch: AfFixture | undefined;
+
+      if (row.apiFootballFixtureId !== null) {
+        // Already bound — look up directly, no date scan needed.
+        afMatch = afByFixtureId.get(row.apiFootballFixtureId);
+      } else {
+        // Unbound — match by kickoff within ±1 day. Use a generous window
+        // because API-Football stores UTC times and seeded kickoffs may have
+        // been entered in local time; ±1 day covers any plausible timezone
+        // difference while remaining unambiguous for USMNT fixtures (they
+        // rarely play more than once in a 48-hour span).
+        const kickoffMs = row.kickoff.getTime();
+        afMatch = afFixtures.find((af) => {
+          const afMs = new Date(af.fixture.date).getTime();
+          return Math.abs(afMs - kickoffMs) <= ONE_DAY_MS;
+        });
+      }
+
+      if (!afMatch) continue; // future fixture not yet in API-Football, or no date match
+
+      const newStatus = mapStatus(afMatch.fixture.status.short);
+      const newHomeScore = afMatch.goals.home ?? null;
+      const newAwayScore = afMatch.goals.away ?? null;
+      const needsIdBind = row.apiFootballFixtureId === null;
+
+      const statusChanged = row.status !== newStatus;
+      const scoresChanged = row.homeScore !== newHomeScore || row.awayScore !== newAwayScore;
+
+      if (!statusChanged && !scoresChanged && !needsIdBind) continue;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updatePayload: Record<string, any> = {
+        status: newStatus,
+        homeScore: newHomeScore,
+        awayScore: newAwayScore,
+      };
+      if (needsIdBind) {
+        updatePayload["apiFootballFixtureId"] = afMatch.fixture.id;
+        idsBound++;
+      }
+
+      await db.update(fixturesTable).set(updatePayload).where(eq(fixturesTable.id, row.id));
+      fixturesUpdated++;
+
+      logger.info(
+        {
+          fixtureId: row.id,
+          afFixtureId: afMatch.fixture.id,
+          status: newStatus,
+          homeScore: newHomeScore,
+          awayScore: newAwayScore,
+          idBound: needsIdBind,
+        },
+        "NT fixture sync: updated fixture",
+      );
+    } catch (err) {
+      logger.warn({ err, fixtureId: row.id }, "NT fixture sync: failed to update fixture row");
+      failures++;
+    }
+  }
+
+  const result = { fixturesChecked: usaRows.length, fixturesUpdated, idsBound, failures };
+  logger.info(result, "National-team fixture sync complete");
+  return result;
+}
+
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /** Runs the sync immediately, then hourly (matches the recommended fixtures refresh cadence). */
@@ -494,7 +631,10 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
   const COOLDOWN = 50 * 60 * 1000; // 50 min — skip startup re-run if already ran this hour
   const run = async () => {
     if (!(await claimSyncRun("fixtures", COOLDOWN))) return;
+    // Run club fixtures and NT fixtures in sequence — both share the same
+    // rate-limited afFetch queue so they naturally throttle each other.
     syncApiFootballFixtures().catch((err) => logger.error({ err }, "API-Football fixtures sync failed"));
+    syncNationalTeamFixtures().catch((err) => logger.error({ err }, "NT fixture sync failed"));
   };
   run();
   intervalHandle = setInterval(run, intervalMs);

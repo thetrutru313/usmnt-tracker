@@ -5,7 +5,7 @@ import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
-import { syncApiFootballFixtures } from "../lib/apiFootballSync";
+import { syncApiFootballFixtures, syncNationalTeamFixtures } from "../lib/apiFootballSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -281,6 +281,24 @@ router.post("/admin/trigger-fixtures-sync", async (req, res): Promise<void> => {
   res.json({ ok: true, scope });
   syncApiFootballFixtures(clubIds).catch((err) =>
     logger.error({ err }, "Admin trigger-fixtures-sync failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-nt-sync
+ * Triggers syncNationalTeamFixtures — updates scores and statuses for seeded
+ * national-team fixture rows (is_national_team = true, USA as home or away).
+ * Returns immediately; sync runs in the background.
+ */
+router.post("/admin/trigger-nt-sync", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  logger.info("Admin: trigger-nt-sync started");
+  res.json({ ok: true });
+  syncNationalTeamFixtures().catch((err) =>
+    logger.error({ err }, "Admin trigger-nt-sync failed"),
   );
 });
 
