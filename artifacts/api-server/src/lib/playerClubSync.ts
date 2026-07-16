@@ -423,6 +423,121 @@ export async function ensurePlayerApiFootballIds(players: PlayerRow[], clubsById
 }
 
 /**
+ * Re-checks every null-pinned player (KNOWN_PLAYER_IDS[name] === null) against
+ * API-Football once per sync cycle. If a confident, age-consistent candidate is
+ * found — via squad lookup or profile search — a WARNING-level alert is logged
+ * with the candidate id and birth date so an admin can verify and promote it to
+ * a confirmed pin in KNOWN_PLAYER_IDS. The id is intentionally NOT written to
+ * the database; the alert is purely for human review.
+ */
+async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<number, ClubRow>): Promise<void> {
+  const nullPinnedNames = new Set(
+    Object.entries(KNOWN_PLAYER_IDS)
+      .filter(([, v]) => v === null)
+      .map(([k]) => k),
+  );
+  if (nullPinnedNames.size === 0) return;
+
+  const nullPinnedPlayers = players.filter((p) => nullPinnedNames.has(p.name));
+  if (nullPinnedPlayers.length === 0) return;
+
+  logger.info({ players: nullPinnedPlayers.map((p) => p.name) }, "Null-pinned player check: starting re-check for unindexed players");
+
+  for (const player of nullPinnedPlayers) {
+    let candidateId: number | null = null;
+    let candidateName: string | null = null;
+    let candidateBirth: string | null = null;
+    let source: string | null = null;
+
+    // Step 1: check their on-file club's current squad.
+    const club = clubsById.get(player.clubId);
+    if (club?.apiFootballTeamId) {
+      try {
+        const squads = await afFetch<AfSquadResponse[]>(`/players/squads?team=${club.apiFootballTeamId}`);
+        const roster = squads[0]?.players ?? [];
+        const normalizedPlayerName = normalizeName(player.name);
+        const match = roster.find((r) => normalizeName(r.name) === normalizedPlayerName);
+        if (match) {
+          candidateId = match.id;
+          candidateName = match.name;
+          source = `squad of ${club.name}`;
+        }
+      } catch (err) {
+        logger.warn({ err, player: player.name, club: club.name }, "Null-pinned check: squad fetch failed");
+      }
+    }
+
+    // Step 2: if squad didn't find them, try a profile search (read-only).
+    if (!candidateId) {
+      const normalized = normalizeName(player.name).split(" ");
+      const surname = normalized.at(-1);
+      const firstInitial = normalized[0]?.[0];
+      if (surname && firstInitial) {
+        try {
+          const results = await afFetch<AfPlayerProfile[]>(`/players/profiles?search=${encodeURIComponent(surname)}`);
+
+          const isSurnameMatch = (r: AfPlayerProfile) =>
+            normalizeName(r.player.lastname ?? "")
+              .split(" ")
+              .filter(Boolean)
+              .includes(surname);
+          const isInitialMatch = (r: AfPlayerProfile) => normalizeName(r.player.firstname ?? "")[0] === firstInitial;
+          const isAgeConsistent = (r: AfPlayerProfile) => {
+            if (player.age == null) return true;
+            const candidateAge = ageFromBirthDate(r.player.birth?.date);
+            if (candidateAge == null) return true;
+            return Math.abs(candidateAge - player.age) <= AGE_TOLERANCE_YEARS;
+          };
+
+          const surnameCandidates = results.filter((r) => isSurnameMatch(r) && isAgeConsistent(r));
+          const initialCandidates = surnameCandidates.filter(isInitialMatch);
+
+          // Apply the same USA-domestic nationality gate used in resolvePlayerIdBySearch.
+          const isUSADomestic = club?.country === "USA";
+          const isUSANationality = (r: AfPlayerProfile) => r.player.nationality === "USA";
+          const usaInitialCandidates = initialCandidates.filter(isUSANationality);
+          const effectiveInitialCandidates =
+            isUSADomestic && usaInitialCandidates.length > 0 ? usaInitialCandidates : initialCandidates;
+
+          let match: AfPlayerProfile | undefined;
+          const usaEffective = effectiveInitialCandidates.filter(isUSANationality);
+          if (usaEffective.length === 1) {
+            match = usaEffective[0];
+          } else if (usaEffective.length === 0 && effectiveInitialCandidates.length === 1) {
+            match = effectiveInitialCandidates[0];
+          }
+
+          if (match) {
+            candidateId = match.player.id;
+            candidateName = match.player.name;
+            candidateBirth = match.player.birth?.date ?? null;
+            source = "profile search";
+          }
+        } catch (err) {
+          logger.warn({ err, player: player.name }, "Null-pinned check: profile search failed");
+        }
+      }
+    }
+
+    if (candidateId) {
+      logger.warn(
+        {
+          player: player.name,
+          candidateId,
+          candidateName,
+          candidateBirth,
+          source,
+          action: "Verify via /players/teams?player=" + candidateId + " then update KNOWN_PLAYER_IDS to confirm",
+        },
+        "NULL-PINNED PLAYER CANDIDATE FOUND — manual verification required before promoting to a confirmed pin",
+      );
+    } else {
+      logger.info({ player: player.name }, "Null-pinned check: player still not indexed in API-Football");
+    }
+  }
+}
+
+/**
  * Keeps each tracked player's club current by checking API-Football's
  * transfer history for their most recent move. Only clubs already tracked in
  * our `clubs` table (i.e. previously resolved by the fixtures sync) are
@@ -447,6 +562,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; clubs
   const clubsByApiFootballId = new Map(clubs.filter((c): c is ClubRow & { apiFootballTeamId: number } => c.apiFootballTeamId != null).map((c) => [c.apiFootballTeamId, c]));
 
   await ensurePlayerApiFootballIds(players, clubsById);
+  await checkNullPinnedPlayers(players, clubsById);
 
   let playersChecked = 0;
   let clubsUpdated = 0;
