@@ -2,6 +2,17 @@ import * as React from "react"
 import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import { useQueryClient } from "@tanstack/react-query"
+import {
+  getGetDashboardQueryOptions,
+  getListPlayersQueryOptions,
+  getListFixturesQueryOptions,
+  getListNewsQueryOptions,
+  getListInjuriesQueryOptions,
+  getListTransfersQueryOptions,
+  getGetRankingsQueryOptions,
+  getListScheduleEventsQueryOptions,
+  getListTransparencyMonthsQueryOptions,
+} from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
 
@@ -116,17 +127,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
   const { pullY, refreshing } = usePullToRefresh(scrollRef, handleRefresh)
 
+  // Fire the primary query for a page when the user hovers its nav link.
+  // prefetchQuery is a no-op when the cache is already fresh, so this is safe
+  // to call on every hover without double-fetching.
+  const prefetch = React.useCallback(
+    (opts: Parameters<typeof queryClient.prefetchQuery>[0]) => {
+      void queryClient.prefetchQuery(opts)
+    },
+    [queryClient],
+  )
+
   const navItems = [
-    { label: "Dashboard", path: "/", icon: Activity },
-    { label: "Player Pool", path: "/players", icon: User2 },
-    { label: "Fixtures", path: "/fixtures", icon: Calendar },
-    { label: "News", path: "/news", icon: Newspaper },
-    { label: "Injuries", path: "/injuries", icon: HeartPulse },
-    { label: "Transfers", path: "/transfers", icon: RefreshCw },
-    { label: "Rankings", path: "/rankings", icon: Trophy },
-    { label: "Schedule", path: "/schedule", icon: CalendarRange },
-    { label: "About", path: "/about", icon: Info },
-    { label: "Transparency", path: "/transparency", icon: DollarSign },
+    { label: "Dashboard",    path: "/",            icon: Activity,     onHover: () => prefetch(getGetDashboardQueryOptions()) },
+    { label: "Player Pool",  path: "/players",     icon: User2,        onHover: () => prefetch(getListPlayersQueryOptions()) },
+    { label: "Fixtures",     path: "/fixtures",    icon: Calendar,     onHover: () => prefetch(getListFixturesQueryOptions()) },
+    { label: "News",         path: "/news",        icon: Newspaper,    onHover: () => prefetch(getListNewsQueryOptions()) },
+    { label: "Injuries",     path: "/injuries",    icon: HeartPulse,   onHover: () => prefetch(getListInjuriesQueryOptions()) },
+    { label: "Transfers",    path: "/transfers",   icon: RefreshCw,    onHover: () => prefetch(getListTransfersQueryOptions()) },
+    { label: "Rankings",     path: "/rankings",    icon: Trophy,       onHover: () => prefetch(getGetRankingsQueryOptions()) },
+    { label: "Schedule",     path: "/schedule",    icon: CalendarRange, onHover: () => prefetch(getListScheduleEventsQueryOptions()) },
+    { label: "About",        path: "/about",       icon: Info },
+    { label: "Transparency", path: "/transparency", icon: DollarSign,  onHover: () => prefetch(getListTransparencyMonthsQueryOptions()) },
   ]
 
   return (
@@ -160,12 +181,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
               const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path))
               const Icon = item.icon
               return (
-                <Link key={item.path} href={item.path} onClick={() => setMobileMenuOpen(false)} className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                  isActive 
-                    ? "bg-primary/10 text-primary" 
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}>
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  onMouseEnter={item.onHover}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  )}
+                >
                   <Icon size={18} className={cn(isActive ? "text-primary" : "text-sidebar-foreground/50")} />
                   {item.label}
                 </Link>
