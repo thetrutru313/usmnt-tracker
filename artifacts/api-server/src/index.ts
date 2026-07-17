@@ -6,7 +6,7 @@ import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
-import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
+import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
 const rawPort = process.env["PORT"];
@@ -88,6 +88,29 @@ app.listen(port, async (err) => {
       }
     } catch (err) {
       logger.warn({ err }, "Startup: NT fixture ID backfill failed (non-fatal)");
+    }
+  })();
+
+  // One-shot startup: remove Obed Vargas from all tables. He committed to the
+  // Mexican national team and is no longer a USMNT prospect. Safe to re-run —
+  // no-ops once the player row is gone.
+  (async () => {
+    try {
+      const rows = await db
+        .select({ id: playersTable.id })
+        .from(playersTable)
+        .where(eq(playersTable.slug, "obed-vargas"));
+      if (rows.length === 0) return; // Already removed
+      const playerId = rows[0]!.id;
+      await db.delete(matchLogsTable).where(eq(matchLogsTable.playerId, playerId));
+      await db.delete(playerStatsTable).where(eq(playerStatsTable.playerId, playerId));
+      await db.delete(injuriesTable).where(eq(injuriesTable.playerId, playerId));
+      await db.delete(transfersTable).where(eq(transfersTable.playerId, playerId));
+      await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.playerId, playerId));
+      await db.delete(playersTable).where(eq(playersTable.id, playerId));
+      logger.info({ playerId }, "Startup: removed Obed Vargas (committed to Mexico)");
+    } catch (err) {
+      logger.warn({ err }, "Startup: Obed Vargas removal failed (non-fatal)");
     }
   })();
 

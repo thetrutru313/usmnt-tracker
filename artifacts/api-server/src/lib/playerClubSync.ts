@@ -63,7 +63,7 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   "Gaga Slonina": 201711,
   "Montrell Culbreath": 444961,
   "Nimfasha Berchimas": 401644,
-  "Obed Vargas": 313383,
+
   "Paxten Aaronson": 265884,
   "Tanner Tessmann": 80752,
   "Alejandro Zendejas": 35885,
