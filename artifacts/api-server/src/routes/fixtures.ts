@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { ListFixturesQueryParams, ListFixturesResponse, GetFixtureParams, GetFixtureResponse } from "@workspace/api-zod";
 import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, clubsTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or } from "drizzle-orm";
+import { pickBestNtFixtureId } from "../lib/pickBestNtFixtureId.js";
 import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
 import { z } from "zod/v4";
 
@@ -91,24 +92,24 @@ router.get("/fixtures/:id", async (req, res): Promise<void> => {
       }
     } else if (fixture.isNationalTeam) {
       // Fallback for seeded national-team fixtures that were created without an
-      // API-Football ID. Join by player + is_national_team + date within ±7 days
-      // of the fixture kickoff — seeded dates can differ from API-Football's date
-      // by a day or two, so an exact match would silently return nothing.
-      const kickoffDate = new Date(fixture.kickoff);
-      const sevenBefore = new Date(kickoffDate.getTime() - 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
-      const sevenAfter = new Date(kickoffDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
-      const logs = await db
+      // API-Football ID. Uses a two-step approach to stay safe when two NT
+      // matches fall within the same ±7-day window (e.g. Jamaica Aug 24 /
+      // T&T Aug 28):
+      //
+      //   Step 1 — infer the correct API-Football fixture ID via majority vote
+      //            among this fixture's linked players' NT logs in the window.
+      //            Nearest-date-to-kickoff breaks any tie.
+      //   Step 2 — load match stats strictly by that resolved ID, not by the
+      //            date window, so only one match's rows are ever returned.
+      const kickoffMs = new Date(fixture.kickoff).getTime();
+      const sevenBefore = new Date(kickoffMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      // Step 1: candidate resolution — only linked players vote
+      const candidates = await db
         .select({
-          playerId: matchLogsTable.playerId,
-          minutes: matchLogsTable.minutes,
-          goals: matchLogsTable.goals,
-          assists: matchLogsTable.assists,
-          rating: matchLogsTable.rating,
-          conceded: matchLogsTable.conceded,
+          apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
+          date: matchLogsTable.date,
         })
         .from(matchLogsTable)
         .where(
@@ -117,16 +118,39 @@ router.get("/fixtures/:id", async (req, res): Promise<void> => {
             eq(matchLogsTable.isNationalTeam, true),
             gte(matchLogsTable.date, sevenBefore),
             lte(matchLogsTable.date, sevenAfter),
+            isNotNull(matchLogsTable.apiFootballFixtureId),
           ),
-        );
-      for (const log of logs) {
-        matchLogMap.set(log.playerId, {
-          minutes: log.minutes,
-          goals: log.goals,
-          assists: log.assists,
-          rating: log.rating ?? null,
-          conceded: log.conceded ?? null,
-        });
+        ) as { apiFootballFixtureId: number; date: string }[];
+
+      const bestId = pickBestNtFixtureId(candidates, kickoffMs);
+
+      if (bestId != null) {
+        // Step 2: load stats strictly by the resolved fixture ID
+        const logs = await db
+          .select({
+            playerId: matchLogsTable.playerId,
+            minutes: matchLogsTable.minutes,
+            goals: matchLogsTable.goals,
+            assists: matchLogsTable.assists,
+            rating: matchLogsTable.rating,
+            conceded: matchLogsTable.conceded,
+          })
+          .from(matchLogsTable)
+          .where(
+            and(
+              inArray(matchLogsTable.playerId, playerIds),
+              eq(matchLogsTable.apiFootballFixtureId, bestId),
+            ),
+          );
+        for (const log of logs) {
+          matchLogMap.set(log.playerId, {
+            minutes: log.minutes,
+            goals: log.goals,
+            assists: log.assists,
+            rating: log.rating ?? null,
+            conceded: log.conceded ?? null,
+          });
+        }
       }
     }
 

@@ -8,6 +8,7 @@ import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -43,35 +44,39 @@ app.listen(port, async (err) => {
         .where(and(eq(fixturesTable.isNationalTeam, true), isNull(fixturesTable.apiFootballFixtureId)));
 
       for (const fixture of ntFixturesWithoutId) {
-        const kickoffDate = new Date(fixture.kickoff);
-        const sevenBefore = new Date(kickoffDate.getTime() - 7 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10);
-        const sevenAfter = new Date(kickoffDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10);
+        const kickoffMs = new Date(fixture.kickoff).getTime();
+        const sevenBefore = new Date(kickoffMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-        const logs = await db
-          .select({ apiFootballFixtureId: matchLogsTable.apiFootballFixtureId })
+        // Only consult players explicitly linked to this fixture — prevents
+        // ambiguity when two NT matches fall in the same ±7-day window.
+        const linked = await db
+          .select({ playerId: fixturePlayersTable.playerId })
+          .from(fixturePlayersTable)
+          .where(eq(fixturePlayersTable.fixtureId, fixture.id));
+
+        const linkedIds = linked.map((r) => r.playerId);
+        if (linkedIds.length === 0) continue; // No tracked players for this fixture
+
+        const candidates = await db
+          .select({
+            apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
+            date: matchLogsTable.date,
+          })
           .from(matchLogsTable)
           .where(
             and(
+              inArray(matchLogsTable.playerId, linkedIds),
               eq(matchLogsTable.isNationalTeam, true),
               gte(matchLogsTable.date, sevenBefore),
               lte(matchLogsTable.date, sevenAfter),
+              isNotNull(matchLogsTable.apiFootballFixtureId),
             ),
-          );
+          ) as { apiFootballFixtureId: number; date: string }[];
 
-        // Tally fixture IDs from the logs — should all agree for one match
-        const counts = new Map<number, number>();
-        for (const l of logs) {
-          if (l.apiFootballFixtureId != null) {
-            counts.set(l.apiFootballFixtureId, (counts.get(l.apiFootballFixtureId) ?? 0) + 1);
-          }
-        }
-        if (counts.size === 0) continue; // Future fixture — no logs yet
+        const bestId = pickBestNtFixtureId(candidates, kickoffMs);
+        if (bestId == null) continue; // Future fixture — no logs yet
 
-        const bestId = [...counts.entries()].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
         await db
           .update(fixturesTable)
           .set({ apiFootballFixtureId: bestId })
