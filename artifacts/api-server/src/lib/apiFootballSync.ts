@@ -486,6 +486,52 @@ export async function syncApiFootballFixtures(
       }
       fixturesUpserted++;
     }
+
+    // ── Repair pass: backfill missing fixture_players links ──────────────────
+    // The upsert loop above only covers the top-8 upcoming (NS) fixtures.
+    // If a fixture was already in the DB from a previous cycle before the
+    // player's API ID was resolved, the original link step ran with an empty
+    // player list and left the fixture untagged.  This pass catches every
+    // non-finished fixture for this club's season pull and fills in any
+    // missing links, so club matches always show tagged players after the next
+    // sweep following player-ID resolution.
+    if (clubPlayerIds.length > 0) {
+      const freshApiIds = [...freshById.keys()];
+      if (freshApiIds.length > 0) {
+        const dbFixtures = await db
+          .select({ id: fixturesTable.id, homeTeam: fixturesTable.homeTeam, awayTeam: fixturesTable.awayTeam })
+          .from(fixturesTable)
+          .where(
+            and(
+              inArray(fixturesTable.apiFootballFixtureId, freshApiIds),
+              inArray(fixturesTable.status, ["scheduled", "live"]),
+            ),
+          );
+
+        for (const dbFixture of dbFixtures) {
+          // Re-apply the reserve/youth guard using the team names already on
+          // the DB row — no need to re-fetch from the API.
+          if (isReserveOrYouthTeam(dbFixture.homeTeam) || isReserveOrYouthTeam(dbFixture.awayTeam)) continue;
+
+          const existingLinks = await db
+            .select({ playerId: fixturePlayersTable.playerId })
+            .from(fixturePlayersTable)
+            .where(eq(fixturePlayersTable.fixtureId, dbFixture.id));
+          const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
+          const toLink = clubPlayerIds.filter((pid) => !alreadyLinked.has(pid));
+          if (toLink.length > 0) {
+            await db
+              .insert(fixturePlayersTable)
+              .values(toLink.map((playerId) => ({ fixtureId: dbFixture.id, playerId, clubId: club.id })));
+            logger.info(
+              { fixtureId: dbFixture.id, club: club.name, linked: toLink.length },
+              "Repair pass: backfilled missing fixture_players links",
+            );
+          }
+        }
+      }
+    }
+
     clubsSynced++;
   }
 
