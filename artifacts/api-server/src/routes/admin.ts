@@ -5,7 +5,7 @@ import { eq, desc, isNull, isNotNull } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
-import { syncPlayerStatsAndInjuries } from "../lib/playerStatsSync";
+import { syncPlayerStatsAndInjuries, syncStatsForFinishedFixture } from "../lib/playerStatsSync";
 import { syncPlayerClubs } from "../lib/playerClubSync";
 import { syncApiFootballFixtures, syncNationalTeamFixtures } from "../lib/apiFootballSync";
 
@@ -329,6 +329,36 @@ router.post("/admin/trigger-nt-sync", async (_req, res): Promise<void> => {
   res.json({ ok: true });
   syncNationalTeamFixtures().catch((err) =>
     logger.error({ err }, "Admin trigger-nt-sync failed"),
+  );
+});
+
+/**
+ * POST /admin/sync-player-stats
+ * Body: { playerIds: number[] }
+ *
+ * Immediately re-runs the post-match stats pipeline for the given players,
+ * bypassing the daily cooldown guard.  Use when a player's match log is stuck
+ * in "stats pending" because the scheduled sync ran before API-Football had
+ * finished populating that fixture's player statistics.
+ */
+router.post("/admin/sync-player-stats", async (req, res): Promise<void> => {
+  if (!process.env["API_FOOTBALL_KEY"]) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  const { playerIds } = req.body as { playerIds?: unknown };
+  if (
+    !Array.isArray(playerIds) ||
+    playerIds.length === 0 ||
+    !playerIds.every((id) => typeof id === "number")
+  ) {
+    res.status(400).json({ error: "Body must be { playerIds: number[] } with at least one id" });
+    return;
+  }
+  logger.info({ playerCount: playerIds.length, playerIds }, "Admin: sync-player-stats triggered");
+  res.json({ ok: true, playerCount: playerIds.length });
+  syncStatsForFinishedFixture(playerIds as number[]).catch((err) =>
+    logger.error({ err }, "Admin sync-player-stats failed"),
   );
 });
 

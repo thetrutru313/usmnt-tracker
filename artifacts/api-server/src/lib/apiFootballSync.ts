@@ -15,6 +15,11 @@ export type { AfFixture, ReconcileClubFixturesInput } from "./fixtureReconciliat
 export { reconcileClubFixtures } from "./fixtureReconciliation.js";
 
 const BASE_URL = "https://v3.football.api-sports.io";
+// API-Football player statistics are typically not available until 15–30 min
+// after a final whistle.  Both the hourly sweep and live poll wait this long
+// before firing the post-match stats pipeline so they don't read empty data
+// and leave match logs in a permanent "pending" state.
+const POST_MATCH_STATS_DELAY_MINUTES = 35;
 // Pro plan allows 30 requests/minute (1 every 2s). The original 7s interval
 // was for the free plan (~10/min) and made 99-fixture USMNT syncs take
 // 11+ minutes — longer than a typical server restart window — so writes
@@ -548,15 +553,22 @@ export async function syncApiFootballFixtures(
     for (const [fixtureId, playerIdSet] of allNewlyFinished) {
       const playerIds = [...playerIdSet];
       logger.info(
-        { fixtureId, playerCount: playerIds.length },
-        "Hourly sweep: post-match stats pipeline triggered for newly-finished fixture",
+        { fixtureId, playerCount: playerIds.length, delayMinutes: POST_MATCH_STATS_DELAY_MINUTES },
+        "Hourly sweep: post-match stats pipeline scheduled — waiting for API-Football stats to populate",
       );
-      syncStatsForFinishedFixture(playerIds).catch((err) =>
-        logger.error(
-          { err, fixtureId },
-          "Post-match stats trigger failed — daily job remains as catch-all",
-        ),
-      );
+      // Delay by POST_MATCH_STATS_DELAY_MINUTES before fetching: API-Football
+      // player statistics are typically not available until 15–30 minutes after
+      // a final whistle, so syncing immediately yields empty results and no
+      // match logs are written.  The daily job remains a catch-all for anything
+      // the delayed trigger still misses (e.g. server restart during the wait).
+      setTimeout(() => {
+        syncStatsForFinishedFixture(playerIds).catch((err) =>
+          logger.error(
+            { err, fixtureId },
+            "Post-match stats trigger failed — daily job remains as catch-all",
+          ),
+        );
+      }, POST_MATCH_STATS_DELAY_MINUTES * 60 * 1000);
     }
   }
 
@@ -772,7 +784,8 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
         "Live poll: updated fixture",
       );
 
-      // Fixture just finished — fire post-match stats pipeline immediately.
+      // Fixture just finished — schedule post-match stats pipeline after the
+      // delay so API-Football has time to populate individual player stats.
       if (freshStatus === "finished") {
         newlyFinished++;
         const links = await db
@@ -783,12 +796,14 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
         if (playerIds.length > 0) {
           const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
           logger.info(
-            { fixtureId: row.id, playerCount: playerIds.length },
-            "Live poll: post-match stats pipeline triggered for newly-finished fixture",
+            { fixtureId: row.id, playerCount: playerIds.length, delayMinutes: POST_MATCH_STATS_DELAY_MINUTES },
+            "Live poll: post-match stats pipeline scheduled — waiting for API-Football stats to populate",
           );
-          syncStatsForFinishedFixture(playerIds).catch((err) =>
-            logger.error({ err, fixtureId: row.id }, "Live poll: post-match stats trigger failed"),
-          );
+          setTimeout(() => {
+            syncStatsForFinishedFixture(playerIds).catch((err) =>
+              logger.error({ err, fixtureId: row.id }, "Live poll: post-match stats trigger failed"),
+            );
+          }, POST_MATCH_STATS_DELAY_MINUTES * 60 * 1000);
         }
       }
     } catch (err) {
