@@ -201,10 +201,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         
-        <div className="absolute bottom-0 inset-x-0 p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/50 font-mono">
-          SYSTEM_STATUS: ONLINE<br/>
-          SYNC: LIVE
-        </div>
       </aside>
 
       {/* Main Content */}
