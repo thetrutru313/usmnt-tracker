@@ -856,6 +856,43 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.queryByText(/Friday/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Monday|Tuesday|Wednesday|Thursday|Saturday|Sunday/i)).not.toBeInTheDocument();
   });
+
+  it('renders "Tomorrow" in the Recent Results date heading when the finished fixture\'s UTC date equals tomorrow\'s UTC date', () => {
+    // Pin the clock to 2026-07-17T15:00:00Z so that today's UTC date is "2026-07-17"
+    // and tomorrow's UTC date is "2026-07-18".  The finished fixture has a kickoff
+    // on 2026-07-18 UTC, so utcDateLabel must return "Tomorrow" when called from
+    // inside the RecentResults {open && ...} block.
+    vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
+
+    // Kickoff at 02:00 UTC on July 18 — tomorrow's UTC calendar day.
+    const finishedFixture = makeFixture("finished", {
+      id: 320,
+      kickoff: new Date("2026-07-18T02:00:00Z"),
+      homeTeam: "Tomorrow Home FC",
+      awayTeam: "Tomorrow Away FC",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [finishedFixture], isLoading: false });
+    renderFixtures();
+
+    // The collapsible toggle must be present before expanding
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Expand the Recent Results collapsible — mounts the {open && ...} block
+    // that contains its own utcDateLabel call for finished fixtures
+    fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
+
+    // The date heading inside the collapsible must read "Tomorrow".
+    // Use getAllByText (not getByText) because the heading may be rendered in
+    // both mobile and desktop layout variants — consistent with other multi-
+    // instance assertions throughout this test file.
+    expect(screen.getAllByText(/\bTomorrow\b/i).length).toBeGreaterThan(0);
+
+    // "Today" must be absent — the fixture is not on today's UTC date
+    expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
+    // No weekday string should appear — the "Tomorrow" fast-path must have fired
+    expect(screen.queryByText(/Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("Fixtures page — 7-day Recent Results window boundary", () => {
