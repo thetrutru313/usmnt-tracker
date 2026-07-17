@@ -476,6 +476,35 @@ describe("Fixtures page — pool-tier filter and Recent Results count badge", ()
     expect(screen.queryAllByText("PSG")).toHaveLength(0);
   });
 
+  it("deactivating the sole active tier resets the filter to All and restores the full fixture list", () => {
+    mockUseListFixtures.mockReturnValue({
+      data: [finishedCore, finishedInMix, finishedNone, upcomingCore, upcomingInMix],
+      isLoading: false,
+    });
+
+    renderFixtures();
+
+    // Sanity check: unfiltered ("All") shows all 3 finished fixtures and both upcoming
+    expect(screen.getByText(/Recent Results \(3\)/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Inter Milan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Bayer Leverkusen").length).toBeGreaterThan(0);
+
+    // Activate "Core Squad" — count drops to 1, inMix upcoming disappears
+    fireEvent.click(screen.getByRole("button", { name: /Core Squad/i }));
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+    expect(screen.queryAllByText("Bayer Leverkusen")).toHaveLength(0);
+
+    // Deactivate "Core Squad" — it is now the sole active tier, so removing it
+    // must fall back to ["all"] rather than leaving an empty filter
+    fireEvent.click(screen.getByRole("button", { name: /Core Squad/i }));
+
+    // Filter must have reset to All: full count of 3 finished fixtures is back
+    expect(screen.getByText(/Recent Results \(3\)/i)).toBeInTheDocument();
+    // Both upcoming fixtures are visible again
+    expect(screen.getAllByText("Inter Milan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Bayer Leverkusen").length).toBeGreaterThan(0);
+  });
+
   it("Recent Results is hidden entirely when the pool filter excludes all finished fixtures", () => {
     // Only a finished fixture with no featured players — "Core Squad" excludes it
     mockUseListFixtures.mockReturnValue({
