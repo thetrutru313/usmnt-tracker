@@ -13,7 +13,7 @@
  * calling `mockReturnValue` between renders.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
@@ -588,5 +588,164 @@ describe("Fixtures page — loading and empty states", () => {
     mockUseListFixtures.mockReturnValue({ data: [], isLoading: false });
     renderFixtures();
     expect(screen.getByText(/NO FIXTURES SCHEDULED/i)).toBeInTheDocument();
+  });
+});
+
+// ─── Timezone / UTC-date bucketing tests ─────────────────────────────────────
+//
+// groupByDate uses `.toISOString().substring(0, 10)` to derive the bucket key,
+// so a kickoff at 02:00 UTC on July 17 must land in the July 17 group — not
+// July 16 — even when the local system clock is set to a US timezone offset
+// where that same instant falls on the previous calendar day.
+//
+// utcDateLabel compares dateStr against `new Date().toISOString().substring(0,10)`
+// (UTC date), so "Today" / "Tomorrow" labels must be timezone-stable.
+
+describe("Fixtures page — UTC date bucketing (groupByDate timezone fix)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("places a 02:00 UTC kickoff in the July 17 bucket (not July 16)", () => {
+    // Pin the clock to 2026-07-17T10:00:00Z so "today" in UTC is 2026-07-17.
+    // In US/Eastern (UTC-5) this wall-clock moment is still July 17 during the day,
+    // but the kickoff (02:00 UTC) would be July 16 in Eastern time — the fix
+    // must prevent that off-by-one from affecting the bucket key.
+    vi.useFakeTimers({ now: new Date("2026-07-17T10:00:00Z") });
+
+    const fixture = makeFixture("scheduled", {
+      id: 99,
+      kickoff: new Date("2026-07-17T02:00:00Z"),
+      homeTeam: "Midnight Test FC",
+      awayTeam: "UTC Rovers",
+    });
+
+    mockUseListFixtures.mockReturnValue({
+      data: [fixture],
+      isLoading: false,
+    });
+
+    renderFixtures();
+
+    // The date heading for this fixture must say "Today" (UTC July 17 === today UTC)
+    // and must NOT say "July 16" — that would indicate the local-timezone bug.
+    expect(screen.getByText(/Today/i)).toBeInTheDocument();
+    expect(screen.queryByText(/July 16/i)).not.toBeInTheDocument();
+  });
+
+  it("assigns two fixtures with kickoffs on different UTC dates to separate buckets", () => {
+    // Pin clock so 2026-07-17 is "today" UTC and 2026-07-18 is "tomorrow".
+    vi.useFakeTimers({ now: new Date("2026-07-17T10:00:00Z") });
+
+    // Kickoff just before midnight UTC — still July 17
+    const fixtureTodayUtc = makeFixture("scheduled", {
+      id: 100,
+      kickoff: new Date("2026-07-17T23:30:00Z"),
+      homeTeam: "Late Night FC",
+      awayTeam: "Midnight FC",
+    });
+
+    // Kickoff just after midnight UTC — now July 18
+    const fixtureTomorrowUtc = makeFixture("scheduled", {
+      id: 101,
+      kickoff: new Date("2026-07-18T00:30:00Z"),
+      homeTeam: "Early Morning FC",
+      awayTeam: "Dawn FC",
+    });
+
+    mockUseListFixtures.mockReturnValue({
+      data: [fixtureTodayUtc, fixtureTomorrowUtc],
+      isLoading: false,
+    });
+
+    renderFixtures();
+
+    // Both "Today" and "Tomorrow" headings must be present (two separate buckets)
+    expect(screen.getByText(/Today/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tomorrow/i)).toBeInTheDocument();
+  });
+});
+
+describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns "Today" when the kickoff UTC date matches the current UTC date', () => {
+    // Pin to 2026-07-17T15:00:00Z — today UTC is 2026-07-17
+    vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
+
+    const fixture = makeFixture("scheduled", {
+      id: 200,
+      kickoff: new Date("2026-07-17T20:00:00Z"),
+      homeTeam: "Today Home",
+      awayTeam: "Today Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    renderFixtures();
+
+    expect(screen.getAllByText(/Today/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/July 16/i)).not.toBeInTheDocument();
+  });
+
+  it('returns "Tomorrow" when the kickoff UTC date is one day ahead of the current UTC date', () => {
+    // Pin to 2026-07-17T15:00:00Z — tomorrow UTC is 2026-07-18
+    vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
+
+    const fixture = makeFixture("scheduled", {
+      id: 201,
+      kickoff: new Date("2026-07-18T20:00:00Z"),
+      homeTeam: "Tomorrow Home",
+      awayTeam: "Tomorrow Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    renderFixtures();
+
+    expect(screen.getAllByText(/Tomorrow/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Today/i)).not.toBeInTheDocument();
+  });
+
+  it('labels a kickoff two+ days out with a weekday string, not "Today" or "Tomorrow"', () => {
+    // Pin to 2026-07-17T15:00:00Z — July 19 is two days away
+    vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
+
+    const fixture = makeFixture("scheduled", {
+      id: 202,
+      kickoff: new Date("2026-07-19T20:00:00Z"),
+      homeTeam: "Future Home",
+      awayTeam: "Future Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    renderFixtures();
+
+    expect(screen.queryByText(/Today/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
+    // July 19, 2026 is a Sunday
+    expect(screen.getByText(/Sunday, July 19/i)).toBeInTheDocument();
+  });
+
+  it("utcDateLabel is stable across UTC midnight: a 23:00 UTC kickoff stays on its UTC calendar day", () => {
+    // Pin to 2026-07-17T10:00:00Z
+    vi.useFakeTimers({ now: new Date("2026-07-17T10:00:00Z") });
+
+    // 23:00 UTC on July 17 — in US/Eastern (UTC-4 summer) this is July 17 at 7pm
+    // but in any timezone behind UTC it is still July 17 UTC.
+    const fixture = makeFixture("scheduled", {
+      id: 203,
+      kickoff: new Date("2026-07-17T23:00:00Z"),
+      homeTeam: "Evening Home",
+      awayTeam: "Evening Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    renderFixtures();
+
+    // Must show "Today" (the UTC date is still July 17)
+    expect(screen.getByText(/Today/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
   });
 });
