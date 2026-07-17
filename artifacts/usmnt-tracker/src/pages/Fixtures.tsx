@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { format, isToday, isTomorrow } from "date-fns";
+import { format, isToday, isTomorrow, subDays, startOfDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type PoolTier, type FixtureCardFixture } from "@/components/FixtureCard";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
@@ -87,9 +87,12 @@ export default function Fixtures() {
     ? fixtures
     : fixtures.filter((fixture) => fixture.featuredPlayers.some((p) => poolFilter.includes(p.poolTier)));
 
-  // Split into upcoming/live and finished
+  // Split into upcoming/live and finished (recent results capped to a 7-day window)
   const upcomingFixtures = filteredFixtures.filter((f) => f.status !== "finished");
-  const finishedFixtures = filteredFixtures.filter((f) => f.status === "finished");
+  const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+  const finishedFixtures = filteredFixtures.filter(
+    (f) => f.status === "finished" && new Date(f.kickoff) >= sevenDaysAgo,
+  );
 
   if (filteredFixtures.length === 0) {
     return (
