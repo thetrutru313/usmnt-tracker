@@ -19,6 +19,7 @@ import type {
   DashboardSummary,
   ErrorResponse,
   Fixture,
+  FixtureDetail,
   GetPlayerParams,
   HealthStatus,
   Injury,
@@ -389,6 +390,83 @@ export function useListFixtures<TData = Awaited<ReturnType<typeof listFixtures>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListFixturesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetFixtureUrl = (id: number,) => {
+
+
+
+
+  return `/api/fixtures/${id}`
+}
+
+/**
+ * @summary Get a fixture with tracked-player stats
+ */
+export const getFixture = async (id: number, options?: RequestInit): Promise<FixtureDetail> => {
+
+  return customFetch<FixtureDetail>(getGetFixtureUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFixtureQueryKey = (id: number,) => {
+    return [
+    `/api/fixtures/${id}`
+    ] as const;
+    }
+
+
+export const getGetFixtureQueryOptions = <TData = Awaited<ReturnType<typeof getFixture>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFixture>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFixtureQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFixture>>> = ({ signal }) => getFixture(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFixture>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFixtureQueryResult = NonNullable<Awaited<ReturnType<typeof getFixture>>>
+export type GetFixtureQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get a fixture with tracked-player stats
+ */
+
+export function useGetFixture<TData = Awaited<ReturnType<typeof getFixture>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFixture>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFixtureQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

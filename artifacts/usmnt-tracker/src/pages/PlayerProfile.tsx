@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock,
 import { FormBadge } from "@/components/FormBadge";
 import { PoolTierIcon, POOL_TIER_STYLES } from "@/components/FixtureCard";
 import type { PoolTier } from "@/components/FixtureCard";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { formatKickoff } from "@/lib/formatTime";
 
@@ -26,6 +26,7 @@ export default function PlayerProfile() {
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const [matchFilter, setMatchFilter] = useState<"all" | "club" | "usmnt">("all");
+  const [, navigate] = useLocation();
 
   const { data: transferNews } = useListNews(
     { playerId, category: "Transfer Rumors", limit: 3 },
@@ -278,42 +279,57 @@ export default function PlayerProfile() {
                     {player.matchLog
                       .filter(match => matchFilter === "all" || (matchFilter === "usmnt") === match.isNationalTeam)
                       .slice(0, 5)
-                      .map(match => (
-                      <tr key={match.id} className="hover:bg-muted/50 transition-colors">
-                        <td className="py-2 pr-2 hidden sm:table-cell">
-                          {match.isNationalTeam ? (
-                            <img src={USMNT_CREST_URL} alt="USMNT" title="USMNT" className="w-5 h-5 object-contain" />
-                          ) : player.clubLogoUrl ? (
-                            <img src={player.clubLogoUrl} alt={player.clubName} title={player.clubName} className="w-5 h-5 object-contain" />
-                          ) : (
-                            <Shield size={16} className="text-muted-foreground" />
-                          )}
-                        </td>
-                        <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">{format(new Date(match.date), "M/d")}</td>
-                        <td className="py-2 font-medium">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
-                            <span className="truncate">{match.opponent}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 text-muted-foreground text-xs hidden sm:table-cell">{match.competition}</td>
-                        <td className="py-2 font-mono hidden sm:table-cell">{match.minutes}'</td>
-                        <td className="py-2 font-mono">
-                          {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
-                          {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
-                          {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
-                        </td>
-                        <td className="py-2 text-right font-bold data-value">
-                          {match.rating != null ? (
-                            <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
-                              {match.rating.toFixed(1)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">–</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                      .map(match => {
+                        const fixtureId = (match as any).fixtureId as number | null | undefined;
+                        const isClickable = fixtureId != null;
+                        return (
+                        <tr
+                          key={match.id}
+                          className={`hover:bg-muted/50 transition-colors ${isClickable ? "cursor-pointer" : ""}`}
+                          onClick={isClickable ? () => navigate(`/matches/${fixtureId}`) : undefined}
+                        >
+                          <td className="py-2 pr-2 hidden sm:table-cell">
+                            {match.isNationalTeam ? (
+                              <img src={USMNT_CREST_URL} alt="USMNT" title="USMNT" className="w-5 h-5 object-contain" />
+                            ) : player.clubLogoUrl ? (
+                              <img src={player.clubLogoUrl} alt={player.clubName} title={player.clubName} className="w-5 h-5 object-contain" />
+                            ) : (
+                              <Shield size={16} className="text-muted-foreground" />
+                            )}
+                          </td>
+                          <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              {format(new Date(match.date), "M/d")}
+                              {isClickable && (
+                                <ArrowUpRight size={11} className="text-muted-foreground/50 shrink-0" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 font-medium">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
+                              <span className="truncate">{match.opponent}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 text-muted-foreground text-xs hidden sm:table-cell">{match.competition}</td>
+                          <td className="py-2 font-mono hidden sm:table-cell">{match.minutes}'</td>
+                          <td className="py-2 font-mono">
+                            {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
+                            {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
+                            {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
+                          </td>
+                          <td className="py-2 text-right font-bold data-value">
+                            {match.rating != null ? (
+                              <span className={match.rating >= 7.5 ? 'text-secondary' : match.rating <= 6.0 ? 'text-destructive' : ''}>
+                                {match.rating.toFixed(1)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">–</span>
+                            )}
+                          </td>
+                        </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>

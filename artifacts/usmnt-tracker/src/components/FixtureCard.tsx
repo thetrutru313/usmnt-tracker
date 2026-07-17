@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 
 export type PoolTier = "core" | "inMix" | "prospect";
@@ -102,9 +102,13 @@ function LiveIndicator({ size = "md" }: { size?: "sm" | "md" }) {
 
 export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
   const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, fixture.status === "live");
+  const [, navigate] = useLocation();
 
   return (
-    <Card className="overflow-hidden hover:border-primary/50 transition-colors">
+    <Card
+      className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer"
+      onClick={() => navigate(`/matches/${fixture.id}`)}
+    >
       <div className="flex flex-col md:flex-row">
         {/* Status / Time block */}
         <div className="md:w-32 bg-muted/30 p-2 md:p-3 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
@@ -260,6 +264,7 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
               href={`/players/${p.id}`}
               className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
               title={POOL_TIER_LABELS[p.poolTier]}
+              onClick={(e) => e.stopPropagation()}
             >
               <PoolTierIcon tier={p.poolTier} />
               {p.name}

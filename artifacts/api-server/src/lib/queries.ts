@@ -204,9 +204,37 @@ export async function getNationalTeamCycleStats(playerId: number, cycle?: string
 }
 
 export async function getMatchLogForPlayer(playerId: number, limit = 10) {
+  // Left-join with fixtures to get the internal fixture id for deep-linking.
+  // Rows where apiFootballFixtureId is null (old seeded data) or no fixture
+  // row exists yet will have fixtureId = null, and the UI omits the link.
   return db
-    .select()
+    .select({
+      id: matchLogsTable.id,
+      fixtureId: fixturesTable.id,
+      playerId: matchLogsTable.playerId,
+      apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
+      date: matchLogsTable.date,
+      opponent: matchLogsTable.opponent,
+      competition: matchLogsTable.competition,
+      result: matchLogsTable.result,
+      minutes: matchLogsTable.minutes,
+      goals: matchLogsTable.goals,
+      assists: matchLogsTable.assists,
+      conceded: matchLogsTable.conceded,
+      rating: matchLogsTable.rating,
+      isNationalTeam: matchLogsTable.isNationalTeam,
+      cycle: matchLogsTable.cycle,
+      createdAt: matchLogsTable.createdAt,
+    })
     .from(matchLogsTable)
+    .leftJoin(
+      fixturesTable,
+      and(
+        eq(fixturesTable.apiFootballFixtureId, matchLogsTable.apiFootballFixtureId),
+        // Only join when apiFootballFixtureId is not null (null = not linked)
+        // Drizzle handles this naturally via the left join + the equal condition
+      ),
+    )
     .where(eq(matchLogsTable.playerId, playerId))
     .orderBy(desc(matchLogsTable.date))
     .limit(limit);

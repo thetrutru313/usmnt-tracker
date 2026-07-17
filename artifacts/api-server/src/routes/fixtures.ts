@@ -1,10 +1,128 @@
 import { Router, type IRouter } from "express";
-import { ListFixturesQueryParams, ListFixturesResponse } from "@workspace/api-zod";
-import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
+import { ListFixturesQueryParams, ListFixturesResponse, GetFixtureParams, GetFixtureResponse } from "@workspace/api-zod";
+import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, clubsTable } from "@workspace/db";
 import { and, eq, gte, inArray, lt, notIlike, or } from "drizzle-orm";
-import { attachFeaturedPlayers } from "../lib/queries";
+import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
+import { z } from "zod/v4";
 
 const router: IRouter = Router();
+
+router.get("/fixtures/:id", async (req, res): Promise<void> => {
+  const parsed = GetFixtureParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { id } = parsed.data;
+
+  // Fetch the fixture row
+  const [fixture] = await db.select().from(fixturesTable).where(eq(fixturesTable.id, id));
+  if (!fixture) {
+    res.status(404).json({ error: "Fixture not found" });
+    return;
+  }
+
+  // All tracked players linked to this fixture
+  const linkedRows = await db
+    .select({
+      playerId: fixturePlayersTable.playerId,
+    })
+    .from(fixturePlayersTable)
+    .where(eq(fixturePlayersTable.fixtureId, id));
+
+  const playerIds = linkedRows.map((r) => r.playerId);
+
+  type TrackedPlayer = {
+    id: number; name: string; slug: string; position: string;
+    photoUrl: string | null; clubName: string; clubLogoUrl: string | null;
+    poolTier: "core" | "inMix" | "prospect";
+    matchLog: { minutes: number; goals: number; assists: number; rating: number | null; conceded?: number | null } | null;
+  };
+  let trackedPlayers: TrackedPlayer[] = [];
+
+  if (playerIds.length > 0) {
+    // Load player details
+    const players = await db
+      .select({
+        id: playersTable.id,
+        name: playersTable.name,
+        slug: playersTable.slug,
+        position: playersTable.position,
+        photoUrl: playersTable.photoUrl,
+        worldCupRoster: playersTable.worldCupRoster,
+        nationalTeamCaps: playersTable.nationalTeamCaps,
+        age: playersTable.age,
+        dateOfBirth: playersTable.dateOfBirth,
+        clubName: clubsTable.name,
+        clubLogoUrl: clubsTable.logoUrl,
+      })
+      .from(playersTable)
+      .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+      .where(inArray(playersTable.id, playerIds));
+
+    // Load match logs for these players for this fixture (match by apiFootballFixtureId)
+    let matchLogMap = new Map<number, { minutes: number; goals: number; assists: number; rating: number | null; conceded: number | null }>();
+
+    if (fixture.apiFootballFixtureId != null) {
+      const logs = await db
+        .select({
+          playerId: matchLogsTable.playerId,
+          minutes: matchLogsTable.minutes,
+          goals: matchLogsTable.goals,
+          assists: matchLogsTable.assists,
+          rating: matchLogsTable.rating,
+          conceded: matchLogsTable.conceded,
+        })
+        .from(matchLogsTable)
+        .where(
+          and(
+            inArray(matchLogsTable.playerId, playerIds),
+            eq(matchLogsTable.apiFootballFixtureId, fixture.apiFootballFixtureId),
+          ),
+        );
+      for (const log of logs) {
+        matchLogMap.set(log.playerId, {
+          minutes: log.minutes,
+          goals: log.goals,
+          assists: log.assists,
+          rating: log.rating ?? null,
+          conceded: log.conceded ?? null,
+        });
+      }
+    }
+
+    trackedPlayers = players.map((p) => {
+      const age = resolveAge(p.dateOfBirth, p.age);
+      const poolTier = computePoolTier({ worldCupRoster: p.worldCupRoster, nationalTeamCaps: p.nationalTeamCaps, age });
+      const matchLog = matchLogMap.get(p.id) ?? null;
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        position: p.position,
+        photoUrl: p.photoUrl ?? null,
+        clubName: p.clubName,
+        clubLogoUrl: p.clubLogoUrl ?? null,
+        poolTier,
+        matchLog,
+      };
+    });
+
+    // Sort: players with match logs first (by minutes desc), pending players after
+    trackedPlayers.sort((a, b) => {
+      if (a.matchLog && !b.matchLog) return -1;
+      if (!a.matchLog && b.matchLog) return 1;
+      if (a.matchLog && b.matchLog) return b.matchLog.minutes - a.matchLog.minutes;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  // Build the featuredPlayers list (same as listFixtures)
+  const [withPlayers] = await attachFeaturedPlayers([fixture]);
+  const response = { ...withPlayers, trackedPlayers };
+
+  res.json(GetFixtureResponse.parse(response));
+});
 
 router.get("/fixtures", async (req, res): Promise<void> => {
   const parsed = ListFixturesQueryParams.safeParse(req.query);

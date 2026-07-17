@@ -8,6 +8,7 @@ import Dashboard from '@/pages/Dashboard';
 import Players from '@/pages/Players';
 import PlayerProfile from '@/pages/PlayerProfile';
 import Fixtures from '@/pages/Fixtures';
+import MatchDetail from '@/pages/MatchDetail';
 import News from '@/pages/News';
 import Injuries from '@/pages/Injuries';
 import Transfers from '@/pages/Transfers';
@@ -40,6 +41,7 @@ function Router() {
             <Route path="/players" component={Players} />
             <Route path="/players/:id" component={PlayerProfile} />
             <Route path="/fixtures" component={Fixtures} />
+            <Route path="/matches/:id" component={MatchDetail} />
             <Route path="/news" component={News} />
             <Route path="/injuries" component={Injuries} />
             <Route path="/transfers" component={Transfers} />

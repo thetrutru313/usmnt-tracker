@@ -110,6 +110,8 @@ export interface PlayerStats {
 
 export interface MatchLog {
   id: number;
+  /** @nullable */
+  fixtureId?: number | null;
   date: string;
   opponent: string;
   competition: string;
@@ -285,6 +287,34 @@ export interface PlayerProfile {
   upcomingFixtures: Fixture[];
   recentNews?: NewsArticle[];
 }
+
+export interface FixtureMatchLog {
+  minutes: number;
+  goals: number;
+  assists: number;
+  /** @nullable */
+  rating: number | null;
+  /** @nullable */
+  conceded?: number | null;
+}
+
+export interface FixtureTrackedPlayer {
+  id: number;
+  name: string;
+  slug: string;
+  position: string;
+  clubName: string;
+  /** @nullable */
+  clubLogoUrl: string | null;
+  /** @nullable */
+  photoUrl: string | null;
+  poolTier: PlayerPoolTier;
+  matchLog: FixtureMatchLog | null;
+}
+
+export type FixtureDetail = Fixture & {
+  trackedPlayers: FixtureTrackedPlayer[];
+};
 
 export type InjuryPerformanceTrend = typeof InjuryPerformanceTrend[keyof typeof InjuryPerformanceTrend];
 

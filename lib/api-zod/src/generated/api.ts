@@ -182,6 +182,7 @@ export const GetPlayerResponse = zod.object({
   "availableCycles": zod.array(zod.string()),
   "matchLog": zod.array(zod.object({
   "id": zod.number(),
+  "fixtureId": zod.number().nullish(),
   "date": zod.coerce.date(),
   "opponent": zod.string(),
   "competition": zod.string(),
@@ -298,6 +299,60 @@ export const ListFixturesResponseItem = zod.object({
 })))
 })
 export const ListFixturesResponse = zod.array(ListFixturesResponseItem)
+
+
+/**
+ * @summary Get a fixture with tracked-player stats
+ */
+export const GetFixtureParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetFixtureResponse = zod.object({
+  "id": zod.number(),
+  "isNationalTeam": zod.boolean(),
+  "competition": zod.string(),
+  "kickoff": zod.coerce.date(),
+  "venue": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeLogoUrl": zod.string().nullable(),
+  "awayLogoUrl": zod.string().nullable(),
+  "homeScore": zod.number().nullable(),
+  "awayScore": zod.number().nullable(),
+  "status": zod.enum(['scheduled', 'live', 'finished', 'postponed']),
+  "tvNetwork": zod.string().nullable(),
+  "streamingService": zod.string().nullable(),
+  "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
+  "featuredPlayers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "position": zod.string(),
+  "photoUrl": zod.string().nullable()
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
+}).and(zod.object({
+  "trackedPlayers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "position": zod.string(),
+  "clubName": zod.string(),
+  "clubLogoUrl": zod.string().nullable(),
+  "photoUrl": zod.string().nullable(),
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n'),
+  "matchLog": zod.union([zod.object({
+  "minutes": zod.number(),
+  "goals": zod.number(),
+  "assists": zod.number(),
+  "rating": zod.number().nullable(),
+  "conceded": zod.number().nullish()
+}),zod.null()])
+}))
+}))
 
 
 /**

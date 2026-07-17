@@ -6,18 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface MatchLog {
-  id: number;
-  /** @nullable */
-  fixtureId?: number | null;
-  date: Date;
-  opponent: string;
-  competition: string;
-  result: string;
+export interface FixtureMatchLog {
   minutes: number;
   goals: number;
   assists: number;
   /** @nullable */
   rating: number | null;
-  isNationalTeam: boolean;
+  /** @nullable */
+  conceded?: number | null;
 }

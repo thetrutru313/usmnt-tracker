@@ -141,6 +141,31 @@ paths:
                 items:
                   $ref: "#/components/schemas/Fixture"
 
+  /fixtures/{id}:
+    get:
+      operationId: getFixture
+      tags: [fixtures]
+      summary: Get a fixture with tracked-player stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Fixture detail with tracked players
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixtureDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /news:
     get:
       operationId: listNews
@@ -420,6 +445,10 @@ components:
       required: [id, date, opponent, competition, result, minutes, goals, assists, rating, isNationalTeam]
       properties:
         id: { type: integer }
+        # Internal fixture id — present when a fixtures row exists for this match log
+        # (i.e. the fixture was synced via the club/USMNT fixture pipeline). Use this
+        # to deep-link to /matches/:fixtureId. Null for old or unlinked match log entries.
+        fixtureId: { type: ["integer", "null"] }
         date: { type: string, format: date }
         opponent: { type: string }
         competition: { type: string }
@@ -642,6 +671,50 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FixtureFeaturedPlayer"
+
+    # Per-match stats for a tracked player on the fixture detail page.
+    # Conceded is only set for goalkeepers (or outfielders with data); null otherwise.
+    FixtureMatchLog:
+      type: object
+      required: [minutes, goals, assists, rating]
+      properties:
+        minutes: { type: integer }
+        goals: { type: integer }
+        assists: { type: integer }
+        rating: { type: ["number", "null"] }
+        conceded: { type: ["integer", "null"] }
+
+    # A tracked USMNT player entry on the fixture detail page. matchLog is null
+    # when the player is linked to the fixture but stats haven't synced yet.
+    FixtureTrackedPlayer:
+      type: object
+      required: [id, name, slug, position, clubName, clubLogoUrl, photoUrl, poolTier, matchLog]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        position: { type: string }
+        clubName: { type: string }
+        clubLogoUrl: { type: ["string", "null"] }
+        photoUrl: { type: ["string", "null"] }
+        poolTier:
+          $ref: "#/components/schemas/PlayerPoolTier"
+        matchLog:
+          oneOf:
+            - $ref: "#/components/schemas/FixtureMatchLog"
+            - type: "null"
+
+    # Full fixture detail: fixture header + all tracked USMNT players.
+    FixtureDetail:
+      allOf:
+        - $ref: "#/components/schemas/Fixture"
+        - type: object
+          required: [trackedPlayers]
+          properties:
+            trackedPlayers:
+              type: array
+              items:
+                $ref: "#/components/schemas/FixtureTrackedPlayer"
 
     NewsArticle:
       type: object
