@@ -96,6 +96,33 @@ describe("fixturesRefetchInterval", () => {
     expect(fixturesRefetchInterval(backToLive)).toBe(LIVE_POLL_INTERVAL);
   });
 
+  /**
+   * Sequential double-finish: two live fixtures ending at different times.
+   *
+   * React Query re-evaluates `refetchInterval` after every completed fetch,
+   * so the helper is called once per poll cycle with fresh data.
+   *
+   * Step 1 — both live     → poll (LIVE_POLL_INTERVAL)
+   * Step 2 — first done    → still poll (second is still live)
+   * Step 3 — both done     → stop polling (false)
+   *
+   * This confirms the helper never halts early and never keeps running
+   * past the last live match.
+   */
+  it("keeps polling while the first of two live fixtures finishes, stops only after the second finishes", () => {
+    // Step 1: both fixtures are live
+    const bothLive = [{ status: "live" }, { status: "live" }];
+    expect(fixturesRefetchInterval(bothLive)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 2: first fixture finishes — second is still live → must keep polling
+    const oneStillLive = [{ status: "finished" }, { status: "live" }];
+    expect(fixturesRefetchInterval(oneStillLive)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 3: second fixture finishes — all done → stop polling
+    const bothFinished = [{ status: "finished" }, { status: "finished" }];
+    expect(fixturesRefetchInterval(bothFinished)).toBe(false);
+  });
+
   it("LIVE_POLL_INTERVAL is exactly 60 000 ms (1 minute)", () => {
     expect(LIVE_POLL_INTERVAL).toBe(60_000);
   });
@@ -222,5 +249,36 @@ describe("dashboardRefetchInterval", () => {
 
   it("returns LIVE_POLL_INTERVAL when only todaysGames is present and one is live", () => {
     expect(dashboardRefetchInterval({ todaysGames: [{ status: "live" }] })).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  /**
+   * Sequential double-finish across todaysGames: two live fixtures ending
+   * at different times.
+   *
+   * Step 1 — both live     → poll (LIVE_POLL_INTERVAL)
+   * Step 2 — first done    → still poll (second is still live)
+   * Step 3 — both done     → stop polling (false)
+   */
+  it("keeps polling while the first of two live todaysGames finishes, stops only after the second finishes", () => {
+    // Step 1: both fixtures in todaysGames are live
+    const bothLive = {
+      todaysGames:   [{ status: "live" }, { status: "live" }],
+      upcomingGames: [{ status: "upcoming" }],
+    };
+    expect(dashboardRefetchInterval(bothLive)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 2: first fixture finishes — second is still live → must keep polling
+    const oneStillLive = {
+      todaysGames:   [{ status: "finished" }, { status: "live" }],
+      upcomingGames: [{ status: "upcoming" }],
+    };
+    expect(dashboardRefetchInterval(oneStillLive)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 3: both fixtures finished — all done → stop polling
+    const bothFinished = {
+      todaysGames:   [{ status: "finished" }, { status: "finished" }],
+      upcomingGames: [{ status: "upcoming" }],
+    };
+    expect(dashboardRefetchInterval(bothFinished)).toBe(false);
   });
 });
