@@ -893,6 +893,45 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     // No weekday string should appear — the "Tomorrow" fast-path must have fired
     expect(screen.queryByText(/Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday/i)).not.toBeInTheDocument();
   });
+
+  it('flips "Tomorrow" to "Today" in Recent Results when UTC midnight passes without a page reload', () => {
+    // Pin the clock to 23:59:50 UTC on 2026-07-17 — today UTC is "2026-07-17",
+    // tomorrow UTC is "2026-07-18".  The finished fixture's kickoff is on July 18
+    // UTC, so utcDateLabel must initially return "Tomorrow".
+    vi.useFakeTimers({ now: new Date("2026-07-17T23:59:50Z") });
+
+    const fixture = makeFixture("finished", {
+      id: 330,
+      kickoff: new Date("2026-07-18T02:00:00Z"),
+      homeTeam: "Midnight Flip Home",
+      awayTeam: "Midnight Flip Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    const { updateFixtures } = renderFixtures();
+
+    // Expand the Recent Results collapsible to see the date heading
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
+
+    // Before midnight: fixture is "Tomorrow"
+    expect(screen.getAllByText(/\bTomorrow\b/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
+
+    // Advance the fake clock past UTC midnight by 15 seconds (to 2026-07-18T00:00:05Z).
+    // Now today UTC is "2026-07-18" — the fixture's kickoff date — so utcDateLabel
+    // must return "Today" on the next render.
+    vi.advanceTimersByTime(15_000);
+
+    // Simulate the 60-second poll cycle delivering updated fixture data.
+    // This re-renders the component, causing utcDateLabel to be called again with
+    // the new system time, flipping the label from "Tomorrow" to "Today".
+    updateFixtures([fixture]);
+
+    // After midnight: the date heading must now read "Today"
+    expect(screen.getAllByText(/\bToday\b/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("Fixtures page — 7-day Recent Results window boundary", () => {
