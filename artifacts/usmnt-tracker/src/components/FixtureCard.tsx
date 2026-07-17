@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MonitorPlay, MapPin, Star } from "lucide-react";
+import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
 import { Link } from "wouter";
 
@@ -73,6 +73,30 @@ export type FixtureCardFixture = {
   }>;
 };
 
+/** Pulsing red dot + "LIVE" label shown on in-progress fixtures. */
+function LiveIndicator({ size = "md" }: { size?: "sm" | "md" }) {
+  if (size === "sm") {
+    return (
+      <span className="inline-flex items-center gap-1 shrink-0">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive" />
+        </span>
+        <span className="text-[9px] font-bold font-mono text-destructive tracking-widest uppercase">LIVE</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive" />
+      </span>
+      <span className="text-[11px] font-bold font-mono text-destructive tracking-widest uppercase">LIVE</span>
+    </span>
+  );
+}
+
 export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
   return (
     <Card className="overflow-hidden hover:border-primary/50 transition-colors">
@@ -86,13 +110,13 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
                   {formatDate(fixture.kickoff)}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Badge variant="destructive" className="animate-pulse rounded-sm px-1 py-0 text-[9px]">LIVE</Badge>
+                  <LiveIndicator size="sm" />
                   <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore}-{fixture.awayScore}</span>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center">
-                <Badge variant="destructive" className="animate-pulse mb-1 rounded-sm px-2 py-0.5">LIVE</Badge>
+              <div className="flex flex-col items-center gap-1">
+                <LiveIndicator size="md" />
                 <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore} - {fixture.awayScore}</span>
               </div>
             )
