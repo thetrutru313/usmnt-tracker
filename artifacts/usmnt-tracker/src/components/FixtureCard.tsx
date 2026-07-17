@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
 import { Link } from "wouter";
+import { useLiveElapsedMinute } from "@/lib/livePolling";
 
 export type PoolTier = "core" | "inMix" | "prospect";
 
@@ -100,6 +101,8 @@ function LiveIndicator({ size = "md" }: { size?: "sm" | "md" }) {
 }
 
 export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
+  const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, fixture.status === "live");
+
   return (
     <Card className="overflow-hidden hover:border-primary/50 transition-colors">
       <div className="flex flex-col md:flex-row">
@@ -113,8 +116,8 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   <LiveIndicator size="sm" />
-                  {fixture.elapsedMinute != null && (
-                    <span className="text-xs font-mono font-bold text-destructive">{fixture.elapsedMinute}&apos;</span>
+                  {liveMinute != null && (
+                    <span className="text-xs font-mono font-bold text-destructive">{liveMinute}&apos;</span>
                   )}
                   <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore}-{fixture.awayScore}</span>
                 </div>
@@ -123,7 +126,7 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
               <div className="flex flex-col items-center gap-1">
                 <LiveIndicator size="md" />
                 <span className="text-xs font-mono font-bold text-destructive">
-                  {fixture.elapsedMinute != null ? `${fixture.elapsedMinute}' · ` : ""}{fixture.homeScore} - {fixture.awayScore}
+                  {liveMinute != null ? `${liveMinute}' · ` : ""}{fixture.homeScore} - {fixture.awayScore}
                 </span>
               </div>
             )

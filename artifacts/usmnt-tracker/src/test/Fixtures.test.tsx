@@ -29,9 +29,13 @@ vi.mock("@workspace/api-client-react", () => ({
   getListFixturesQueryKey: () => ["fixtures", { scope: "all" }],
 }));
 
-// Suppress real polling intervals — we control data via the mock.
+// Suppress real polling intervals and the client-side minute tick — we
+// control data via the mock.  `useLiveElapsedMinute` is stubbed to return the
+// raw server value so cards render deterministically in tests.
 vi.mock("@/lib/livePolling", () => ({
   fixturesRefetchInterval: () => false,
+  useLiveElapsedMinute: (elapsedMinute: number | null | undefined) =>
+    elapsedMinute ?? null,
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
