@@ -288,4 +288,39 @@ describe("dashboardRefetchInterval", () => {
     };
     expect(dashboardRefetchInterval(bothFinished)).toBe(false);
   });
+
+  /**
+   * Cross-array sequential finish: one live fixture in todaysGames and one in
+   * upcomingGames ending at different times.
+   *
+   * React Query re-evaluates `refetchInterval` after every completed fetch, so
+   * as long as either array still has a live fixture the helper must keep
+   * returning LIVE_POLL_INTERVAL.
+   *
+   * Step 1 — todaysGames live, upcomingGames live  → poll (LIVE_POLL_INTERVAL)
+   * Step 2 — todaysGames finished, upcomingGames still live → poll (LIVE_POLL_INTERVAL)
+   * Step 3 — upcomingGames finished → stop polling (false)
+   */
+  it("keeps polling when the todaysGames fixture finishes first while an upcomingGames fixture is still live, stops only after the upcomingGames fixture finishes", () => {
+    // Step 1: one live fixture in each array
+    const bothLive = {
+      todaysGames:   [{ status: "live" }],
+      upcomingGames: [{ status: "live" }],
+    };
+    expect(dashboardRefetchInterval(bothLive)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 2: todaysGames fixture finishes — upcomingGames is still live → must keep polling
+    const todaysFinished = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "live" }],
+    };
+    expect(dashboardRefetchInterval(todaysFinished)).toBe(LIVE_POLL_INTERVAL);
+
+    // Step 3: upcomingGames fixture finishes — all done → stop polling
+    const allFinished = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(allFinished)).toBe(false);
+  });
 });
