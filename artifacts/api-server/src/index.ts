@@ -6,6 +6,8 @@ import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
+import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
+import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -27,6 +29,62 @@ app.listen(port, async (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // One-shot startup: backfill api_football_fixture_id on seeded national-team
+  // fixtures that were created without one. Finds the correct ID from existing
+  // national-team match logs within a ±7-day window of the fixture kickoff —
+  // seeded dates can differ from API-Football's recorded date by a day or two.
+  // Runs silently on every restart; no-ops when fixtures already have an ID.
+  (async () => {
+    try {
+      const ntFixturesWithoutId = await db
+        .select()
+        .from(fixturesTable)
+        .where(and(eq(fixturesTable.isNationalTeam, true), isNull(fixturesTable.apiFootballFixtureId)));
+
+      for (const fixture of ntFixturesWithoutId) {
+        const kickoffDate = new Date(fixture.kickoff);
+        const sevenBefore = new Date(kickoffDate.getTime() - 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const sevenAfter = new Date(kickoffDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+
+        const logs = await db
+          .select({ apiFootballFixtureId: matchLogsTable.apiFootballFixtureId })
+          .from(matchLogsTable)
+          .where(
+            and(
+              eq(matchLogsTable.isNationalTeam, true),
+              gte(matchLogsTable.date, sevenBefore),
+              lte(matchLogsTable.date, sevenAfter),
+            ),
+          );
+
+        // Tally fixture IDs from the logs — should all agree for one match
+        const counts = new Map<number, number>();
+        for (const l of logs) {
+          if (l.apiFootballFixtureId != null) {
+            counts.set(l.apiFootballFixtureId, (counts.get(l.apiFootballFixtureId) ?? 0) + 1);
+          }
+        }
+        if (counts.size === 0) continue; // Future fixture — no logs yet
+
+        const bestId = [...counts.entries()].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+        await db
+          .update(fixturesTable)
+          .set({ apiFootballFixtureId: bestId })
+          .where(eq(fixturesTable.id, fixture.id));
+        logger.info(
+          { fixtureId: fixture.id, apiFootballFixtureId: bestId },
+          "Startup: backfilled api_football_fixture_id for seeded national-team fixture",
+        );
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup: NT fixture ID backfill failed (non-fatal)");
+    }
+  })();
 
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats

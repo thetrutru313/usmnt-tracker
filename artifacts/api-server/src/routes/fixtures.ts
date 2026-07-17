@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ListFixturesQueryParams, ListFixturesResponse, GetFixtureParams, GetFixtureResponse } from "@workspace/api-zod";
 import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, clubsTable } from "@workspace/db";
-import { and, eq, gte, inArray, lt, notIlike, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or } from "drizzle-orm";
 import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
 import { z } from "zod/v4";
 
@@ -78,6 +78,45 @@ router.get("/fixtures/:id", async (req, res): Promise<void> => {
           and(
             inArray(matchLogsTable.playerId, playerIds),
             eq(matchLogsTable.apiFootballFixtureId, fixture.apiFootballFixtureId),
+          ),
+        );
+      for (const log of logs) {
+        matchLogMap.set(log.playerId, {
+          minutes: log.minutes,
+          goals: log.goals,
+          assists: log.assists,
+          rating: log.rating ?? null,
+          conceded: log.conceded ?? null,
+        });
+      }
+    } else if (fixture.isNationalTeam) {
+      // Fallback for seeded national-team fixtures that were created without an
+      // API-Football ID. Join by player + is_national_team + date within ±7 days
+      // of the fixture kickoff — seeded dates can differ from API-Football's date
+      // by a day or two, so an exact match would silently return nothing.
+      const kickoffDate = new Date(fixture.kickoff);
+      const sevenBefore = new Date(kickoffDate.getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const sevenAfter = new Date(kickoffDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const logs = await db
+        .select({
+          playerId: matchLogsTable.playerId,
+          minutes: matchLogsTable.minutes,
+          goals: matchLogsTable.goals,
+          assists: matchLogsTable.assists,
+          rating: matchLogsTable.rating,
+          conceded: matchLogsTable.conceded,
+        })
+        .from(matchLogsTable)
+        .where(
+          and(
+            inArray(matchLogsTable.playerId, playerIds),
+            eq(matchLogsTable.isNationalTeam, true),
+            gte(matchLogsTable.date, sevenBefore),
+            lte(matchLogsTable.date, sevenAfter),
           ),
         );
       for (const log of logs) {
