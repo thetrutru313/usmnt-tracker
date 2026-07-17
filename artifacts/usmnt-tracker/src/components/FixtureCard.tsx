@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
 import { Link } from "wouter";
-import { useLiveElapsedMinute } from "@/lib/livePolling";
+import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 
 export type PoolTier = "core" | "inMix" | "prospect";
 

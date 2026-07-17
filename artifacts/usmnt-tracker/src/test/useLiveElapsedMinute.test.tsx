@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useLiveElapsedMinute } from "@/lib/livePolling";
+import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 
 beforeEach(() => {
   vi.useFakeTimers();
