@@ -785,6 +785,43 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     // The off-by-one alternative — local-tz midnight on a UTC-stored date — must not appear
     expect(screen.queryByText(/Thursday, July 16/i)).not.toBeInTheDocument();
   });
+
+  it('renders "Friday, July 17" in the Recent Results date heading when that date is not today or tomorrow', () => {
+    // Pin the clock two days after the fixture so July 17 falls through to
+    // utcDateLabel's weekday-format branch inside the RecentResults collapsible.
+    // (If the clock were set to July 17 the label would read "Today", and
+    // July 18 would give "Tomorrow" — both bypass the branch under test.)
+    vi.useFakeTimers({ now: new Date("2026-07-19T10:00:00Z") });
+
+    // Default makeFixture kickoff is 2026-07-17T20:00:00Z → UTC date "2026-07-17".
+    // July 17, 2026 is a Friday.
+    const finishedFixture = makeFixture("finished", {
+      id: 300,
+      kickoff: new Date("2026-07-17T20:00:00Z"),
+      homeTeam: "RecentResults Home",
+      awayTeam: "RecentResults Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [finishedFixture], isLoading: false });
+    renderFixtures();
+
+    // The collapsible toggle must be present before expanding
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Expand the Recent Results collapsible — this mounts the {open && ...} block
+    // that contains its own utcDateLabel call
+    fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
+
+    // The date heading inside the collapsible must show the correct weekday
+    expect(screen.getByText(/Friday, July 17/i)).toBeInTheDocument();
+
+    // The off-by-one alternative must be absent
+    expect(screen.queryByText(/Thursday, July 16/i)).not.toBeInTheDocument();
+
+    // Neither of the short-circuit labels should have fired
+    expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("Fixtures page — 7-day Recent Results window boundary", () => {
