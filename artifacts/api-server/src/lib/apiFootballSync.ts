@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, isNotNull, sql } from "drizzle-orm";
 import { logger } from "./logger.js";
 import {
   type AfFixture,
@@ -353,6 +353,9 @@ export async function syncApiFootballFixtures(
   let fixturesReconciled = 0;
   let fixturesRemoved = 0;
   let failures = 0;
+  // Accumulates every fixture that transitioned to "finished" across all clubs
+  // this sweep, keyed by fixture id to deduplicate clubs sharing a fixture.
+  const allNewlyFinished = new Map<number, Set<number>>();
 
   for (const club of clubs) {
     const teamId = await resolveTeamId(club);
@@ -424,6 +427,12 @@ export async function syncApiFootballFixtures(
     const reconciled = await reconcileClubFixtures({ club, clubPlayerIds, freshById, removalsTrustworthy, now });
     fixturesReconciled += reconciled.fixturesReconciled;
     fixturesRemoved += reconciled.fixturesRemoved;
+    // Merge this club's newly-finished fixtures into the sweep-level map.
+    for (const { fixtureId, playerIds } of reconciled.newlyFinished) {
+      const existing = allNewlyFinished.get(fixtureId) ?? new Set<number>();
+      for (const pid of playerIds) existing.add(pid);
+      allNewlyFinished.set(fixtureId, existing);
+    }
 
     for (const f of upcoming) {
       const broadcast = broadcastFor(f.league.name);
@@ -478,6 +487,31 @@ export async function syncApiFootballFixtures(
       fixturesUpserted++;
     }
     clubsSynced++;
+  }
+
+  // Fire the post-match stats pipeline for every fixture that transitioned to
+  // "finished" this sweep.  Each fixture's player set is the union of all club
+  // player IDs that were linked to it, deduplicated across clubs.
+  //
+  // Fired with .catch() so a stats failure never aborts the fixture-sweep
+  // result.  The daily player-stats job remains as a catch-all for anything
+  // the trigger misses (API outage, server restart mid-sync, etc.).
+  if (allNewlyFinished.size > 0) {
+    // Lazy require avoids circular import: playerStatsSync → apiFootballSync.
+    const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
+    for (const [fixtureId, playerIdSet] of allNewlyFinished) {
+      const playerIds = [...playerIdSet];
+      logger.info(
+        { fixtureId, playerCount: playerIds.length },
+        "Hourly sweep: post-match stats pipeline triggered for newly-finished fixture",
+      );
+      syncStatsForFinishedFixture(playerIds).catch((err) =>
+        logger.error(
+          { err, fixtureId },
+          "Post-match stats trigger failed — daily job remains as catch-all",
+        ),
+      );
+    }
   }
 
   // Purge postponed fixtures whose original kickoff was more than 24 hours ago.
@@ -639,6 +673,87 @@ export async function syncNationalTeamFixtures(): Promise<{
 
 let intervalHandle: NodeJS.Timeout | null = null;
 
+/**
+ * Polls only the fixtures that are currently "live" in the DB, fetching each
+ * one by its API-Football fixture id.  Makes zero API calls when there are no
+ * live fixtures, so quota cost during quiet periods is nil.
+ *
+ * When a live fixture transitions to "finished" the post-match stats pipeline
+ * is fired immediately — same logic as the hourly sweep — so profiles update
+ * within 5 minutes of a final whistle rather than waiting until the next
+ * hourly tick.
+ *
+ * Exported so it can be called from integration tests or a manual admin route.
+ */
+export async function pollLiveFixtures(): Promise<{ polled: number; updated: number; newlyFinished: number }> {
+  const liveRows = await db
+    .select({
+      id: fixturesTable.id,
+      apiFootballFixtureId: fixturesTable.apiFootballFixtureId,
+      homeScore: fixturesTable.homeScore,
+      awayScore: fixturesTable.awayScore,
+    })
+    .from(fixturesTable)
+    .where(and(eq(fixturesTable.status, "live"), isNotNull(fixturesTable.apiFootballFixtureId)));
+
+  if (liveRows.length === 0) return { polled: 0, updated: 0, newlyFinished: 0 };
+
+  let updated = 0;
+  let newlyFinished = 0;
+
+  for (const row of liveRows) {
+    if (row.apiFootballFixtureId === null) continue;
+    try {
+      const results = await afFetch<AfFixture[]>(`/fixtures?id=${row.apiFootballFixtureId}`);
+      const fresh = results[0];
+      if (!fresh) continue;
+
+      const freshStatus = mapStatus(fresh.fixture.status.short);
+      const freshHomeScore = fresh.goals.home ?? null;
+      const freshAwayScore = fresh.goals.away ?? null;
+      const freshElapsed = freshStatus === "live" ? (fresh.fixture.status.elapsed ?? null) : null;
+
+      // Skip no-op writes: still live, score unchanged.
+      if (freshStatus === "live" && row.homeScore === freshHomeScore && row.awayScore === freshAwayScore) continue;
+
+      await db
+        .update(fixturesTable)
+        .set({ status: freshStatus, homeScore: freshHomeScore, awayScore: freshAwayScore, elapsedMinute: freshElapsed })
+        .where(eq(fixturesTable.id, row.id));
+      updated++;
+      logger.info(
+        { fixtureId: row.id, apiFootballFixtureId: row.apiFootballFixtureId, freshStatus, freshHomeScore, freshAwayScore },
+        "Live poll: updated fixture",
+      );
+
+      // Fixture just finished — fire post-match stats pipeline immediately.
+      if (freshStatus === "finished") {
+        newlyFinished++;
+        const links = await db
+          .select({ playerId: fixturePlayersTable.playerId })
+          .from(fixturePlayersTable)
+          .where(eq(fixturePlayersTable.fixtureId, row.id));
+        const playerIds = links.map((l) => l.playerId);
+        if (playerIds.length > 0) {
+          const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
+          logger.info(
+            { fixtureId: row.id, playerCount: playerIds.length },
+            "Live poll: post-match stats pipeline triggered for newly-finished fixture",
+          );
+          syncStatsForFinishedFixture(playerIds).catch((err) =>
+            logger.error({ err, fixtureId: row.id }, "Live poll: post-match stats trigger failed"),
+          );
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, fixtureId: row.id, apiFootballFixtureId: row.apiFootballFixtureId }, "Live poll: failed to fetch/update fixture");
+    }
+  }
+
+  logger.info({ polled: liveRows.length, updated, newlyFinished }, "Live fixture poll complete");
+  return { polled: liveRows.length, updated, newlyFinished };
+}
+
 /** Runs the sync immediately, then hourly (matches the recommended fixtures refresh cadence). */
 export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void {
   if (!process.env["API_FOOTBALL_KEY"]) {
@@ -656,6 +771,29 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
   };
   run();
   intervalHandle = setInterval(run, intervalMs);
+
+  // ── 5-minute live fixture polling loop ──────────────────────────────────
+  // Runs alongside the hourly sweep but only touches fixtures currently marked
+  // "live" in the DB.  Quota cost is zero during quiet periods (no live rows →
+  // no API calls).  An in-process mutex prevents concurrent runs from racing;
+  // the shared afFetch throttle ensures this loop and the hourly sweep don't
+  // burst the per-minute rate limit even if they happen to overlap.
+  let liveLoopRunning = false;
+  const livePoll = async () => {
+    if (liveLoopRunning) {
+      logger.debug("Live fixture poll skipped — previous run still in progress");
+      return;
+    }
+    liveLoopRunning = true;
+    try {
+      await pollLiveFixtures();
+    } catch (err) {
+      logger.error({ err }, "Live fixture poll failed");
+    } finally {
+      liveLoopRunning = false;
+    }
+  };
+  setInterval(livePoll, 5 * 60 * 1000);
 }
 
 export function stopApiFootballSyncSchedule(): void {

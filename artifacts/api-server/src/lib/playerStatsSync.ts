@@ -1107,6 +1107,24 @@ export async function syncPlayerStatsAndInjuries(
   return { clubsProcessed, playersWithMatchLogs, playersWithSeasonStats, injuriesWritten, failures };
 }
 
+/**
+ * Immediately syncs match logs, player_stats, and form trends for the given
+ * players — called the moment a fixture transitions to "finished" so player
+ * profiles reflect the result within minutes rather than waiting for the next
+ * daily stats job.
+ *
+ * Delegates to the full syncPlayerStatsAndInjuries so that match_logs,
+ * last5/previous5/season player_stats, injuries, and form badges are all
+ * updated in one pass.  The playerIds filter keeps the API-quota cost
+ * proportional to the fixture (typically 1–5 players per club).
+ */
+export async function syncStatsForFinishedFixture(playerIds: number[]): Promise<void> {
+  if (playerIds.length === 0) return;
+  logger.info({ playerCount: playerIds.length }, "Post-match stats trigger: syncing stats for newly-finished fixture");
+  await syncPlayerStatsAndInjuries(undefined, playerIds);
+  logger.info({ playerCount: playerIds.length }, "Post-match stats trigger: complete");
+}
+
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /**

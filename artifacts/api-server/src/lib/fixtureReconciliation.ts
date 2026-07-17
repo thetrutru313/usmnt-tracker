@@ -67,14 +67,31 @@ export interface ReconcileClubFixturesInput {
  * - Fixtures absent whose kickoff is still in the future are only warned about;
  *   they will be removed on a later run once their kickoff has passed.
  */
+export interface ReconcileClubFixturesResult {
+  fixturesReconciled: number;
+  fixturesRemoved: number;
+  /**
+   * Fixtures that transitioned to "finished" during this reconciliation pass.
+   * Callers can use this to immediately trigger the post-match stats pipeline
+   * instead of waiting for the next daily stats job.
+   *
+   * `playerIds` is the full set of player IDs tracked at the club — not just
+   * those who played in the match — so the post-match sync covers everyone
+   * who might have appeared (and lets the daily-style sync update season
+   * stats for the whole club in one efficient pass).
+   */
+  newlyFinished: Array<{ fixtureId: number; playerIds: number[] }>;
+}
+
 export async function reconcileClubFixtures(
   input: ReconcileClubFixturesInput,
-): Promise<{ fixturesReconciled: number; fixturesRemoved: number }> {
+): Promise<ReconcileClubFixturesResult> {
   const { club, clubPlayerIds, freshById, removalsTrustworthy, now } = input;
   let fixturesReconciled = 0;
   let fixturesRemoved = 0;
+  const newlyFinished: Array<{ fixtureId: number; playerIds: number[] }> = [];
 
-  if (clubPlayerIds.length === 0) return { fixturesReconciled, fixturesRemoved };
+  if (clubPlayerIds.length === 0) return { fixturesReconciled, fixturesRemoved, newlyFinished };
 
   // Include "live" alongside "scheduled" so matches that went live during a
   // previous sync cycle are still checked and updated to "finished" (with the
@@ -131,6 +148,14 @@ export async function reconcileClubFixtures(
           },
           "Reconciled tracked fixture to provider's current status",
         );
+        // Capture status transitions to "finished" so the caller can fire the
+        // post-match stats pipeline immediately instead of waiting for the
+        // next daily job.  A fixture already stored as "finished" can't appear
+        // here (the query at the top filters to scheduled/live only), so any
+        // freshStatus === "finished" is definitionally a new transition.
+        if (freshStatus === "finished") {
+          newlyFinished.push({ fixtureId: tracked.id, playerIds: clubPlayerIds });
+        }
         fixturesReconciled++;
       }
     } else if (!removalsTrustworthy) {
@@ -178,7 +203,7 @@ export async function reconcileClubFixtures(
     }
   }
 
-  return { fixturesReconciled, fixturesRemoved };
+  return { fixturesReconciled, fixturesRemoved, newlyFinished };
 }
 
 // ─── Stale postponed fixture purge ───────────────────────────────────────────
