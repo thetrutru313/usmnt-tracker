@@ -15,6 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { subDays, startOfDay } from "date-fns";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import Fixtures from "@/pages/Fixtures";
@@ -748,18 +749,55 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.getByText(/Today/i)).toBeInTheDocument();
     expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
   });
+
+  it('renders "Friday, July 17" for the 2026-07-17 date string when that date is not today or tomorrow', () => {
+    // Pin the clock one week before July 17 so utcDateLabel falls through to the
+    // weekday-format branch (not the "Today"/"Tomorrow" fast-paths).
+    //
+    // The function builds a local-midnight Date via new Date(y, m - 1, d) and
+    // passes it to date-fns format().  That construction is timezone-stable: it
+    // always produces a Date whose local calendar date matches the UTC string,
+    // so format() returns the correct weekday regardless of the host's UTC offset.
+    //
+    // If the implementation were changed to new Date(dateStr) — which is treated
+    // as UTC midnight — format() would return "Thursday, July 16" in any timezone
+    // behind UTC (e.g. US/Eastern at UTC-4 or UTC-5), breaking western users.
+    vi.useFakeTimers({ now: new Date("2026-07-10T10:00:00Z") });
+
+    // Kickoff at noon UTC on July 17.  groupByDate buckets this as "2026-07-17",
+    // so utcDateLabel receives the string "2026-07-17".
+    const fixture = makeFixture("scheduled", {
+      id: 204,
+      kickoff: new Date("2026-07-17T12:00:00Z"),
+      homeTeam: "Weekday Home",
+      awayTeam: "Weekday Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [fixture], isLoading: false });
+    renderFixtures();
+
+    // July 17, 2026 is a Friday.  The heading must reflect the UTC calendar date,
+    // not a UTC-offset-shifted date.
+    expect(screen.getByText(/Friday, July 17/i)).toBeInTheDocument();
+    // Ensure neither of the short-circuit labels fired
+    expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
+    // The off-by-one alternative — local-tz midnight on a UTC-stored date — must not appear
+    expect(screen.queryByText(/Thursday, July 16/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("Fixtures page — 7-day Recent Results window boundary", () => {
   /**
    * The filter is: new Date(f.kickoff) >= subDays(startOfDay(new Date()), 7)
    *
-   * With the clock pinned to 2026-07-17T12:00:00Z (noon UTC):
-   *   startOfDay(now)       = 2026-07-17T00:00:00Z  (UTC midnight today)
-   *   sevenDaysAgo          = 2026-07-10T00:00:00Z
+   * `startOfDay` uses the local timezone of the test process (set to
+   * America/New_York in vitest.config.ts), so the exact UTC timestamp of the
+   * boundary varies with offset.  Rather than hardcoding a UTC instant that
+   * is only correct in UTC, the boundary tests derive `sevenDaysAgo` with the
+   * same formula the component uses — making them timezone-agnostic.
    *
-   * Boundary fixture (kickoff = 2026-07-10T00:00:00Z):  passes  (>=)
-   * One ms before boundary  (kickoff = 2026-07-09T23:59:59.999Z): fails (<)
+   * Clock is pinned to 2026-07-17T12:00:00Z (noon UTC / 8 am Eastern).
    */
   beforeEach(() => {
     vi.useFakeTimers();
@@ -771,9 +809,13 @@ describe("Fixtures page — 7-day Recent Results window boundary", () => {
   });
 
   it("includes a finished fixture whose kickoff is exactly at the 7-day boundary", () => {
+    // Derive the boundary the same way the component does so this test is
+    // correct regardless of which timezone the test process runs under.
+    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+
     const boundaryFixture = makeFixture("finished", {
       id: 200,
-      kickoff: new Date("2026-07-10T00:00:00Z"), // exactly sevenDaysAgo
+      kickoff: sevenDaysAgo, // exactly on the boundary (>= passes)
       homeTeam: "Boundary Home",
       awayTeam: "Boundary Away",
     });
@@ -786,9 +828,11 @@ describe("Fixtures page — 7-day Recent Results window boundary", () => {
   });
 
   it("excludes a finished fixture whose kickoff is 1 ms before the 7-day boundary", () => {
+    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+
     const justBeforeBoundary = makeFixture("finished", {
       id: 201,
-      kickoff: new Date("2026-07-09T23:59:59.999Z"), // 1 ms before sevenDaysAgo
+      kickoff: new Date(sevenDaysAgo.getTime() - 1), // 1 ms before sevenDaysAgo
       homeTeam: "Stale Home",
       awayTeam: "Stale Away",
     });
