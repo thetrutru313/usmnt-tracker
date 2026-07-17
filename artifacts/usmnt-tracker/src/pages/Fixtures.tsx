@@ -4,6 +4,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type PoolTier } from "@/components/FixtureCard";
+import { fixturesRefetchInterval } from "@/lib/livePolling";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -39,8 +40,6 @@ function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string
   );
 }
 
-const LIVE_POLL_INTERVAL = 60_000; // 1 minute
-
 export default function Fixtures() {
   const { data: fixtures, isLoading } = useListFixtures(
     { scope: 'all' },
@@ -48,9 +47,7 @@ export default function Fixtures() {
       query: {
         queryKey: getListFixturesQueryKey({ scope: 'all' }),
         refetchInterval: (query): number | false =>
-          (query.state.data as Fixture[] | undefined)?.some((f) => f.status === 'live')
-            ? LIVE_POLL_INTERVAL
-            : false,
+          fixturesRefetchInterval(query.state.data as Fixture[] | undefined),
       },
     },
   );

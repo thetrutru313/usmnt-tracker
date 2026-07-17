@@ -1,4 +1,5 @@
 import { useGetDashboard, getGetDashboardQueryKey, type DashboardSummary } from "@workspace/api-client-react";
+import { dashboardRefetchInterval } from "@/lib/livePolling";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FormBadge } from "@/components/FormBadge";
@@ -9,19 +10,12 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS, type EventKind, type EventStatus } from "@/data/schedule";
 
-const LIVE_POLL_INTERVAL = 60_000; // 1 minute
-
 export default function Dashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard({
     query: {
       queryKey: getGetDashboardQueryKey(),
-      refetchInterval: (query): number | false => {
-        const data = query.state.data as DashboardSummary | undefined;
-        const hasLive =
-          data?.todaysGames?.some((f) => f.status === 'live') ||
-          data?.upcomingGames?.some((f) => f.status === 'live');
-        return hasLive ? LIVE_POLL_INTERVAL : false;
-      },
+      refetchInterval: (query): number | false =>
+        dashboardRefetchInterval(query.state.data as DashboardSummary | undefined),
     },
   });
 
