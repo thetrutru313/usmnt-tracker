@@ -38,6 +38,20 @@ export function fixturesRefetchInterval(
 }
 
 /**
+ * Returns the polling interval for the Match Detail page.
+ *
+ * - Fixture status is `live` → poll every LIVE_POLL_INTERVAL ms so stats
+ *   update automatically during the match.
+ * - Any other status (scheduled, finished, postponed, etc.) → stop polling
+ *   (false), since the data will not change while the user is watching.
+ */
+export function fixtureRefetchInterval(
+  data: WithStatus | undefined,
+): number | false {
+  return data?.status === "live" ? LIVE_POLL_INTERVAL : false;
+}
+
+/**
  * Returns the polling interval for the Dashboard page.
  *
  * - At least one fixture in `todaysGames` or `upcomingGames` is not yet in a

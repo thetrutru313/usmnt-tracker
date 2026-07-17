@@ -1,4 +1,5 @@
 import { useGetFixture } from "@workspace/api-client-react";
+import { fixtureRefetchInterval } from "@/lib/livePolling";
 import { useParams } from "wouter";
 import { Link } from "wouter";
 import { ArrowLeft, MapPin, Clock, Loader2 } from "lucide-react";
@@ -186,7 +187,7 @@ export default function MatchDetail() {
   const fixtureId = parseInt(id || "0", 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: fixture, isLoading, error } = useGetFixture(fixtureId, { query: { enabled: !!fixtureId } as any });
+  const { data: fixture, isLoading, error } = useGetFixture(fixtureId, { query: { enabled: !!fixtureId, refetchInterval: (query: any) => fixtureRefetchInterval(query.state.data) } as any });
 
   if (isLoading) {
     return (
