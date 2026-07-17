@@ -1,8 +1,8 @@
 import { useGetFixture } from "@workspace/api-client-react";
-import { fixtureRefetchInterval } from "@/lib/livePolling";
+import { fixtureRefetchInterval, LIVE_POLL_INTERVAL } from "@/lib/livePolling";
 import { useParams } from "wouter";
 import { Link } from "wouter";
-import { ArrowLeft, MapPin, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -68,6 +68,12 @@ function ScoreBlock({
         <span className="text-3xl md:text-4xl font-bold font-mono tracking-tight">
           {scoreDisplay}
         </span>
+        {status === "live" && (
+          <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-mono text-muted-foreground tracking-wide">
+            <RefreshCw size={9} className="animate-spin" style={{ animationDuration: "3s" }} />
+            updating every {LIVE_POLL_INTERVAL / 1000}s
+          </span>
+        )}
         {status === "finished" && (
           <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Full Time</span>
         )}
