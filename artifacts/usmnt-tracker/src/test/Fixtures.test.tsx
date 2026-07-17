@@ -384,6 +384,55 @@ describe("Fixtures page — pool-tier filter and Recent Results count badge", ()
   });
 });
 
+describe("Fixtures page — Recent Results collapsible stays open across poll updates", () => {
+  it("keeps the collapsible open and shows both fixtures when a second fixture finishes mid-poll", () => {
+    const firstFinished = makeFixture("finished", {
+      id: 1,
+      homeTeam: "Portland Timbers",
+      awayTeam: "Seattle Sounders",
+      homeScore: 2,
+      awayScore: 0,
+    });
+
+    mockUseListFixtures.mockReturnValue({
+      data: [firstFinished],
+      isLoading: false,
+    });
+
+    const { updateFixtures } = renderFixtures();
+
+    // The collapsible is present (one finished fixture)
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Open the collapsible — user interaction before the poll fires
+    const toggleBtn = screen.getByRole("button", { name: /Recent Results/i });
+    fireEvent.click(toggleBtn);
+
+    // Confirm it is open: first fixture's teams are visible
+    expect(screen.getAllByText("Portland Timbers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Seattle Sounders").length).toBeGreaterThan(0);
+
+    // Simulate a poll cycle delivering a second finished fixture
+    const secondFinished = makeFixture("finished", {
+      id: 2,
+      homeTeam: "Minnesota United",
+      awayTeam: "LA Galaxy",
+      homeScore: 1,
+      awayScore: 3,
+    });
+    updateFixtures([firstFinished, secondFinished]);
+
+    // Collapsible must still be open — count badge updates
+    expect(screen.getByText(/Recent Results \(2\)/i)).toBeInTheDocument();
+
+    // Both fixtures must be visible without any additional clicks
+    expect(screen.getAllByText("Portland Timbers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Seattle Sounders").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Minnesota United").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("LA Galaxy").length).toBeGreaterThan(0);
+  });
+});
+
 describe("Fixtures page — loading and empty states", () => {
   it("shows a skeleton while isLoading is true", () => {
     mockUseListFixtures.mockReturnValue({ data: undefined, isLoading: true });
