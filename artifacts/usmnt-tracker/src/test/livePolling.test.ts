@@ -130,6 +130,56 @@ describe("fixturesRefetchInterval", () => {
     expect(fixturesRefetchInterval(bothFinished)).toBe(false);
   });
 
+  /**
+   * Postponed / cancelled fixtures are terminal: they will never go live.
+   * Polling indefinitely for them wastes API quota and battery.
+   */
+  it("stops polling (false) when the only non-finished fixtures are postponed", () => {
+    const fixtures = [
+      { status: "finished" },
+      { status: "postponed" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(false);
+  });
+
+  it("stops polling (false) when the only non-finished fixtures are cancelled", () => {
+    const fixtures = [
+      { status: "finished" },
+      { status: "cancelled" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(false);
+  });
+
+  it("stops polling (false) when fixtures are a mix of finished, postponed, and cancelled only", () => {
+    const fixtures = [
+      { status: "finished" },
+      { status: "postponed" },
+      { status: "cancelled" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(false);
+  });
+
+  it("stops polling (false) when all fixtures are postponed (no finished fixtures at all)", () => {
+    const fixtures = [{ status: "postponed" }, { status: "postponed" }];
+    expect(fixturesRefetchInterval(fixtures)).toBe(false);
+  });
+
+  it("still polls (LIVE_POLL_INTERVAL) when a live fixture is present alongside postponed ones", () => {
+    const fixtures = [
+      { status: "postponed" },
+      { status: "live" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  it("still polls (LIVE_POLL_INTERVAL) when a scheduled fixture is present alongside postponed ones", () => {
+    const fixtures = [
+      { status: "postponed" },
+      { status: "scheduled" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(LIVE_POLL_INTERVAL);
+  });
+
   it("LIVE_POLL_INTERVAL is exactly 60 000 ms (1 minute)", () => {
     expect(LIVE_POLL_INTERVAL).toBe(60_000);
   });
@@ -264,6 +314,50 @@ describe("dashboardRefetchInterval", () => {
 
   it("returns LIVE_POLL_INTERVAL when only todaysGames is present and one is live", () => {
     expect(dashboardRefetchInterval({ todaysGames: [{ status: "live" }] })).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  /**
+   * Postponed / cancelled fixtures are terminal: they will never go live.
+   * Polling indefinitely for them wastes API quota and battery.
+   */
+  it("stops polling (false) when the only non-finished todaysGames are postponed", () => {
+    const data = {
+      todaysGames:   [{ status: "finished" }, { status: "postponed" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(false);
+  });
+
+  it("stops polling (false) when the only non-finished upcomingGames are cancelled", () => {
+    const data = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "finished" }, { status: "cancelled" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(false);
+  });
+
+  it("stops polling (false) when both arrays contain only finished/postponed/cancelled entries", () => {
+    const data = {
+      todaysGames:   [{ status: "postponed" }],
+      upcomingGames: [{ status: "cancelled" }, { status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(false);
+  });
+
+  it("still polls (LIVE_POLL_INTERVAL) when a live todaysGames entry is present alongside postponed ones", () => {
+    const data = {
+      todaysGames:   [{ status: "postponed" }, { status: "live" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  it("still polls (LIVE_POLL_INTERVAL) when a scheduled upcomingGames entry is present alongside cancelled ones", () => {
+    const data = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "cancelled" }, { status: "scheduled" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(LIVE_POLL_INTERVAL);
   });
 
   /**
