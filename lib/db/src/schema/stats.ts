@@ -1,4 +1,4 @@
-import { boolean, doublePrecision, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -87,6 +87,9 @@ export const matchLogsTable = pgTable("match_logs", {
   uniqueIndex("match_logs_player_nt_fixture_unique")
     .on(table.playerId, table.apiFootballFixtureId)
     .where(sql`${table.apiFootballFixtureId} IS NOT NULL AND ${table.isNationalTeam} = true`),
+  // Performance indexes for WHERE/JOIN clauses used on every fixtures request.
+  index("match_logs_player_id_idx").on(table.playerId),
+  index("match_logs_api_football_fixture_id_idx").on(table.apiFootballFixtureId),
 ],
 );
 

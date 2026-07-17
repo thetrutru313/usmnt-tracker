@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clubsTable } from "./clubs";
@@ -44,7 +44,12 @@ export const fixturePlayersTable = pgTable("fixture_players", {
   // showing them, while a fixture that's already been played should still
   // reflect who was actually featured at the time.
   clubId: integer("club_id").references(() => clubsTable.id),
-});
+},
+(table) => [
+  index("fixture_players_fixture_id_idx").on(table.fixtureId),
+  index("fixture_players_player_id_idx").on(table.playerId),
+],
+);
 
 export const insertFixturePlayerSchema = createInsertSchema(fixturePlayersTable).omit({ id: true });
 export type InsertFixturePlayer = z.infer<typeof insertFixturePlayerSchema>;

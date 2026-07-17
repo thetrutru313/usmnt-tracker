@@ -47,6 +47,7 @@ export default function Fixtures() {
     {
       query: {
         queryKey: getListFixturesQueryKey({ scope: 'all' }),
+        staleTime: 60_000,
         refetchInterval: (query): number | false =>
           fixturesRefetchInterval(query.state.data as Fixture[] | undefined),
       },
