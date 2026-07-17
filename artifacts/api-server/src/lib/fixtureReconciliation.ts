@@ -76,6 +76,11 @@ export async function reconcileClubFixtures(
 
   if (clubPlayerIds.length === 0) return { fixturesReconciled, fixturesRemoved };
 
+  // Include "live" alongside "scheduled" so matches that went live during a
+  // previous sync cycle are still checked and updated to "finished" (with the
+  // correct final score) once they end. Without this, a fixture updated to
+  // "live, 0-0" would be invisible to all future reconciliation runs and stay
+  // stuck forever.
   const trackedRows = await db
     .select({
       id: fixturesTable.id,
@@ -83,10 +88,13 @@ export async function reconcileClubFixtures(
       homeTeam: fixturesTable.homeTeam,
       awayTeam: fixturesTable.awayTeam,
       kickoff: fixturesTable.kickoff,
+      status: fixturesTable.status,
+      homeScore: fixturesTable.homeScore,
+      awayScore: fixturesTable.awayScore,
     })
     .from(fixturesTable)
     .innerJoin(fixturePlayersTable, eq(fixturePlayersTable.fixtureId, fixturesTable.id))
-    .where(and(inArray(fixturePlayersTable.playerId, clubPlayerIds), eq(fixturesTable.status, "scheduled")));
+    .where(and(inArray(fixturePlayersTable.playerId, clubPlayerIds), inArray(fixturesTable.status, ["scheduled", "live"])));
 
   const trackedFixtures = new Map(trackedRows.map((row) => [row.id, row]));
   for (const tracked of trackedFixtures.values()) {
@@ -94,10 +102,23 @@ export async function reconcileClubFixtures(
     const fresh = freshById.get(tracked.apiFootballFixtureId);
     if (fresh) {
       const freshStatus = mapStatus(fresh.fixture.status.short);
+      const freshElapsed = freshStatus === "live" ? (fresh.fixture.status.elapsed ?? null) : null;
+
+      // Skip no-op writes: if the fixture is still live with the same score,
+      // nothing meaningful has changed and there is no reason to hit the DB.
+      if (
+        freshStatus === "live" &&
+        tracked.status === "live" &&
+        tracked.homeScore === fresh.goals.home &&
+        tracked.awayScore === fresh.goals.away
+      ) {
+        continue;
+      }
+
       if (freshStatus !== "scheduled") {
         await db
           .update(fixturesTable)
-          .set({ status: freshStatus, homeScore: fresh.goals.home, awayScore: fresh.goals.away, elapsedMinute: freshStatus === "live" ? (fresh.fixture.status.elapsed ?? null) : null })
+          .set({ status: freshStatus, homeScore: fresh.goals.home, awayScore: fresh.goals.away, elapsedMinute: freshElapsed })
           .where(eq(fixturesTable.id, tracked.id));
         logger.info(
           {
@@ -105,9 +126,10 @@ export async function reconcileClubFixtures(
             apiFootballFixtureId: tracked.apiFootballFixtureId,
             homeTeam: tracked.homeTeam,
             awayTeam: tracked.awayTeam,
+            previousStatus: tracked.status,
             newStatus: freshStatus,
           },
-          "Reconciled fixture that was stuck as 'scheduled' to the provider's current status",
+          "Reconciled tracked fixture to provider's current status",
         );
         fixturesReconciled++;
       }

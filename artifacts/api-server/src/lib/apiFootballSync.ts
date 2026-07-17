@@ -402,10 +402,13 @@ export async function syncApiFootballFixtures(
     // started" past its real outcome, or drops it from the team's fixture
     // list entirely once a bracket/tie is decided. Deliberately do NOT limit
     // this to future kickoffs — a fixture whose kickoff has already passed
-    // while still stuck at "scheduled" is exactly the stale case we're
-    // after. Only fixtures linked to this club's players are checked here,
-    // since that's the scope this sync can safely reason about without extra
-    // rate-limited API calls.
+    // while still stuck at "scheduled" or "live" is exactly the stale case
+    // we're after. reconcileClubFixtures checks both statuses so a match
+    // that went live in a previous cycle (and was correctly written as
+    // "live, 0-0") will be updated to "finished" with the real score on
+    // the next run. Only fixtures linked to this club's players are checked
+    // here, since that's the scope this sync can safely reason about without
+    // extra rate-limited API calls.
     //
     // Removing a fixture that's genuinely missing from the fresh pull is only
     // safe when we trust that pull completely — if any season fetch for this
