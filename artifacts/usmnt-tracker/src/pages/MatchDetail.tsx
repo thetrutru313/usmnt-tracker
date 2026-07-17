@@ -352,6 +352,8 @@ export default function MatchDetail() {
                             <RatingBadge rating={player.matchLog.rating} />
                           </td>
                         </>
+                      ) : fixture.status === "scheduled" ? (
+                        <td colSpan={hasConceded ? 5 : 4} />
                       ) : (
                         <td colSpan={hasConceded ? 5 : 4} className="py-3 pr-4 text-center">
                           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
