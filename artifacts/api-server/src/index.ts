@@ -6,9 +6,6 @@ import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
-import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
-
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -30,32 +27,6 @@ app.listen(port, async (err) => {
   }
 
   logger.info({ port }, "Server listening");
-
-  // One-time cleanup: remove speculative "International Friendly" placeholder
-  // fixtures (USA vs Panama, USA vs Colombia) that were seeded during initial
-  // development but are not real, publicly announced matches.  DELETE is
-  // idempotent — zero rows affected once already cleaned up.
-  try {
-    const phantoms = await db
-      .select({ id: fixturesTable.id })
-      .from(fixturesTable)
-      .where(
-        and(
-          eq(fixturesTable.homeTeam, "USA"),
-          eq(fixturesTable.competition, "International Friendly"),
-          eq(fixturesTable.status, "scheduled"),
-          inArray(fixturesTable.awayTeam, ["Panama", "Colombia"]),
-        ),
-      );
-    if (phantoms.length > 0) {
-      const ids = phantoms.map((r) => r.id);
-      await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, ids));
-      await db.delete(fixturesTable).where(inArray(fixturesTable.id, ids));
-      logger.info({ removed: ids.length, fixtureIds: ids }, "Removed phantom seeded International Friendly fixtures");
-    }
-  } catch (cleanupErr) {
-    logger.warn({ err: cleanupErr }, "Phantom fixture cleanup failed — will retry on next restart");
-  }
 
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats

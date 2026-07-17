@@ -62,6 +62,36 @@ const executablePath = resolveChromium();
 export default defineConfig({
   testDir: "./tests",
 
+  // Start the Vite dev server when no running instance is detected.
+  // reuseExistingServer: true means the workflow-managed dev server is reused
+  // when tests run interactively; the server is started fresh in CI / validation
+  // runs where no workflow is active.
+  webServer: [
+    {
+      // Vite dev server for the usmnt-tracker frontend.
+      // cwd is resolved relative to this config file (e2e/playwright.config.ts).
+      // reuseExistingServer: true means the Replit workflow's already-running
+      // server is reused when tests run interactively; a new server is started in
+      // validation / CI runs where no workflow process is active.
+      command: "BASE_PATH=/ PORT=5173 pnpm run dev",
+      cwd: "../artifacts/usmnt-tracker",
+      port: 5173,
+      reuseExistingServer: true,
+      timeout: 60_000,
+    },
+    {
+      // Express API server. The smoke tests need it so the React app can load
+      // real data (players, fixtures) — without it several tests hit a silent
+      // loading state and time out.  dist/ is pre-built by the api-server
+      // workflow; `pnpm run start` skips the rebuild and boots in seconds.
+      command: "PORT=8080 pnpm run start",
+      cwd: "../artifacts/api-server",
+      port: 8080,
+      reuseExistingServer: true,
+      timeout: 30_000,
+    },
+  ],
+
   // 60 s per test — accommodates cold-start lazy-chunk loading + first API fetch.
   timeout: 60_000,
 

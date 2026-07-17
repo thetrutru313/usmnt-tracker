@@ -337,6 +337,39 @@ export async function backfillLegacyFixturePlayerClubIds(): Promise<{ backfilled
   return { backfilled };
 }
 
+/**
+ * Iterates every fixture in `allNewlyFinished` and fires `syncFn` once per
+ * entry (fire-and-forget via `.catch()`).  Extracted so tests can drive the
+ * trigger loop directly with a stub `syncFn` — avoiding the lazy
+ * `require("./playerStatsSync")` that is necessary in production to break the
+ * circular import but cannot be intercepted by vitest's module mocking.
+ *
+ * @param allNewlyFinished  Map of DB fixture id → set of player ids, produced
+ *                          by merging `reconcileClubFixtures` results across
+ *                          all clubs in the sweep.
+ * @param syncFn            Called once per fixture with the union of player ids.
+ *                          Defaults to the real `syncStatsForFinishedFixture`
+ *                          (injected by `syncApiFootballFixtures` via lazy require).
+ */
+export function dispatchPostMatchTriggers(
+  allNewlyFinished: Map<number, Set<number>>,
+  syncFn: (playerIds: number[]) => Promise<void>,
+): void {
+  for (const [fixtureId, playerIdSet] of allNewlyFinished) {
+    const playerIds = [...playerIdSet];
+    logger.info(
+      { fixtureId, playerCount: playerIds.length },
+      "Hourly sweep: post-match stats pipeline triggered for newly-finished fixture",
+    );
+    syncFn(playerIds).catch((err) =>
+      logger.error(
+        { err, fixtureId },
+        "Post-match stats trigger failed — daily job remains as catch-all",
+      ),
+    );
+  }
+}
+
 export async function syncApiFootballFixtures(
   /** When provided, only syncs fixtures for the given club DB ids. Clubs
    *  outside this list are skipped entirely, incurring zero additional API
@@ -550,26 +583,7 @@ export async function syncApiFootballFixtures(
   if (allNewlyFinished.size > 0) {
     // Lazy require avoids circular import: playerStatsSync → apiFootballSync.
     const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
-    for (const [fixtureId, playerIdSet] of allNewlyFinished) {
-      const playerIds = [...playerIdSet];
-      logger.info(
-        { fixtureId, playerCount: playerIds.length, delayMinutes: POST_MATCH_STATS_DELAY_MINUTES },
-        "Hourly sweep: post-match stats pipeline scheduled — waiting for API-Football stats to populate",
-      );
-      // Delay by POST_MATCH_STATS_DELAY_MINUTES before fetching: API-Football
-      // player statistics are typically not available until 15–30 minutes after
-      // a final whistle, so syncing immediately yields empty results and no
-      // match logs are written.  The daily job remains a catch-all for anything
-      // the delayed trigger still misses (e.g. server restart during the wait).
-      setTimeout(() => {
-        syncStatsForFinishedFixture(playerIds).catch((err) =>
-          logger.error(
-            { err, fixtureId },
-            "Post-match stats trigger failed — daily job remains as catch-all",
-          ),
-        );
-      }, POST_MATCH_STATS_DELAY_MINUTES * 60 * 1000);
-    }
+    dispatchPostMatchTriggers(allNewlyFinished, syncStatsForFinishedFixture);
   }
 
   // Purge postponed fixtures whose original kickoff was more than 24 hours ago.
