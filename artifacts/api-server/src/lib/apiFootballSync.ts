@@ -772,28 +772,62 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
   run();
   intervalHandle = setInterval(run, intervalMs);
 
-  // ── 5-minute live fixture polling loop ──────────────────────────────────
+  // ── Live fixture polling loop ────────────────────────────────────────────
   // Runs alongside the hourly sweep but only touches fixtures currently marked
   // "live" in the DB.  Quota cost is zero during quiet periods (no live rows →
   // no API calls).  An in-process mutex prevents concurrent runs from racing;
   // the shared afFetch throttle ensures this loop and the hourly sweep don't
   // burst the per-minute rate limit even if they happen to overlap.
-  let liveLoopRunning = false;
-  const livePoll = async () => {
-    if (liveLoopRunning) {
-      logger.debug("Live fixture poll skipped — previous run still in progress");
-      return;
+  //
+  // Interval is controlled by LIVE_POLL_INTERVAL_MS (default: 5 minutes).
+  // Set to 0 or a negative value to disable the live-poll loop entirely.
+  // Non-numeric or empty values are rejected and fall back to the default
+  // with a warning rather than silently passing NaN to setInterval.
+  const DEFAULT_LIVE_POLL_MS = 5 * 60 * 1000;
+  const rawLivePollEnv = process.env["LIVE_POLL_INTERVAL_MS"];
+  let livePollIntervalMs: number;
+  if (rawLivePollEnv === undefined) {
+    livePollIntervalMs = DEFAULT_LIVE_POLL_MS;
+  } else {
+    const parsed = Number(rawLivePollEnv);
+    if (rawLivePollEnv.trim() === "" || !Number.isFinite(parsed)) {
+      logger.warn(
+        { rawLivePollEnv, defaultMs: DEFAULT_LIVE_POLL_MS },
+        "LIVE_POLL_INTERVAL_MS is not a valid finite number — falling back to default",
+      );
+      livePollIntervalMs = DEFAULT_LIVE_POLL_MS;
+    } else {
+      livePollIntervalMs = parsed;
     }
-    liveLoopRunning = true;
-    try {
-      await pollLiveFixtures();
-    } catch (err) {
-      logger.error({ err }, "Live fixture poll failed");
-    } finally {
-      liveLoopRunning = false;
-    }
-  };
-  setInterval(livePoll, 5 * 60 * 1000);
+  }
+
+  if (livePollIntervalMs <= 0) {
+    logger.info(
+      { livePollIntervalMs },
+      "Live fixture poll loop DISABLED (LIVE_POLL_INTERVAL_MS ≤ 0)",
+    );
+  } else {
+    logger.info(
+      { livePollIntervalMs },
+      "Live fixture poll loop starting",
+    );
+    let liveLoopRunning = false;
+    const livePoll = async () => {
+      if (liveLoopRunning) {
+        logger.debug("Live fixture poll skipped — previous run still in progress");
+        return;
+      }
+      liveLoopRunning = true;
+      try {
+        await pollLiveFixtures();
+      } catch (err) {
+        logger.error({ err }, "Live fixture poll failed");
+      } finally {
+        liveLoopRunning = false;
+      }
+    };
+    setInterval(livePoll, livePollIntervalMs);
+  }
 }
 
 export function stopApiFootballSyncSchedule(): void {
