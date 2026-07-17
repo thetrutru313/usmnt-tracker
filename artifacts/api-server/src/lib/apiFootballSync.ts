@@ -6,6 +6,7 @@ import {
   FINISHED_STATUSES,
   mapStatus,
   reconcileClubFixtures,
+  purgeStalePostponedFixtures,
 } from "./fixtureReconciliation.js";
 
 // Re-export so existing callers (usmntSync, playerStatsSync, etc.) keep working.
@@ -479,8 +480,20 @@ export async function syncApiFootballFixtures(
     clubsSynced++;
   }
 
+  // Purge postponed fixtures whose original kickoff was more than 24 hours ago.
+  // Runs once per sync cycle (not per club) so the cutoff is consistent across
+  // all clubs. A failure here must never abort the sync result — the purge is
+  // best-effort cleanup, not a correctness requirement.
+  let purgedPostponed = 0;
+  try {
+    const purgeResult = await purgeStalePostponedFixtures();
+    purgedPostponed = purgeResult.purged;
+  } catch (err) {
+    logger.warn({ err }, "Stale postponed fixture purge failed — will retry on next sync cycle");
+  }
+
   logger.info(
-    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures },
+    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, failures },
     "API-Football fixtures sync complete",
   );
   return { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures };

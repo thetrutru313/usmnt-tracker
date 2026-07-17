@@ -8,7 +8,7 @@
  */
 
 import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, lt } from "drizzle-orm";
 import { logger } from "./logger.js";
 
 // ─── API-Football fixture shape ───────────────────────────────────────────────
@@ -179,4 +179,47 @@ export async function reconcileClubFixtures(
   }
 
   return { fixturesReconciled, fixturesRemoved };
+}
+
+// ─── Stale postponed fixture purge ───────────────────────────────────────────
+
+const POSTPONED_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Deletes postponed fixtures whose original kickoff was more than 24 hours ago.
+ *
+ * Rationale: API-Football marks both weather delays and true reschedules as
+ * `PST`. A same-day weather delay resolves within hours, so we give a 24-hour
+ * grace window before treating a postponed fixture as stale. After that window,
+ * the game has either already happened under a new kickoff time (and a fresh
+ * fixture entry with a new ID will have been created by the provider) or been
+ * cancelled — either way the original record is clutter that should not show
+ * in the upcoming section.
+ *
+ * fixture_players rows are deleted first to satisfy the foreign-key constraint,
+ * then the parent fixture rows are removed.
+ */
+export async function purgeStalePostponedFixtures(
+  now: number = Date.now(),
+): Promise<{ purged: number }> {
+  const cutoff = new Date(now - POSTPONED_TTL_MS);
+
+  const stale = await db
+    .select({ id: fixturesTable.id })
+    .from(fixturesTable)
+    .where(and(eq(fixturesTable.status, "postponed"), lt(fixturesTable.kickoff, cutoff)));
+
+  if (stale.length === 0) return { purged: 0 };
+
+  const staleIds = stale.map((f) => f.id);
+
+  await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, staleIds));
+  await db.delete(fixturesTable).where(inArray(fixturesTable.id, staleIds));
+
+  logger.info(
+    { purged: stale.length, cutoffIso: cutoff.toISOString() },
+    "Purged stale postponed fixtures older than 24 hours",
+  );
+
+  return { purged: stale.length };
 }
