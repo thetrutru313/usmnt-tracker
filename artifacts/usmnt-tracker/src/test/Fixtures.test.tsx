@@ -749,3 +749,78 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
   });
 });
+
+describe("Fixtures page — 7-day Recent Results window boundary", () => {
+  /**
+   * The filter is: new Date(f.kickoff) >= subDays(startOfDay(new Date()), 7)
+   *
+   * With the clock pinned to 2026-07-17T12:00:00Z (noon UTC):
+   *   startOfDay(now)       = 2026-07-17T00:00:00Z  (UTC midnight today)
+   *   sevenDaysAgo          = 2026-07-10T00:00:00Z
+   *
+   * Boundary fixture (kickoff = 2026-07-10T00:00:00Z):  passes  (>=)
+   * One ms before boundary  (kickoff = 2026-07-09T23:59:59.999Z): fails (<)
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00Z")); // noon UTC, July 17
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("includes a finished fixture whose kickoff is exactly at the 7-day boundary", () => {
+    const boundaryFixture = makeFixture("finished", {
+      id: 200,
+      kickoff: new Date("2026-07-10T00:00:00Z"), // exactly sevenDaysAgo
+      homeTeam: "Boundary Home",
+      awayTeam: "Boundary Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [boundaryFixture], isLoading: false });
+    renderFixtures();
+
+    // Fixture is on the boundary (>=) so it must appear in Recent Results
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+  });
+
+  it("excludes a finished fixture whose kickoff is 1 ms before the 7-day boundary", () => {
+    const justBeforeBoundary = makeFixture("finished", {
+      id: 201,
+      kickoff: new Date("2026-07-09T23:59:59.999Z"), // 1 ms before sevenDaysAgo
+      homeTeam: "Stale Home",
+      awayTeam: "Stale Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [justBeforeBoundary], isLoading: false });
+    renderFixtures();
+
+    // Fixture is outside the window — Recent Results toggle must not appear
+    expect(screen.queryByText(/Recent Results/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a fixture 6 days ago but not one 8 days ago", () => {
+    const withinWindow = makeFixture("finished", {
+      id: 202,
+      kickoff: new Date("2026-07-11T15:00:00Z"), // 6 days ago — well inside window
+      homeTeam: "Within Home",
+      awayTeam: "Within Away",
+    });
+    const outsideWindow = makeFixture("finished", {
+      id: 203,
+      kickoff: new Date("2026-07-09T15:00:00Z"), // 8 days ago — outside window
+      homeTeam: "Outside Home",
+      awayTeam: "Outside Away",
+    });
+
+    mockUseListFixtures.mockReturnValue({
+      data: [withinWindow, outsideWindow],
+      isLoading: false,
+    });
+    renderFixtures();
+
+    // Only the within-window fixture contributes to the count
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+  });
+});
