@@ -376,9 +376,6 @@ async function main() {
     // CONCACAF Nations League - Group Stage window (next up after the World Cup).
     { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Jamaica", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Ricardo Pepi", "Matt Turner"] },
     { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Trinidad and Tobago", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
-    // November friendly window, after the Nations League group stage.
-    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 119, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Panama", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Weston McKennie", "Tyler Adams", "Yunus Musah", "Ricardo Pepi"] },
-    { isNationalTeam: true, competition: "International Friendly", daysFromNow: 123, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Colombia", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Malik Tillman", "Folarin Balogun", "Timothy Weah", "Sergiño Dest"] },
   ];
 
   for (const f of fixtureDefs) {
