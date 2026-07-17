@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetRankingsResponse } from "@workspace/api-zod";
 import { db, playersTable, clubsTable } from "@workspace/db";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import {
   playerStatsTable,
   matchLogsTable,
@@ -35,7 +35,9 @@ router.get("/rankings", async (_req, res): Promise<void> => {
         .from(playerStatsTable)
         .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
         .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-        .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
+        // 270-minute gate mirrors the form badge's confidence threshold — only
+        // players with meaningful playing time qualify as "most in form".
+        .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating), gte(playerStatsTable.minutes, 270)))
         .orderBy(desc(playerStatsTable.avgRating))
         .limit(8),
       db
@@ -86,7 +88,27 @@ router.get("/rankings", async (_req, res): Promise<void> => {
         .where(eq(playerStatsTable.periodType, "season"))
         .limit(50),
       injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(6),
-      playerSummaryQuery().where(inArray(playersTable.performanceTrend, ["on_fire", "rising"])).limit(8),
+      // Rising Prospects: prospect/fringe players trending up, ordered by
+      // last5 avg rating so the hottest young player ranks first. Uses a
+      // direct join against playerStatsTable (period last5) rather than the
+      // generic playerSummaryQuery so we can order by the stat column and
+      // apply the same 270-minute confidence gate as the form badge.
+      db
+        .select(playerSummaryColumns)
+        .from(playerStatsTable)
+        .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
+        .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+        .where(
+          and(
+            eq(playerStatsTable.periodType, "last5"),
+            isNotNull(playerStatsTable.avgRating),
+            gte(playerStatsTable.minutes, 270),
+            inArray(playersTable.performanceTrend, ["on_fire", "rising"]),
+            inArray(playersTable.category, ["prospect", "fringe"]),
+          ),
+        )
+        .orderBy(desc(playerStatsTable.avgRating))
+        .limit(8),
       transfersWithPlayerQuery().where(eq(transfersTable.status, "rumor")).orderBy(desc(transfersTable.probabilityScore)).limit(6),
     ]);
 
