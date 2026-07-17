@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { FixtureCard, PoolTierIcon, type PoolTier } from "@/components/FixtureCard";
+import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { FixtureCard, PoolTierIcon, type PoolTier, type FixtureCardFixture } from "@/components/FixtureCard";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
@@ -87,6 +87,10 @@ export default function Fixtures() {
     ? fixtures
     : fixtures.filter((fixture) => fixture.featuredPlayers.some((p) => poolFilter.includes(p.poolTier)));
 
+  // Split into upcoming/live and finished
+  const upcomingFixtures = filteredFixtures.filter((f) => f.status !== "finished");
+  const finishedFixtures = filteredFixtures.filter((f) => f.status === "finished");
+
   if (filteredFixtures.length === 0) {
     return (
       <div className="space-y-8 max-w-4xl mx-auto">
@@ -98,41 +102,105 @@ export default function Fixtures() {
     );
   }
 
-  // Group fixtures by date
-  const groupedFixtures = filteredFixtures.reduce((acc, fixture) => {
-    const dateStr = format(new Date(fixture.kickoff), 'yyyy-MM-dd');
-    if (!acc[dateStr]) acc[dateStr] = [];
-    acc[dateStr].push(fixture);
-    return acc;
-  }, {} as Record<string, typeof fixtures>);
+  function groupByDate(list: FixtureCardFixture[]): Record<string, FixtureCardFixture[]> {
+    return list.reduce((acc, fixture) => {
+      const dateStr = format(new Date(fixture.kickoff), 'yyyy-MM-dd');
+      if (!acc[dateStr]) acc[dateStr] = [];
+      acc[dateStr]!.push(fixture);
+      return acc;
+    }, {} as Record<string, FixtureCardFixture[]>);
+  }
 
-  const sortedDates = Object.keys(groupedFixtures).sort();
+  const groupedUpcoming = groupByDate(upcomingFixtures);
+  const sortedUpcomingDates = Object.keys(groupedUpcoming).sort();
+
+  const groupedFinished = groupByDate(finishedFixtures);
+  // Most recent finished dates first
+  const sortedFinishedDates = Object.keys(groupedFinished).sort().reverse();
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
 
-      <div className="space-y-8">
-        {sortedDates.map(dateStr => {
-          const date = new Date(dateStr);
-          const dateTitle = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "EEEE, MMMM d");
-          
-          return (
-            <div key={dateStr} className="space-y-4">
-              <h2 className="text-lg font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
-                <CalendarIcon size={16} />
-                {dateTitle}
-              </h2>
-              
-              <div className="space-y-3">
-                {groupedFixtures[dateStr].map(fixture => (
-                  <FixtureCard key={fixture.id} fixture={fixture} />
-                ))}
+      {upcomingFixtures.length === 0 ? (
+        <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+          <p className="text-muted-foreground font-mono">NO UPCOMING FIXTURES</p>
+          <p className="text-muted-foreground/60 font-mono text-xs mt-2">Check recent results below</p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {sortedUpcomingDates.map(dateStr => {
+            const date = new Date(dateStr);
+            const dateTitle = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "EEEE, MMMM d");
+
+            return (
+              <div key={dateStr} className="space-y-4">
+                <h2 className="text-lg font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+                  <CalendarIcon size={16} />
+                  {dateTitle}
+                </h2>
+                <div className="space-y-3">
+                  {groupedUpcoming[dateStr].map(fixture => (
+                    <FixtureCard key={fixture.id} fixture={fixture} />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
+
+      {finishedFixtures.length > 0 && (
+        <RecentResults groupedFinished={groupedFinished} sortedFinishedDates={sortedFinishedDates} />
+      )}
+    </div>
+  );
+}
+
+function RecentResults({
+  groupedFinished,
+  sortedFinishedDates,
+}: {
+  groupedFinished: Record<string, FixtureCardFixture[]>;
+  sortedFinishedDates: string[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+        aria-expanded={open}
+      >
+        <span className="text-sm font-bold font-mono uppercase tracking-wider text-muted-foreground">
+          Recent Results ({sortedFinishedDates.reduce((n, d) => n + groupedFinished[d].length, 0)})
+        </span>
+        {open ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-8">
+          {sortedFinishedDates.map(dateStr => {
+            const date = new Date(dateStr);
+            const dateTitle = isToday(date) ? "Today" : format(date, "EEEE, MMMM d");
+
+            return (
+              <div key={dateStr} className="space-y-4">
+                <h2 className="text-sm font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+                  <CalendarIcon size={14} />
+                  {dateTitle}
+                </h2>
+                <div className="space-y-3">
+                  {groupedFinished[dateStr].map(fixture => (
+                    <FixtureCard key={fixture.id} fixture={fixture} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
