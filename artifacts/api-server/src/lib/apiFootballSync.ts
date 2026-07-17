@@ -370,6 +370,36 @@ export function dispatchPostMatchTriggers(
   }
 }
 
+/**
+ * Schedules a post-match stats sync for a fixture that the live-poll loop
+ * just observed transitioning to "finished".  Extracted so tests can drive
+ * the wiring with a stub `syncFn` and a zero delay without touching the DB
+ * or the API-Football client.
+ *
+ * Mirrors the `dispatchPostMatchTriggers` extraction for the reconciliation
+ * path: both helpers take an injectable `syncFn` to break the lazy-require
+ * circular-import chain and make the trigger logic independently testable.
+ *
+ * @param fixtureId  DB fixture id (used only for logging/error context).
+ * @param playerIds  Players linked to this fixture — forwarded as-is to syncFn.
+ * @param syncFn     Called after `delayMs` with the player ids.
+ * @param delayMs    Milliseconds to wait before invoking syncFn.  Defaults to
+ *                   the production 35-minute hold so API-Football has time to
+ *                   populate individual player statistics.
+ */
+export function scheduleLivePollStatsSync(
+  fixtureId: number,
+  playerIds: number[],
+  syncFn: (playerIds: number[]) => Promise<void>,
+  delayMs: number = POST_MATCH_STATS_DELAY_MINUTES * 60 * 1000,
+): void {
+  setTimeout(() => {
+    syncFn(playerIds).catch((err) =>
+      logger.error({ err, fixtureId }, "Live poll: post-match stats trigger failed"),
+    );
+  }, delayMs);
+}
+
 export async function syncApiFootballFixtures(
   /** When provided, only syncs fixtures for the given club DB ids. Clubs
    *  outside this list are skipped entirely, incurring zero additional API
@@ -813,11 +843,7 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
             { fixtureId: row.id, playerCount: playerIds.length, delayMinutes: POST_MATCH_STATS_DELAY_MINUTES },
             "Live poll: post-match stats pipeline scheduled — waiting for API-Football stats to populate",
           );
-          setTimeout(() => {
-            syncStatsForFinishedFixture(playerIds).catch((err) =>
-              logger.error({ err, fixtureId: row.id }, "Live poll: post-match stats trigger failed"),
-            );
-          }, POST_MATCH_STATS_DELAY_MINUTES * 60 * 1000);
+          scheduleLivePollStatsSync(row.id, playerIds, syncStatsForFinishedFixture);
         }
       }
     } catch (err) {
