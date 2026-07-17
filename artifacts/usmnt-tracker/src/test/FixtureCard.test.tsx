@@ -31,6 +31,7 @@ function makeFixture(
     homeScore: status === "live" || status === "finished" ? 1 : null,
     awayScore: status === "live" || status === "finished" ? 0 : null,
     status,
+    elapsedMinute: null,
     tvNetwork: null,
     streamingService: null,
     broadcastLink: null,
@@ -96,6 +97,29 @@ describe("FixtureCard — live → finished transition", () => {
       </Router>,
     );
     expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Elapsed minute display ───────────────────────────────────────────────────
+
+describe("FixtureCard — elapsed minute display", () => {
+  it("shows the elapsed minute alongside the score when status is live and minute is provided", () => {
+    const fixture = { ...makeFixture("live"), elapsedMinute: 72 };
+    renderCard(fixture);
+    expect(screen.getByText(/72/)).toBeInTheDocument();
+  });
+
+  it("does not show a minute when elapsedMinute is null", () => {
+    const fixture = { ...makeFixture("live"), elapsedMinute: null };
+    renderCard(fixture);
+    // Score should still render; no extra minute token
+    expect(screen.queryByText(/\d+'/)).not.toBeInTheDocument();
+  });
+
+  it("shows the elapsed minute in the showDate layout", () => {
+    const fixture = { ...makeFixture("live"), elapsedMinute: 45 };
+    renderCard(fixture, /* showDate */ true);
+    expect(screen.getByText(/45/)).toBeInTheDocument();
   });
 });
 

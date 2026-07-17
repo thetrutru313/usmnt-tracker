@@ -214,6 +214,8 @@ export interface Fixture {
   streamingService: string | null;
   /** @nullable */
   broadcastLink?: string | null;
+  /** @nullable */
+  elapsedMinute?: number | null;
   featuredPlayers: FixtureFeaturedPlayer[];
 }
 

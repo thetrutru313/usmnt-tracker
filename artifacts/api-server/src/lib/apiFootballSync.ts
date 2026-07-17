@@ -434,6 +434,7 @@ export async function syncApiFootballFixtures(
         homeLogoUrl: f.teams.home.logo,
         awayLogoUrl: f.teams.away.logo,
         status: mapStatus(f.fixture.status.short),
+        elapsedMinute: mapStatus(f.fixture.status.short) === "live" ? (f.fixture.status.elapsed ?? null) : null,
         tvNetwork: broadcast.tvNetwork,
         streamingService: broadcast.streamingService,
       };
@@ -588,6 +589,7 @@ export async function syncNationalTeamFixtures(): Promise<{
         status: newStatus,
         homeScore: newHomeScore,
         awayScore: newAwayScore,
+        elapsedMinute: newStatus === "live" ? (afMatch.fixture.status.elapsed ?? null) : null,
       };
       if (needsIdBind) {
         updatePayload["apiFootballFixtureId"] = afMatch.fixture.id;

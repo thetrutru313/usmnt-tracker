@@ -229,6 +229,7 @@ export const GetPlayerResponse = zod.object({
   "tvNetwork": zod.string().nullable(),
   "streamingService": zod.string().nullable(),
   "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
   "featuredPlayers": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -285,6 +286,7 @@ export const ListFixturesResponseItem = zod.object({
   "tvNetwork": zod.string().nullable(),
   "streamingService": zod.string().nullable(),
   "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
   "featuredPlayers": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -407,6 +409,7 @@ export const GetDashboardResponse = zod.object({
   "tvNetwork": zod.string().nullable(),
   "streamingService": zod.string().nullable(),
   "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
   "featuredPlayers": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -433,6 +436,7 @@ export const GetDashboardResponse = zod.object({
   "tvNetwork": zod.string().nullable(),
   "streamingService": zod.string().nullable(),
   "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
   "featuredPlayers": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),

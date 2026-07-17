@@ -19,6 +19,9 @@ export const fixturesTable = pgTable("fixtures", {
   homeScore: integer("home_score"),
   awayScore: integer("away_score"),
   status: text("status").notNull().default("scheduled"), // scheduled | live | finished | postponed
+  // Elapsed minutes into the match as reported by the live feed. Only
+  // meaningful when status = "live"; null for all other statuses.
+  elapsedMinute: integer("elapsed_minute"),
   tvNetwork: text("tv_network"),
   streamingService: text("streaming_service"),
   broadcastLink: text("broadcast_link"),

@@ -63,6 +63,8 @@ export type FixtureCardFixture = {
   homeScore: number | null;
   awayScore: number | null;
   status: "scheduled" | "live" | "finished" | "postponed";
+  /** Elapsed match minute from the live feed; only set when status is "live". */
+  elapsedMinute?: number | null;
   tvNetwork: string | null;
   streamingService: string | null;
   broadcastLink?: string | null;
@@ -111,13 +113,18 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   <LiveIndicator size="sm" />
+                  {fixture.elapsedMinute != null && (
+                    <span className="text-xs font-mono font-bold text-destructive">{fixture.elapsedMinute}&apos;</span>
+                  )}
                   <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore}-{fixture.awayScore}</span>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1">
                 <LiveIndicator size="md" />
-                <span className="text-xs font-mono font-bold text-destructive">{fixture.homeScore} - {fixture.awayScore}</span>
+                <span className="text-xs font-mono font-bold text-destructive">
+                  {fixture.elapsedMinute != null ? `${fixture.elapsedMinute}' · ` : ""}{fixture.homeScore} - {fixture.awayScore}
+                </span>
               </div>
             )
           ) : fixture.status === "finished" ? (

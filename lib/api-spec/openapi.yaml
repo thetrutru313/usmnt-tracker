@@ -636,6 +636,8 @@ components:
         tvNetwork: { type: ["string", "null"] }
         streamingService: { type: ["string", "null"] }
         broadcastLink: { type: ["string", "null"] }
+        # Elapsed match minute when status is "live"; null otherwise.
+        elapsedMinute: { type: ["integer", "null"] }
         featuredPlayers:
           type: array
           items:

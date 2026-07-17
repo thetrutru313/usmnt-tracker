@@ -17,7 +17,7 @@ export interface AfFixture {
   fixture: {
     id: number;
     date: string; // ISO 8601 with offset
-    status: { short: string }; // e.g. NS (not started), FT (finished), PST (postponed)
+    status: { short: string; elapsed: number | null }; // e.g. NS (not started), FT (finished), PST (postponed)
     venue: { name: string | null };
   };
   league: { name: string };
@@ -97,7 +97,7 @@ export async function reconcileClubFixtures(
       if (freshStatus !== "scheduled") {
         await db
           .update(fixturesTable)
-          .set({ status: freshStatus, homeScore: fresh.goals.home, awayScore: fresh.goals.away })
+          .set({ status: freshStatus, homeScore: fresh.goals.home, awayScore: fresh.goals.away, elapsedMinute: freshStatus === "live" ? (fresh.fixture.status.elapsed ?? null) : null })
           .where(eq(fixturesTable.id, tracked.id));
         logger.info(
           {
