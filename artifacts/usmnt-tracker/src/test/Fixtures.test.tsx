@@ -362,6 +362,45 @@ describe("Fixtures page — pool-tier filter and Recent Results count badge", ()
     expect(screen.getByText(/Recent Results \(3\)/i)).toBeInTheDocument();
   });
 
+  it("fixture with players in multiple tiers appears under either matching tier filter and disappears only when no tier matches", () => {
+    // A single finished fixture whose featuredPlayers span both core and inMix tiers.
+    // Activating either tier filter alone must still include this fixture.
+    // Activating a tier with no matching players (prospect) must exclude it.
+    const finishedMultiTier = makeFixture("finished", {
+      id: 30,
+      homeTeam: "Real Madrid",
+      awayTeam: "Barcelona",
+      featuredPlayers: [
+        { id: 3, name: "Tyler Adams", poolTier: "core" as const },
+        { id: 4, name: "Ricardo Pepi", poolTier: "inMix" as const },
+      ],
+    });
+
+    mockUseListFixtures.mockReturnValue({
+      data: [finishedMultiTier],
+      isLoading: false,
+    });
+
+    renderFixtures();
+
+    // Unfiltered: fixture is present
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Activate "Core Squad" — fixture has a core player, so it must still appear
+    fireEvent.click(screen.getByRole("button", { name: /Core Squad/i }));
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Switch to "In the Mix" — fixture has an inMix player, so it must still appear
+    fireEvent.click(screen.getByRole("button", { name: /^All$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /In the Mix/i }));
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Switch to "Prospects" — fixture has NO prospect-tier player, so it must vanish
+    fireEvent.click(screen.getByRole("button", { name: /^All$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Prospects/i }));
+    expect(screen.queryByText(/Recent Results/i)).not.toBeInTheDocument();
+  });
+
   it("Recent Results is hidden entirely when the pool filter excludes all finished fixtures", () => {
     // Only a finished fixture with no featured players — "Core Squad" excludes it
     mockUseListFixtures.mockReturnValue({
