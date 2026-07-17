@@ -438,6 +438,44 @@ describe("Fixtures page — pool-tier filter and Recent Results count badge", ()
     expect(screen.queryAllByText("PSG")).toHaveLength(0);
   });
 
+  it("deactivating one tier in a multi-select restores only that tier's fixtures", () => {
+    mockUseListFixtures.mockReturnValue({
+      data: [finishedCore, finishedInMix, finishedNone, upcomingCore, upcomingInMix],
+      isLoading: false,
+    });
+
+    renderFixtures();
+
+    // Activate "Core Squad" first — count drops to 1
+    fireEvent.click(screen.getByRole("button", { name: /Core Squad/i }));
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Also activate "In the Mix" — filter is now ["core", "inMix"], count rises to 2
+    fireEvent.click(screen.getByRole("button", { name: /In the Mix/i }));
+    expect(screen.getByText(/Recent Results \(2\)/i)).toBeInTheDocument();
+
+    // Both upcoming fixtures visible
+    expect(screen.getAllByText("Inter Milan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Bayer Leverkusen").length).toBeGreaterThan(0);
+
+    // Deactivate "In the Mix" — filter returns to ["core"] only
+    fireEvent.click(screen.getByRole("button", { name: /In the Mix/i }));
+
+    // Count badge must reflect only the surviving core tier (1 finished fixture)
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Recent Results \(2\)/i)).not.toBeInTheDocument();
+
+    // Only the core upcoming fixture remains in the upcoming section
+    expect(screen.getAllByText("Inter Milan").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Bayer Leverkusen")).toHaveLength(0);
+
+    // Expand Recent Results and confirm only the core finished fixture appears
+    fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
+    expect(screen.getAllByText("AC Milan").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Arsenal")).toHaveLength(0);
+    expect(screen.queryAllByText("PSG")).toHaveLength(0);
+  });
+
   it("Recent Results is hidden entirely when the pool filter excludes all finished fixtures", () => {
     // Only a finished fixture with no featured players — "Core Squad" excludes it
     mockUseListFixtures.mockReturnValue({
