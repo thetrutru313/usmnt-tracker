@@ -107,6 +107,15 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Proxy /api/* to the Express API server so the dev server can be hit
+    // directly (e.g. by E2E tests) without relying on the Replit path-based
+    // proxy at port 80.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port,
