@@ -121,6 +121,21 @@ describe("FixtureCard — elapsed minute display", () => {
     renderCard(fixture, /* showDate */ true);
     expect(screen.getByText(/45/)).toBeInTheDocument();
   });
+
+  it("does not render the elapsed minute when status is finished, even if elapsedMinute is non-null", () => {
+    // A finished fixture may carry a stale elapsedMinute value from the live
+    // feed (e.g. "90"). The card must never display it — showing "90'" on a
+    // finished result would mislead users into thinking the match is still on.
+    const fixture = { ...makeFixture("finished"), elapsedMinute: 90 };
+    renderCard(fixture);
+    expect(screen.queryByText(/\d+'/)).not.toBeInTheDocument();
+  });
+
+  it("does not render the elapsed minute in the showDate layout when status is finished", () => {
+    const fixture = { ...makeFixture("finished"), elapsedMinute: 90 };
+    renderCard(fixture, /* showDate */ true);
+    expect(screen.queryByText(/\d+'/)).not.toBeInTheDocument();
+  });
 });
 
 // ─── animate-ping CSS class presence ─────────────────────────────────────────
