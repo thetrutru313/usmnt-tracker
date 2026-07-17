@@ -77,6 +77,25 @@ describe("fixturesRefetchInterval", () => {
     expect(fixturesRefetchInterval(after)).toBe(false);
   });
 
+  /**
+   * AUTO-RESUME: finished → live round-trip
+   *
+   * React Query re-evaluates `refetchInterval` on every completed fetch.
+   * If a fixture transitions back to live (e.g. extra time begins, or a
+   * data-feed correction re-marks a match as live), the helper must return
+   * LIVE_POLL_INTERVAL again so React Query restarts polling automatically
+   * on the very next background refetch cycle — no component remount required.
+   */
+  it("resumes polling (LIVE_POLL_INTERVAL) when a finished fixture transitions back to live (e.g. extra time)", () => {
+    // Step 1 — match appeared finished: polling stops
+    const finished = [{ status: "finished" }, { status: "finished" }];
+    expect(fixturesRefetchInterval(finished)).toBe(false);
+
+    // Step 2 — data-feed correction: one match is live again
+    const backToLive = [{ status: "live" }, { status: "finished" }];
+    expect(fixturesRefetchInterval(backToLive)).toBe(LIVE_POLL_INTERVAL);
+  });
+
   it("LIVE_POLL_INTERVAL is exactly 60 000 ms (1 minute)", () => {
     expect(LIVE_POLL_INTERVAL).toBe(60_000);
   });
@@ -155,6 +174,46 @@ describe("dashboardRefetchInterval", () => {
 
     expect(dashboardRefetchInterval(before)).toBe(LIVE_POLL_INTERVAL);
     expect(dashboardRefetchInterval(after)).toBe(false);
+  });
+
+  /**
+   * AUTO-RESUME: finished → live round-trip (dashboard)
+   *
+   * React Query re-evaluates `refetchInterval` on every completed fetch.
+   * If a match transitions back to live (e.g. extra time, feed correction),
+   * the helper must return LIVE_POLL_INTERVAL again so polling resumes
+   * automatically — no component remount required.
+   */
+  it("resumes polling (LIVE_POLL_INTERVAL) when a todaysGames fixture transitions back to live after being finished", () => {
+    // Step 1 — all done: polling stops
+    const allFinished = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(allFinished)).toBe(false);
+
+    // Step 2 — feed correction: todaysGames match is live again
+    const backToLive = {
+      todaysGames:   [{ status: "live" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(backToLive)).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  it("resumes polling (LIVE_POLL_INTERVAL) when an upcomingGames fixture transitions back to live after being finished", () => {
+    // Step 1 — all done: polling stops
+    const allFinished = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "finished" }],
+    };
+    expect(dashboardRefetchInterval(allFinished)).toBe(false);
+
+    // Step 2 — feed correction: upcomingGames match is live again (e.g. extra time)
+    const backToLive = {
+      todaysGames:   [{ status: "finished" }],
+      upcomingGames: [{ status: "live" }],
+    };
+    expect(dashboardRefetchInterval(backToLive)).toBe(LIVE_POLL_INTERVAL);
   });
 
   it("returns false when only todaysGames is present and it has no live fixtures", () => {
