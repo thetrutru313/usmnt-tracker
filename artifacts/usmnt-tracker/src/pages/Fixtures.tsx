@@ -1,10 +1,21 @@
 import { useState } from "react";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { format, isToday, isTomorrow, subDays, startOfDay } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type PoolTier, type FixtureCardFixture } from "@/components/FixtureCard";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
+
+/** Returns "Today", "Tomorrow", or a formatted day label — all based on the UTC calendar date. */
+function utcDateLabel(dateStr: string): string {
+  const todayUtc = new Date().toISOString().substring(0, 10);
+  const tomorrowUtc = new Date(Date.now() + 86400000).toISOString().substring(0, 10);
+  if (dateStr === todayUtc) return "Today";
+  if (dateStr === tomorrowUtc) return "Tomorrow";
+  // Build a local-midnight Date from the UTC year/month/day so format() displays the right weekday/day.
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return format(new Date(y, m - 1, d), "EEEE, MMMM d");
+}
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -107,7 +118,7 @@ export default function Fixtures() {
 
   function groupByDate(list: FixtureCardFixture[]): Record<string, FixtureCardFixture[]> {
     return list.reduce((acc, fixture) => {
-      const dateStr = format(new Date(fixture.kickoff), 'yyyy-MM-dd');
+      const dateStr = new Date(fixture.kickoff).toISOString().substring(0, 10);
       if (!acc[dateStr]) acc[dateStr] = [];
       acc[dateStr]!.push(fixture);
       return acc;
@@ -136,8 +147,7 @@ export default function Fixtures() {
       ) : (
         <div className="space-y-8">
           {sortedUpcomingDates.map(dateStr => {
-            const date = new Date(dateStr);
-            const dateTitle = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "EEEE, MMMM d");
+            const dateTitle = utcDateLabel(dateStr);
 
             return (
               <div key={dateStr} className="space-y-4">
@@ -184,8 +194,7 @@ function RecentResults({
       {open && (
         <div className="p-4 space-y-8">
           {sortedFinishedDates.map(dateStr => {
-            const date = new Date(dateStr);
-            const dateTitle = isToday(date) ? "Today" : format(date, "EEEE, MMMM d");
+            const dateTitle = utcDateLabel(dateStr);
 
             return (
               <div key={dateStr} className="space-y-4">
