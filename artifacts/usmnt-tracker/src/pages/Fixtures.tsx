@@ -122,10 +122,13 @@ export default function Fixtures() {
     <div className="space-y-8 max-w-4xl mx-auto">
       <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
 
+      {finishedFixtures.length > 0 && (
+        <RecentResults groupedFinished={groupedFinished} sortedFinishedDates={sortedFinishedDates} />
+      )}
+
       {upcomingFixtures.length === 0 ? (
         <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
           <p className="text-muted-foreground font-mono">NO UPCOMING FIXTURES</p>
-          <p className="text-muted-foreground/60 font-mono text-xs mt-2">Check recent results below</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -148,10 +151,6 @@ export default function Fixtures() {
             );
           })}
         </div>
-      )}
-
-      {finishedFixtures.length > 0 && (
-        <RecentResults groupedFinished={groupedFinished} sortedFinishedDates={sortedFinishedDates} />
       )}
     </div>
   );
