@@ -80,15 +80,19 @@ export function fixturesRefetchInterval(
 /**
  * Returns the polling interval for the Dashboard page.
  *
- * Checks both `todaysGames` and `upcomingGames` arrays for any live fixture.
+ * - At least one fixture in `todaysGames` or `upcomingGames` is not yet
+ *   finished (scheduled, live, etc.) → poll every LIVE_POLL_INTERVAL ms so
+ *   the LIVE badge appears within one poll cycle of a match kicking off,
+ *   without needing a page reload.
+ * - All fixtures are finished / no data yet → stop polling (false)
  */
 export function dashboardRefetchInterval(
   data:
     | { todaysGames?: WithStatus[]; upcomingGames?: WithStatus[] }
     | undefined,
 ): number | false {
-  const hasLive =
-    data?.todaysGames?.some((f) => f.status === "live") ||
-    data?.upcomingGames?.some((f) => f.status === "live");
-  return hasLive ? LIVE_POLL_INTERVAL : false;
+  const hasUnfinished =
+    data?.todaysGames?.some((f) => f.status !== "finished") ||
+    data?.upcomingGames?.some((f) => f.status !== "finished");
+  return hasUnfinished ? LIVE_POLL_INTERVAL : false;
 }

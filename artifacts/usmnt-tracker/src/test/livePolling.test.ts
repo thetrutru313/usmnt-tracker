@@ -153,9 +153,17 @@ describe("dashboardRefetchInterval", () => {
   it("returns false when all fixtures in both arrays are finished", () => {
     const data = {
       todaysGames:   [{ status: "finished" }, { status: "finished" }],
-      upcomingGames: [{ status: "upcoming" }],
+      upcomingGames: [{ status: "finished" }],
     };
     expect(dashboardRefetchInterval(data)).toBe(false);
+  });
+
+  it("returns LIVE_POLL_INTERVAL when todaysGames are finished but upcomingGames has a scheduled entry (so the LIVE badge appears within one poll cycle of kick-off)", () => {
+    const data = {
+      todaysGames:   [{ status: "finished" }, { status: "finished" }],
+      upcomingGames: [{ status: "upcoming" }],
+    };
+    expect(dashboardRefetchInterval(data)).toBe(LIVE_POLL_INTERVAL);
   });
 
   it("returns LIVE_POLL_INTERVAL when a todaysGames entry is live", () => {
@@ -266,25 +274,25 @@ describe("dashboardRefetchInterval", () => {
    * Step 2 — first done    → still poll (second is still live)
    * Step 3 — both done     → stop polling (false)
    */
-  it("keeps polling while the first of two live todaysGames finishes, stops only after the second finishes", () => {
+  it("keeps polling while the first of two live todaysGames finishes, stops only after the second finishes (and upcomingGames is also finished)", () => {
     // Step 1: both fixtures in todaysGames are live
     const bothLive = {
       todaysGames:   [{ status: "live" }, { status: "live" }],
-      upcomingGames: [{ status: "upcoming" }],
+      upcomingGames: [{ status: "finished" }],
     };
     expect(dashboardRefetchInterval(bothLive)).toBe(LIVE_POLL_INTERVAL);
 
     // Step 2: first fixture finishes — second is still live → must keep polling
     const oneStillLive = {
       todaysGames:   [{ status: "finished" }, { status: "live" }],
-      upcomingGames: [{ status: "upcoming" }],
+      upcomingGames: [{ status: "finished" }],
     };
     expect(dashboardRefetchInterval(oneStillLive)).toBe(LIVE_POLL_INTERVAL);
 
     // Step 3: both fixtures finished — all done → stop polling
     const bothFinished = {
       todaysGames:   [{ status: "finished" }, { status: "finished" }],
-      upcomingGames: [{ status: "upcoming" }],
+      upcomingGames: [{ status: "finished" }],
     };
     expect(dashboardRefetchInterval(bothFinished)).toBe(false);
   });
