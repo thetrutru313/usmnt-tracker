@@ -218,6 +218,12 @@ export default function MatchDetail() {
 
   const players = fixture.trackedPlayers ?? [];
   const hasConceded = players.some((p) => p.matchLog?.conceded != null);
+  // After 3 hours from kickoff the post-match pipeline has definitely had a
+  // chance to run (daily sync + 35-min post-match delay), so a missing match
+  // log means the player did not feature — not that stats are still incoming.
+  const statsSettled =
+    fixture.status === "finished" &&
+    Date.now() > new Date(fixture.kickoff).getTime() + 3 * 60 * 60 * 1000;
 
   return (
     <div className="space-y-6 pb-10 max-w-3xl mx-auto">
@@ -273,7 +279,8 @@ export default function MatchDetail() {
             <img src={USMNT_CREST_URL} alt="" aria-hidden className="w-4 h-4 object-contain" />
             USMNT Tracked Players
             <span className="ml-auto text-xs font-mono font-normal text-muted-foreground normal-case tracking-normal">
-              {players.filter((p) => p.matchLog).length} / {players.length} synced
+              {players.filter((p) => p.matchLog).length} / {players.length}{" "}
+              {statsSettled ? "featured" : "synced"}
             </span>
           </CardTitle>
         </CardHeader>
@@ -354,7 +361,13 @@ export default function MatchDetail() {
                         </>
                       ) : fixture.status === "scheduled" ? (
                         <td colSpan={hasConceded ? 5 : 4} />
+                      ) : statsSettled ? (
+                        // Stats pipeline has had time to run; absent log = did not feature.
+                        <td colSpan={hasConceded ? 5 : 4} className="py-3 pr-4 text-center">
+                          <span className="text-xs text-muted-foreground font-mono">—</span>
+                        </td>
                       ) : (
+                        // Recently finished — sync may still be in-flight.
                         <td colSpan={hasConceded ? 5 : 4} className="py-3 pr-4 text-center">
                           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
                             <Loader2 size={11} className="animate-spin" />
