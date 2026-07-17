@@ -123,6 +123,57 @@ describe("FixtureCard — elapsed minute display", () => {
   });
 });
 
+// ─── animate-ping CSS class presence ─────────────────────────────────────────
+//
+// The pulsing effect relies on Tailwind's `animate-ping` class being present in
+// the rendered DOM. A Tailwind purge misconfiguration would keep the element but
+// strip the class, leaving a static red dot with no failing test. These checks
+// guard against that by asserting on the class directly rather than just the
+// LIVE text node.
+
+describe("FixtureCard — animate-ping class presence", () => {
+  it('renders an element with animate-ping when status is "live"', () => {
+    const { container } = renderCard(makeFixture("live"));
+    expect(container.querySelector(".animate-ping")).toBeInTheDocument();
+  });
+
+  it('renders an element with animate-ping in the showDate layout when status is "live"', () => {
+    const { container } = renderCard(makeFixture("live"), /* showDate */ true);
+    expect(container.querySelector(".animate-ping")).toBeInTheDocument();
+  });
+
+  it('has no animate-ping element when status is "finished"', () => {
+    const { container } = renderCard(makeFixture("finished"));
+    expect(container.querySelector(".animate-ping")).not.toBeInTheDocument();
+  });
+
+  it('has no animate-ping element when status is "scheduled"', () => {
+    const { container } = renderCard(makeFixture("scheduled"));
+    expect(container.querySelector(".animate-ping")).not.toBeInTheDocument();
+  });
+
+  it('has no animate-ping element when status is "postponed"', () => {
+    const { container } = renderCard(makeFixture("postponed"));
+    expect(container.querySelector(".animate-ping")).not.toBeInTheDocument();
+  });
+
+  it("removes animate-ping when status transitions from live to finished", () => {
+    const { container, rerender } = render(
+      <Router>
+        <FixtureCard fixture={makeFixture("live")} />
+      </Router>,
+    );
+    expect(container.querySelector(".animate-ping")).toBeInTheDocument();
+
+    rerender(
+      <Router>
+        <FixtureCard fixture={makeFixture("finished")} />
+      </Router>,
+    );
+    expect(container.querySelector(".animate-ping")).not.toBeInTheDocument();
+  });
+});
+
 // ─── showDate layout variant ──────────────────────────────────────────────────
 
 describe("FixtureCard — LiveIndicator in showDate layout", () => {
