@@ -178,6 +178,20 @@ router.put("/admin/transparency/:id", requireAdminPassword, async (req, res): Pr
     notes?: string | null;
   };
 
+  if (Array.isArray(body.invoiceUrls)) {
+    for (let i = 0; i < body.invoiceUrls.length; i++) {
+      const entry = body.invoiceUrls[i];
+      if (!entry || typeof entry.url !== "string" || entry.url.trim() === "") {
+        res.status(400).json({ error: `invoiceUrls[${i}] is missing required field: url` });
+        return;
+      }
+      if (typeof entry.label !== "string" || entry.label.trim() === "") {
+        res.status(400).json({ error: `invoiceUrls[${i}] is missing required field: label` });
+        return;
+      }
+    }
+  }
+
   const [updated] = await db
     .update(transparencyMonthsTable)
     .set({
