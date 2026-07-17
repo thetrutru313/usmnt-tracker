@@ -823,10 +823,10 @@ export async function syncPlayerStatsAndInjuries(
   let playersWithSeasonStats = 0;
   let injuriesWritten = 0;
   let failures = 0;
-  // Tracks players whose club block completed without throwing. Only these
-  // players have fresh player_stats rows in the DB — recomputeFormTrends runs
-  // exclusively on this set so a club-level failure never causes stale rows
-  // to overwrite the safe "steady" pre-reset for that club's players.
+  // Tracks players whose club block completed without throwing. Used for
+  // logging only — recomputeFormTrends now runs against all player IDs so
+  // that players at a failed club are still recomputed from their existing
+  // player_stats rows rather than left on the pre-reset "steady" value.
   const processedPlayerIds = new Set<number>();
 
   const [currentSeason] = seasonYearCandidates();
@@ -1026,13 +1026,23 @@ export async function syncPlayerStatsAndInjuries(
   // badge always reflects the same source-of-truth as the Club Form Breakdown
   // (both read from player_stats). The mid-loop per-player writes that used
   // in-memory sync state have been removed; this single pass replaces them.
-  // The pre-reset (earlier in this function) remains as a safety net in case
-  // this pass itself throws — players land on "steady" rather than stale.
+  //
+  // All players are recomputed — not just processedPlayerIds. Players whose
+  // club block threw will have whatever player_stats rows survived from the
+  // previous sync run; computeFormTier reads those and assigns the correct
+  // tier. Players with no rows at all get null from the stats query and fall
+  // through to the "steady" guard already inside computeFormTier — exactly
+  // the same safe result as the pre-reset. Using valid prior-run rows is
+  // always better than leaving a player stuck on the artificial "steady".
+  //
+  // The pre-reset (earlier in this function) remains as a final safety net in
+  // case this entire try block throws — players land on "steady" rather than
+  // carrying a stale badge from a previous sync cycle.
   try {
-    const idsToRecompute = [...processedPlayerIds];
+    const idsToRecompute = players.map((p) => p.id);
     await recomputeFormTrends(idsToRecompute);
     logger.info(
-      { recomputed: idsToRecompute.length, skipped: players.length - idsToRecompute.length },
+      { recomputed: idsToRecompute.length, failedClubs: failures },
       "Form trends recomputed from committed player_stats rows",
     );
   } catch (err) {

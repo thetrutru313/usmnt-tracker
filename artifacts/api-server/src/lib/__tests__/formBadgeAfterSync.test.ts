@@ -245,6 +245,89 @@ describe("GET /transfers — performanceTrend reflects latest DB value", () => {
   );
 });
 
+// ─── GET /players/:id round-trip ────────────────────────────────────────────
+//
+// Confirms that performanceTrend written to the players table is returned
+// correctly by GET /api/players/:id. This is the API surface the player
+// profile page reads from — if the route ever dropped the column from its
+// join or response shape, the form badge would silently vanish from the UI.
+
+describe("GET /players/:id — performanceTrend reflects latest DB value", () => {
+  let savedPlayerId: number | null = null;
+  let savedOriginalTrend: string | null = null;
+
+  afterAll(async () => {
+    if (savedPlayerId !== null && savedOriginalTrend !== null) {
+      await db
+        .update(playersTable)
+        .set({ performanceTrend: savedOriginalTrend as "on_fire" | "rising" | "steady" | "falling" | "ice_cold" })
+        .where(eq(playersTable.id, savedPlayerId));
+    }
+  });
+
+  it(
+    "returns the updated performanceTrend after a direct DB write",
+    async () => {
+      // Step 1: find any player in the DB.
+      const [playerRow] = await db
+        .select({ id: playersTable.id, performanceTrend: playersTable.performanceTrend })
+        .from(playersTable)
+        .limit(1);
+
+      if (!playerRow) {
+        console.warn("[formBadgeAfterSync] No players in DB — skipping player profile trend check.");
+        return;
+      }
+
+      savedPlayerId = playerRow.id;
+      savedOriginalTrend = playerRow.performanceTrend;
+
+      // Step 2: write a known trend that differs from the current one.
+      const TIERS = ["on_fire", "rising", "steady", "falling", "ice_cold"] as const;
+      type Tier = (typeof TIERS)[number];
+      const currentTier: Tier = TIERS.includes(playerRow.performanceTrend as Tier)
+        ? (playerRow.performanceTrend as Tier)
+        : "steady";
+      const newTrend: Tier = TIERS[(TIERS.indexOf(currentTier) + 1) % TIERS.length];
+
+      await db
+        .update(playersTable)
+        .set({ performanceTrend: newTrend })
+        .where(eq(playersTable.id, playerRow.id));
+
+      // Step 3: fetch the player profile and confirm the trend is reflected.
+      const res = await request(app).get(`/api/players/${playerRow.id}`).expect(200);
+
+      expect(res.body).toBeDefined();
+      expect(
+        res.body.performanceTrend,
+        `GET /api/players/${playerRow.id} must return performanceTrend='${newTrend}' after DB write`,
+      ).toBe(newTrend);
+    },
+    30_000,
+  );
+
+  it(
+    "performanceTrend is present and non-null on the player profile response",
+    async () => {
+      const [playerRow] = await db
+        .select({ id: playersTable.id })
+        .from(playersTable)
+        .limit(1);
+
+      if (!playerRow) {
+        console.warn("[formBadgeAfterSync] No players in DB — skipping player profile field presence check.");
+        return;
+      }
+
+      const res = await request(app).get(`/api/players/${playerRow.id}`).expect(200);
+      expect(res.body.performanceTrend).toBeDefined();
+      expect(res.body.performanceTrend).not.toBeNull();
+    },
+    30_000,
+  );
+});
+
 // ─── Schema-level guard ─────────────────────────────────────────────────────
 //
 // The Zod parse calls above already enforce that `performanceTrend` is present

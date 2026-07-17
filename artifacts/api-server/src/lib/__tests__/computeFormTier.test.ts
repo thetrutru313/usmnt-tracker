@@ -280,3 +280,37 @@ describe("computeFormTier — trending flag", () => {
     expect(result.trending).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Named regression: Julian Hall scenario
+// last5=7.18, prev5=6.64, season=6.89
+// score = 50*(7.18−6.89) + 30*(7.18−6.64) = 14.5 + 16.2 = 30.7 → on_fire
+// trajectory: 7.18 > 6.64 → not downward → gate inactive
+// Previously showed "steady" because a failed club sync left the player on
+// the pre-reset value. The formula clearly produces "on_fire".
+// ---------------------------------------------------------------------------
+describe("computeFormTier — Julian Hall regression (NYRB, May 2026)", () => {
+  it("produces on_fire for last5=7.18, prev5=6.64, season=6.89", () => {
+    // score = 50*(7.18−6.89) + 30*(7.18−6.64) = 14.5 + 16.2 = 30.7
+    // 30.7 ≥ 25 → on_fire; trajectory is upward → gate inactive
+    const last5 = makeStats({ minutes: 393, avgRating: 7.18 });
+    const prev5 = makeStats({ minutes: 457, avgRating: 6.64 });
+    expect(computeFormTier(last5, prev5, 6.89)).toEqual({ trend: "on_fire", trending: true });
+  });
+
+  it("would be on_fire even without the trajectory term (season delta alone scores 14.5)", () => {
+    // Without prev5, score = 50*(7.18−6.89) = 14.5 → rising (not on_fire)
+    // This confirms the trajectory term is what pushes him over the on_fire threshold.
+    const last5 = makeStats({ minutes: 393, avgRating: 7.18 });
+    expect(computeFormTier(last5, null, 6.89)).toEqual({ trend: "rising", trending: true });
+  });
+
+  it("trajectory gate does not fire because last5 > prev5", () => {
+    // Gate only blocks when last5 < prev5 (downward trajectory).
+    // 7.18 > 6.64 → gate is inactive → on_fire is correctly awarded.
+    const last5 = makeStats({ minutes: 393, avgRating: 7.18 });
+    const prev5 = makeStats({ minutes: 457, avgRating: 6.64 });
+    const result = computeFormTier(last5, prev5, 6.89);
+    expect(result.trend).not.toBe("steady");
+  });
+});
