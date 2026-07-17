@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListFixtures } from "@workspace/api-client-react";
+import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, isToday, isTomorrow } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -39,8 +39,21 @@ function FixturesHeader({ poolFilter, onPoolFilterChange }: { poolFilter: string
   );
 }
 
+const LIVE_POLL_INTERVAL = 60_000; // 1 minute
+
 export default function Fixtures() {
-  const { data: fixtures, isLoading } = useListFixtures({ scope: 'all' });
+  const { data: fixtures, isLoading } = useListFixtures(
+    { scope: 'all' },
+    {
+      query: {
+        queryKey: getListFixturesQueryKey({ scope: 'all' }),
+        refetchInterval: (query): number | false =>
+          (query.state.data as Fixture[] | undefined)?.some((f) => f.status === 'live')
+            ? LIVE_POLL_INTERVAL
+            : false,
+      },
+    },
+  );
   const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
 
   const handlePoolFilterChange = (next: string[]) => {
