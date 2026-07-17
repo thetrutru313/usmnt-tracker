@@ -40,13 +40,20 @@ describe("fixturesRefetchInterval", () => {
     expect(fixturesRefetchInterval(fixtures)).toBe(false);
   });
 
-  it("returns false when fixtures have upcoming/scheduled statuses only", () => {
+  it("returns LIVE_POLL_INTERVAL when fixtures are scheduled/upcoming (so the LIVE badge appears within one poll cycle of kick-off)", () => {
     const fixtures = [
       { status: "upcoming" },
       { status: "scheduled" },
-      { status: "postponed" },
     ];
-    expect(fixturesRefetchInterval(fixtures)).toBe(false);
+    expect(fixturesRefetchInterval(fixtures)).toBe(LIVE_POLL_INTERVAL);
+  });
+
+  it("returns LIVE_POLL_INTERVAL when a non-finished fixture is mixed with finished ones", () => {
+    const fixtures = [
+      { status: "finished" },
+      { status: "scheduled" },
+    ];
+    expect(fixturesRefetchInterval(fixtures)).toBe(LIVE_POLL_INTERVAL);
   });
 
   it("returns LIVE_POLL_INTERVAL when exactly one fixture is live", () => {

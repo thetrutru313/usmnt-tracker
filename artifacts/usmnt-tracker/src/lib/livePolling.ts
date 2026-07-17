@@ -12,13 +12,15 @@ type WithStatus = { status: string };
 /**
  * Returns the polling interval for the Fixtures page.
  *
- * - At least one fixture is `live`  → poll every LIVE_POLL_INTERVAL ms
+ * - At least one fixture is not yet finished (scheduled, live, etc.)
+ *   → poll every LIVE_POLL_INTERVAL ms so the LIVE badge appears within
+ *     one poll cycle of a match kicking off, without needing a page reload.
  * - All fixtures are finished / no data yet → stop polling (false)
  */
 export function fixturesRefetchInterval(
   data: WithStatus[] | undefined,
 ): number | false {
-  return data?.some((f) => f.status === "live") ? LIVE_POLL_INTERVAL : false;
+  return data?.some((f) => f.status !== "finished") ? LIVE_POLL_INTERVAL : false;
 }
 
 /**
