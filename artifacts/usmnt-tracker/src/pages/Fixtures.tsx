@@ -1,21 +1,11 @@
 import { useState } from "react";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { format, subDays, startOfDay } from "date-fns";
+import { subDays, startOfDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type PoolTier, type FixtureCardFixture } from "@/components/FixtureCard";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
-
-/** Returns "Today", "Tomorrow", or a formatted day label — all based on the UTC calendar date. */
-function utcDateLabel(dateStr: string): string {
-  const todayUtc = new Date().toISOString().substring(0, 10);
-  const tomorrowUtc = new Date(Date.now() + 86400000).toISOString().substring(0, 10);
-  if (dateStr === todayUtc) return "Today";
-  if (dateStr === tomorrowUtc) return "Tomorrow";
-  // Build a local-midnight Date from the UTC year/month/day so format() displays the right weekday/day.
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return format(new Date(y, m - 1, d), "EEEE, MMMM d");
-}
+import { utcDateLabel } from "@/lib/dateLabels";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
