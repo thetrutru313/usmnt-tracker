@@ -1,8 +1,92 @@
 import * as React from "react"
 import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign } from "lucide-react"
 import { Link, useLocation } from "wouter"
+import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
+
+// ── Pull-to-refresh ───────────────────────────────────────────────────────────
+
+const PULL_THRESHOLD = 72  // px of drag needed to trigger a refresh
+const PULL_MAX      = 96  // px cap so the indicator doesn't fly off screen
+
+function usePullToRefresh(
+  scrollRef: React.RefObject<HTMLDivElement | null>,
+  onRefresh: () => Promise<void>,
+) {
+  const [pullY, setPullY]           = React.useState(0)
+  const [refreshing, setRefreshing] = React.useState(false)
+
+  // Refs so touch handlers always read the latest values without stale closures
+  const startYRef      = React.useRef(0)
+  const pullingRef     = React.useRef(false)
+  const pullYRef       = React.useRef(0)
+  const refreshingRef  = React.useRef(false)
+
+  React.useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (refreshingRef.current) return
+      if (el.scrollTop === 0) {
+        startYRef.current = e.touches[0].clientY
+        pullingRef.current = true
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pullingRef.current || refreshingRef.current) return
+      const delta = e.touches[0].clientY - startYRef.current
+      if (delta <= 0) {
+        // Scrolling up — cancel pull
+        pullingRef.current = false
+        pullYRef.current   = 0
+        setPullY(0)
+        return
+      }
+      // Prevent the browser's native pull-to-refresh / overscroll bounce
+      e.preventDefault()
+      const clamped = Math.min(delta, PULL_MAX)
+      pullYRef.current = clamped
+      setPullY(clamped)
+    }
+
+    const onTouchEnd = () => {
+      if (!pullingRef.current) return
+      pullingRef.current = false
+
+      const dist = pullYRef.current
+      if (dist >= PULL_THRESHOLD) {
+        refreshingRef.current = true
+        setRefreshing(true)
+        setPullY(PULL_THRESHOLD) // hold indicator in place while refreshing
+        onRefresh().finally(() => {
+          refreshingRef.current = false
+          setRefreshing(false)
+          pullYRef.current = 0
+          setPullY(0)
+        })
+      } else {
+        pullYRef.current = 0
+        setPullY(0)
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true  })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true  })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [scrollRef, onRefresh])
+
+  return { pullY, refreshing }
+}
+
+// ── Online status ─────────────────────────────────────────────────────────────
 
 function useOnlineStatus() {
   const [isOnline, setIsOnline] = React.useState(() => navigator.onLine)
@@ -23,6 +107,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
   const isOnline = useOnlineStatus()
+
+  const queryClient = useQueryClient()
+  const scrollRef   = React.useRef<HTMLDivElement>(null)
+  const handleRefresh = React.useCallback(
+    () => queryClient.invalidateQueries(),
+    [queryClient],
+  )
+  const { pullY, refreshing } = usePullToRefresh(scrollRef, handleRefresh)
 
   const navItems = [
     { label: "Dashboard", path: "/", icon: Activity },
@@ -109,7 +201,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         </header>
 
-        <div className="flex-1 overflow-auto">
+        <div ref={scrollRef} className="flex-1 overflow-auto">
+          {/* Pull-to-refresh indicator — only visible on touch devices */}
+          {(pullY > 0 || refreshing) && (
+            <div
+              className="flex items-center justify-center overflow-hidden transition-all duration-150"
+              style={{ height: refreshing ? PULL_THRESHOLD : pullY }}
+            >
+              <div
+                className={cn(
+                  "rounded-full border-2 p-1.5 transition-colors",
+                  (refreshing || pullY >= PULL_THRESHOLD)
+                    ? "border-primary text-primary"
+                    : "border-muted-foreground/40 text-muted-foreground/40",
+                )}
+              >
+                <RefreshCw
+                  size={16}
+                  className={cn(refreshing && "animate-spin")}
+                  style={
+                    !refreshing
+                      ? { transform: `rotate(${(pullY / PULL_THRESHOLD) * 360}deg)` }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+          )}
           <div className="p-4 lg:p-8 max-w-7xl mx-auto">
             {children}
           </div>
