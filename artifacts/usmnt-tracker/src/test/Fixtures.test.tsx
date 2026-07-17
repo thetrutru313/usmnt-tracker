@@ -822,6 +822,40 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
   });
+
+  it('renders "Today" in the Recent Results date heading when the finished fixture\'s UTC date matches the current UTC date', () => {
+    // Pin the clock to 2026-07-17T15:00:00Z so that today's UTC date is "2026-07-17".
+    // The finished fixture also has a kickoff on 2026-07-17 UTC, so utcDateLabel
+    // must return "Today" when called from inside the RecentResults {open && ...} block.
+    vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
+
+    // Kickoff at 13:00 UTC on July 17 — same UTC calendar day as the pinned clock.
+    const finishedFixture = makeFixture("finished", {
+      id: 310,
+      kickoff: new Date("2026-07-17T13:00:00Z"),
+      homeTeam: "Same-Day Home FC",
+      awayTeam: "Same-Day Away FC",
+    });
+
+    mockUseListFixtures.mockReturnValue({ data: [finishedFixture], isLoading: false });
+    renderFixtures();
+
+    // The collapsible toggle must be present before expanding
+    expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
+
+    // Expand the Recent Results collapsible — mounts the {open && ...} block
+    // that contains its own utcDateLabel call for finished fixtures
+    fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
+
+    // The date heading inside the collapsible must read "Today"
+    expect(screen.getByText(/\bToday\b/i)).toBeInTheDocument();
+
+    // "Tomorrow" must be absent — the fixture is not tomorrow
+    expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
+    // No weekday string should appear — the "Today" fast-path must have fired
+    expect(screen.queryByText(/Friday/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Monday|Tuesday|Wednesday|Thursday|Saturday|Sunday/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("Fixtures page — 7-day Recent Results window boundary", () => {
