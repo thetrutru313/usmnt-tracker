@@ -61,10 +61,84 @@ export const playerSummaryColumns = {
   marketValueUsd: playersTable.marketValueUsd,
   nationalTeamCaps: playersTable.nationalTeamCaps,
   nationalTeamGoals: playersTable.nationalTeamGoals,
-  trending: playersTable.trending,
-  performanceTrend: playersTable.performanceTrend,
   potentialCallUpScore: playersTable.potentialCallUpScore,
 };
+
+/**
+ * Derive the form badge on-demand from `player_stats` rows, mirroring
+ * `computeFormTier` in `playerStatsSync.ts`. Called at query time so the
+ * badge is always live — the `performance_trend` column is no longer updated
+ * by the sync and should not be read for display purposes.
+ *
+ * Only `minutes` and `avgRating` are used from each window.
+ */
+function computeFormBadge(
+  last5: { minutes: number; avgRating: number | null } | undefined,
+  prev5: { minutes: number; avgRating: number | null } | undefined,
+  seasonAvgRating: number | null | undefined,
+): { performanceTrend: string; trending: boolean } {
+  const STEADY = { performanceTrend: "steady" as const, trending: false };
+  if (!last5 || last5.minutes < 270 || last5.avgRating == null || seasonAvgRating == null) return STEADY;
+
+  const seasonDelta = last5.avgRating - seasonAvgRating;
+  let score = 50 * seasonDelta;
+  if (prev5?.avgRating != null) score += 30 * (last5.avgRating - prev5.avgRating);
+
+  const trajectoryIsDown = prev5?.avgRating != null && last5.avgRating < prev5.avgRating;
+
+  let trend: string;
+  if (!trajectoryIsDown && score >= 25) trend = "on_fire";
+  else if (!trajectoryIsDown && score >= 12) trend = "rising";
+  else if (score > -12) trend = "steady";
+  else if (score > -25) trend = "falling";
+  else trend = "ice_cold";
+
+  return { performanceTrend: trend, trending: trend === "on_fire" || trend === "rising" };
+}
+
+/**
+ * Batch-compute form badges for a list of player IDs by reading their
+ * `last5`, `previous5`, and `season` rows from `player_stats`. One query
+ * covers all IDs; used by `listPlayers`, `getPlayerById`, and route handlers
+ * to overlay the computed badge onto any player shape without reading the
+ * stale `performance_trend` column.
+ */
+export async function computeFormBadgesForPlayerIds(
+  playerIds: number[],
+): Promise<Map<number, { performanceTrend: string; trending: boolean }>> {
+  if (playerIds.length === 0) return new Map();
+
+  const statsRows = await db
+    .select({
+      playerId: playerStatsTable.playerId,
+      periodType: playerStatsTable.periodType,
+      minutes: playerStatsTable.minutes,
+      avgRating: playerStatsTable.avgRating,
+    })
+    .from(playerStatsTable)
+    .where(
+      and(
+        inArray(playerStatsTable.playerId, playerIds),
+        inArray(playerStatsTable.periodType, ["last5", "previous5", "season"]),
+      ),
+    );
+
+  const last5Map = new Map<number, { minutes: number; avgRating: number | null }>();
+  const prev5Map = new Map<number, { minutes: number; avgRating: number | null }>();
+  const seasonAvgMap = new Map<number, number | null>();
+
+  for (const row of statsRows) {
+    if (row.periodType === "last5") last5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
+    else if (row.periodType === "previous5") prev5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
+    else if (row.periodType === "season") seasonAvgMap.set(row.playerId, row.avgRating);
+  }
+
+  const badges = new Map<number, { performanceTrend: string; trending: boolean }>();
+  for (const pid of playerIds) {
+    badges.set(pid, computeFormBadge(last5Map.get(pid), prev5Map.get(pid), seasonAvgMap.get(pid)));
+  }
+  return badges;
+}
 
 export function playerSummaryQuery() {
   return db
@@ -85,9 +159,14 @@ export async function listPlayers(filter: {
 
   const query = playerSummaryQuery();
   const rows = conditions.length ? await query.where(and(...conditions)) : await query;
+
+  const playerIds = rows.map((r) => r.id);
+  const badges = await computeFormBadgesForPlayerIds(playerIds);
+
   return rows.map(({ worldCupRoster, dateOfBirth, age: storedAge, ...row }) => {
     const age = resolveAge(dateOfBirth, storedAge);
-    return { ...row, age, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age }) };
+    const badge = badges.get(row.id) ?? { performanceTrend: "steady", trending: false };
+    return { ...row, age, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age }), ...badge };
   });
 }
 
@@ -113,8 +192,6 @@ export async function getPlayerById(id: number) {
       youthNationalTeam: playersTable.youthNationalTeam,
       debutDate: playersTable.debutDate,
       potentialCallUpScore: playersTable.potentialCallUpScore,
-      performanceTrend: playersTable.performanceTrend,
-      trending: playersTable.trending,
       bio: playersTable.bio,
     })
     .from(playersTable)
@@ -122,7 +199,9 @@ export async function getPlayerById(id: number) {
     .where(eq(playersTable.id, id));
   if (!row) return undefined;
   const { dateOfBirth, age: storedAge, ...rest } = row;
-  return { ...rest, age: resolveAge(dateOfBirth, storedAge) };
+  const badges = await computeFormBadgesForPlayerIds([id]);
+  const badge = badges.get(id) ?? { performanceTrend: "steady", trending: false };
+  return { ...rest, age: resolveAge(dateOfBirth, storedAge), ...badge };
 }
 
 export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "previous5") {
@@ -363,7 +442,7 @@ const injuryWithPlayerColumns = {
   latestUpdate: injuriesTable.latestUpdate,
   startDate: injuriesTable.startDate,
   clubName: clubsTable.name,
-  performanceTrend: playersTable.performanceTrend,
+  // performanceTrend removed — derived on-demand via computeFormBadgesForPlayerIds
   player: {
     id: playersTable.id,
     name: playersTable.name,
@@ -391,7 +470,7 @@ const transferWithPlayerColumns = {
   probabilityScore: transfersTable.probabilityScore,
   announcedAt: transfersTable.announcedAt,
   summary: transfersTable.summary,
-  performanceTrend: playersTable.performanceTrend,
+  // performanceTrend removed — derived on-demand via computeFormBadgesForPlayerIds
   player: {
     id: playersTable.id,
     name: playersTable.name,
@@ -406,6 +485,30 @@ export function transfersWithPlayerQuery() {
     .select(transferWithPlayerColumns)
     .from(transfersTable)
     .innerJoin(playersTable, eq(transfersTable.playerId, playersTable.id));
+}
+
+/**
+ * Overlays live form badges onto injury rows (player id at row.player.id).
+ * Replaces the previously-stale read of players.performanceTrend.
+ */
+export async function withInjuryBadges<T extends { player: { id: number } }>(
+  rows: T[],
+): Promise<(T & { performanceTrend: string; trending: boolean })[]> {
+  if (rows.length === 0) return [];
+  const badges = await computeFormBadgesForPlayerIds(rows.map((r) => r.player.id));
+  return rows.map((row) => ({ ...row, ...(badges.get(row.player.id) ?? { performanceTrend: "steady", trending: false }) }));
+}
+
+/**
+ * Overlays live form badges onto transfer rows (player id at row.player.id).
+ * Replaces the previously-stale read of players.performanceTrend.
+ */
+export async function withTransferBadges<T extends { player: { id: number } }>(
+  rows: T[],
+): Promise<(T & { performanceTrend: string; trending: boolean })[]> {
+  if (rows.length === 0) return [];
+  const badges = await computeFormBadgesForPlayerIds(rows.map((r) => r.player.id));
+  return rows.map((row) => ({ ...row, ...(badges.get(row.player.id) ?? { performanceTrend: "steady", trending: false }) }));
 }
 
 export { and, desc, eq, gte, ilike, inArray, or, sql };

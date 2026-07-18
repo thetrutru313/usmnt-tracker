@@ -179,7 +179,7 @@ function restoreMocks() {
 // Expected: recomputeFormTrends uses those rows → writes "on_fire", NOT "steady"
 // ---------------------------------------------------------------------------
 
-describe("club sync failure — player with valid stats gets correct label (not steady)", () => {
+describe("club sync failure — post-loop call-up score still runs for all players", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedSetCalls.length = 0;
@@ -192,47 +192,14 @@ describe("club sync failure — player with valid stats gets correct label (not 
     // db.select sequence:
     //   call 1 → clubs query
     //   call 2 → players query
-    //   call 3 → recomputeFormTrends stats query (returns on_fire rows)
-    //   call 4+ → post-loop call-up score queries → []
+    //   call 3+ → post-loop call-up score queries (allLast5, allPrevious5, allSeason,
+    //             activeInjuries, freshPlayers) → all return []
     mockDb.select
       .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([CLUB])) })
       .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([PLAYER])) })
-      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult(ON_FIRE_STATS_ROWS)) })
       .mockReturnValue({ from: vi.fn().mockReturnValue(makeFromResult([])) });
 
     restoreMocks();
-  });
-
-  it("writes on_fire — not the pre-reset steady — after the club throws", async () => {
-    await syncPlayerStatsAndInjuries(1);
-
-    const trendWrites = (capturedSetCalls as Array<Record<string, unknown>>).filter(
-      (d) => "performanceTrend" in d,
-    );
-
-    // There must be at least one trend write (the pre-reset + the recompute)
-    expect(trendWrites.length, "expected at least two trend writes (pre-reset + recompute)").toBeGreaterThanOrEqual(2);
-
-    // The recompute write must be "on_fire" — it comes last and overwrites the pre-reset
-    const lastWrite = trendWrites[trendWrites.length - 1];
-    expect(
-      lastWrite.performanceTrend,
-      "recomputeFormTrends must write 'on_fire' (not the pre-reset 'steady') when valid stats exist",
-    ).toBe("on_fire");
-    expect(lastWrite.trending).toBe(true);
-  });
-
-  it("the pre-reset still fires (steady is written before the recompute overwrites it)", async () => {
-    await syncPlayerStatsAndInjuries(1);
-
-    const trendWrites = (capturedSetCalls as Array<Record<string, unknown>>).filter(
-      (d) => "performanceTrend" in d,
-    );
-
-    // First write must be the pre-reset (steady)
-    const firstWrite = trendWrites[0];
-    expect(firstWrite.performanceTrend).toBe("steady");
-    expect(firstWrite.trending).toBe(false);
   });
 
   it("reports the club failure in the result", async () => {
@@ -244,11 +211,11 @@ describe("club sync failure — player with valid stats gets correct label (not 
 
 // ---------------------------------------------------------------------------
 // Suite 2: Club fails — player has NO player_stats rows
-// Expected: recomputeFormTrends finds no rows → computeFormTier returns steady
-// This is the correct fallback — there is genuinely nothing to compute from.
+// The badge is now derived on-demand at query time (queries.ts). The sync
+// correctly skips any badge writes to the players table in this case.
 // ---------------------------------------------------------------------------
 
-describe("club sync failure — player with no stats correctly stays steady", () => {
+describe("club sync failure — no trend writes for any player (badge is query-time)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedSetCalls.length = 0;
@@ -260,43 +227,35 @@ describe("club sync failure — player with no stats correctly stays steady", ()
     // db.select sequence:
     //   call 1 → clubs
     //   call 2 → players
-    //   call 3 → recomputeFormTrends stats query → [] (no rows — brand new player)
-    //   call 4+ → post-loop queries → []
+    //   call 3+ → post-loop call-up score queries (allLast5, allPrevious5, allSeason,
+    //             activeInjuries, freshPlayers) → all return []
     mockDb.select
       .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([CLUB])) })
       .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([PLAYER])) })
-      .mockReturnValueOnce({ from: vi.fn().mockReturnValue(makeFromResult([])) }) // no stats
       .mockReturnValue({ from: vi.fn().mockReturnValue(makeFromResult([])) });
 
     restoreMocks();
   });
 
-  it("all trend writes are steady when the player has no stats rows", async () => {
+  it("no performanceTrend writes to the players table even after a club failure", async () => {
     await syncPlayerStatsAndInjuries(1);
 
     const trendWrites = (capturedSetCalls as Array<Record<string, unknown>>).filter(
       (d) => "performanceTrend" in d,
     );
-
-    expect(trendWrites.length, "at least one trend write (pre-reset or recompute) must occur").toBeGreaterThanOrEqual(1);
-
-    for (const write of trendWrites) {
-      expect(
-        write.performanceTrend,
-        "a player with no stats rows must remain steady — no badge inflation from empty data",
-      ).toBe("steady");
-      expect(write.trending).toBe(false);
-    }
+    expect(
+      trendWrites.length,
+      "performanceTrend must not be written to the players table — badge is derived at query time",
+    ).toBe(0);
   });
 
-  it("recomputeFormTrends still fires (stats query runs even for failed clubs)", async () => {
+  it("post-loop call-up score queries still run even when the club sync failed", async () => {
     await syncPlayerStatsAndInjuries(1);
 
-    // The 3rd db.select call is the recomputeFormTrends stats query.
-    // If it fired, select was called at least 3 times.
+    // 1 clubs + 1 players + 5 post-loop queries = at least 5 select calls total.
     expect(
       mockDb.select.mock.calls.length,
-      "recomputeFormTrends must issue a stats query even when the club's sync failed",
-    ).toBeGreaterThanOrEqual(3);
+      "post-loop call-up score section must still issue queries even when the club failed",
+    ).toBeGreaterThanOrEqual(5);
   });
 });

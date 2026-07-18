@@ -407,76 +407,6 @@ export function computeFormTier(
   return { trend, trending: trend === "on_fire" || trend === "rising" };
 }
 
-/**
- * Reads committed `last5`, `previous5`, and `season` rows from `player_stats`
- * for every supplied player and writes the computed `performanceTrend` /
- * `trending` values back to `players` in batched updates. Running this AFTER
- * all per-player stat rows have been committed means the badge is always
- * derived from the DB source-of-truth rather than from in-memory sync state —
- * so the badge and the Club Form Breakdown always agree.
- *
- * Distinct player-ids that share the same (trend, trending) result are grouped
- * into a single UPDATE to minimise round-trips.
- */
-async function recomputeFormTrends(playerIds: number[]): Promise<void> {
-  if (playerIds.length === 0) return;
-
-  // One query for all three period types across all synced players.
-  const statsRows = await db
-    .select({
-      playerId: playerStatsTable.playerId,
-      periodType: playerStatsTable.periodType,
-      minutes: playerStatsTable.minutes,
-      avgRating: playerStatsTable.avgRating,
-    })
-    .from(playerStatsTable)
-    .where(
-      and(
-        inArray(playerStatsTable.playerId, playerIds),
-        inArray(playerStatsTable.periodType, ["last5", "previous5", "season"]),
-      ),
-    );
-
-  const last5Map = new Map<number, { minutes: number; avgRating: number | null }>();
-  const prev5Map = new Map<number, { minutes: number; avgRating: number | null }>();
-  const seasonAvgMap = new Map<number, number | null>();
-
-  for (const row of statsRows) {
-    if (row.periodType === "last5") last5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
-    else if (row.periodType === "previous5") prev5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
-    else if (row.periodType === "season") seasonAvgMap.set(row.playerId, row.avgRating);
-  }
-
-  // Minimal AggregatedSeasonStats shape — computeFormTier only reads `minutes`
-  // and `avgRating`; all other fields are structurally required but unused.
-  const ZERO: Omit<AggregatedSeasonStats, "minutes" | "avgRating"> = {
-    starts: 0, goals: 0, assists: 0, shots: 0, keyPasses: 0,
-    passCompletionPct: null, tackles: 0, interceptions: 0, duelsWonPct: null, savePct: null,
-  };
-
-  // Group player IDs by the (trend, trending) result so we can batch updates.
-  const groups = new Map<string, { trend: PerformanceTrend; trending: boolean; ids: number[] }>();
-  for (const playerId of playerIds) {
-    const l5 = last5Map.get(playerId);
-    const p5 = prev5Map.get(playerId);
-    const seasonAvg = seasonAvgMap.has(playerId) ? (seasonAvgMap.get(playerId) ?? null) : null;
-
-    const last5Agg: AggregatedSeasonStats | null = l5 ? { ...ZERO, minutes: l5.minutes, avgRating: l5.avgRating } : null;
-    const prev5Agg: AggregatedSeasonStats | null = p5 ? { ...ZERO, minutes: p5.minutes, avgRating: p5.avgRating } : null;
-
-    const { trend, trending } = computeFormTier(last5Agg, prev5Agg, seasonAvg);
-    const key = `${trend}:${trending}`;
-    const group = groups.get(key) ?? { trend, trending, ids: [] };
-    group.ids.push(playerId);
-    groups.set(key, group);
-  }
-
-  await Promise.all(
-    [...groups.values()].map(({ trend, trending, ids }) =>
-      db.update(playersTable).set({ performanceTrend: trend, trending }).where(inArray(playersTable.id, ids)),
-    ),
-  );
-}
 
 /**
  * Computes a 0–100 integer "call-up score" for a player based on all live
@@ -800,21 +730,6 @@ export async function syncPlayerStatsAndInjuries(
 
   await ensurePlayerApiFootballIds(players, clubsById);
 
-  // Safety-net pre-reset: set every syncing player's performance_trend to
-  // 'steady' before any club loop runs. If a club block throws and the
-  // per-player definitive write (at the end of each player block) never
-  // executes, the player lands on 'steady' rather than carrying a stale
-  // badge from a prior sync run. The per-player computeFormTier write later
-  // in the loop overwrites this with the correct value for players whose
-  // sync completes cleanly.
-  if (players.length > 0) {
-    const playerIdList = players.map((p) => p.id);
-    await db
-      .update(playersTable)
-      .set({ performanceTrend: "steady", trending: false })
-      .where(inArray(playersTable.id, playerIdList));
-  }
-
   const playersByClub = new Map<number, PlayerRow[]>();
   for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
 
@@ -823,11 +738,6 @@ export async function syncPlayerStatsAndInjuries(
   let playersWithSeasonStats = 0;
   let injuriesWritten = 0;
   let failures = 0;
-  // Tracks players whose club block completed without throwing. Used for
-  // logging only — recomputeFormTrends now runs against all player IDs so
-  // that players at a failed club are still recomputed from their existing
-  // player_stats rows rather than left on the pre-reset "steady" value.
-  const processedPlayerIds = new Set<number>();
 
   const [currentSeason] = seasonYearCandidates();
 
@@ -1005,10 +915,6 @@ export async function syncPlayerStatsAndInjuries(
       }
 
       injuriesWritten += await syncClubInjuries(club, clubPlayers, clubTeamId, nationalTeamEntries);
-      // Mark this club's players as successfully processed — recomputeFormTrends
-      // is scoped to this set, so failed clubs' players keep their pre-reset
-      // "steady" value rather than getting recomputed from stale stats rows.
-      for (const p of clubPlayers) processedPlayerIds.add(p.id);
       clubsProcessed++;
       logger.info({ club: club.name, clubsProcessed, totalClubs: clubs.length }, "Player-stats sync progress");
     } catch (err) {
@@ -1022,47 +928,23 @@ export async function syncPlayerStatsAndInjuries(
   // this per-club loop.
 
   // --- Post-loop: derive performance_trend from committed player_stats rows --
-  // Running this AFTER all per-player stat rows are committed ensures the
-  // badge always reflects the same source-of-truth as the Club Form Breakdown
-  // (both read from player_stats). The mid-loop per-player writes that used
-  // in-memory sync state have been removed; this single pass replaces them.
-  //
-  // All players are recomputed — not just processedPlayerIds. Players whose
-  // club block threw will have whatever player_stats rows survived from the
-  // previous sync run; computeFormTier reads those and assigns the correct
-  // tier. Players with no rows at all get null from the stats query and fall
-  // through to the "steady" guard already inside computeFormTier — exactly
-  // the same safe result as the pre-reset. Using valid prior-run rows is
-  // always better than leaving a player stuck on the artificial "steady".
-  //
-  // The pre-reset (earlier in this function) remains as a final safety net in
-  // case this entire try block throws — players land on "steady" rather than
-  // carrying a stale badge from a previous sync cycle.
-  try {
-    const idsToRecompute = players.map((p) => p.id);
-    await recomputeFormTrends(idsToRecompute);
-    logger.info(
-      { recomputed: idsToRecompute.length, failedClubs: failures },
-      "Form trends recomputed from committed player_stats rows",
-    );
-  } catch (err) {
-    logger.warn({ err }, "Form-trend recomputation failed — pre-reset steady values retained");
-  }
-
   // --- Post-loop: recompute potentialCallUpScore for every player -----------
-  // All injuries, stats, and form trends are fully written at this point, so
-  // the score reflects the freshest possible data from this sync cycle. We do
-  // this as a separate pass rather than mid-loop so that (a) active-injury
-  // data is committed before we read it, and (b) one batch read covers all
-  // players instead of per-player queries inside the hot path.
+  // All injuries and stat rows are fully written at this point, so the score
+  // reflects the freshest possible data. The form badge is computed inline
+  // from the same player_stats rows — no separate recomputeFormTrends pass
+  // is needed; the badge is also derived on-demand at query time (queries.ts).
   try {
-    const [allLast5, allSeason, activeInjuries, freshPlayers] = await Promise.all([
+    const [allLast5, allPrevious5, allSeason, activeInjuries, freshPlayers] = await Promise.all([
       db
-        .select({ playerId: playerStatsTable.playerId, avgRating: playerStatsTable.avgRating })
+        .select({ playerId: playerStatsTable.playerId, minutes: playerStatsTable.minutes, avgRating: playerStatsTable.avgRating })
         .from(playerStatsTable)
         .where(eq(playerStatsTable.periodType, "last5")),
       db
-        .select({ playerId: playerStatsTable.playerId, minutes: playerStatsTable.minutes })
+        .select({ playerId: playerStatsTable.playerId, minutes: playerStatsTable.minutes, avgRating: playerStatsTable.avgRating })
+        .from(playerStatsTable)
+        .where(eq(playerStatsTable.periodType, "previous5")),
+      db
+        .select({ playerId: playerStatsTable.playerId, minutes: playerStatsTable.minutes, avgRating: playerStatsTable.avgRating })
         .from(playerStatsTable)
         .where(eq(playerStatsTable.periodType, "season")),
       db
@@ -1076,21 +958,35 @@ export async function syncPlayerStatsAndInjuries(
           nationalTeamCaps: playersTable.nationalTeamCaps,
           marketValueUsd: playersTable.marketValueUsd,
           age: playersTable.age,
-          performanceTrend: playersTable.performanceTrend,
         })
         .from(playersTable),
     ]);
 
-    const last5RatingByPlayer = new Map(allLast5.map((r) => [r.playerId, r.avgRating]));
-    const seasonMinByPlayer = new Map(allSeason.map((r) => [r.playerId, r.minutes]));
+    const last5ByPlayer = new Map(allLast5.map((r) => [r.playerId, r]));
+    const prev5ByPlayer = new Map(allPrevious5.map((r) => [r.playerId, r]));
+    const seasonByPlayer = new Map(allSeason.map((r) => [r.playerId, r]));
     const activeInjurySet = new Set(activeInjuries.map((r) => r.playerId));
 
+    // Minimal AggregatedSeasonStats shape — computeFormTier only reads `minutes`
+    // and `avgRating`; all other fields are structurally required but unused.
+    const ZERO: Omit<AggregatedSeasonStats, "minutes" | "avgRating"> = {
+      starts: 0, goals: 0, assists: 0, shots: 0, keyPasses: 0,
+      passCompletionPct: null, tackles: 0, interceptions: 0, duelsWonPct: null, savePct: null,
+    };
+
     for (const p of freshPlayers) {
+      const l5 = last5ByPlayer.get(p.id);
+      const p5 = prev5ByPlayer.get(p.id);
+      const s = seasonByPlayer.get(p.id);
+      const last5Agg: AggregatedSeasonStats | null = l5 ? { ...ZERO, minutes: l5.minutes, avgRating: l5.avgRating } : null;
+      const prev5Agg: AggregatedSeasonStats | null = p5 ? { ...ZERO, minutes: p5.minutes, avgRating: p5.avgRating } : null;
+      const { trend } = computeFormTier(last5Agg, prev5Agg, s?.avgRating ?? null);
+
       const score = computeCallUpScore(
         p,
-        p.performanceTrend ?? "steady",
-        seasonMinByPlayer.get(p.id) ?? null,
-        last5RatingByPlayer.get(p.id) ?? null,
+        trend,
+        s?.minutes ?? null,
+        l5?.avgRating ?? null,
         activeInjurySet.has(p.id),
       );
       await db.update(playersTable).set({ potentialCallUpScore: score }).where(eq(playersTable.id, p.id));

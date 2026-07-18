@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { ListTransfersQueryParams, ListTransfersResponse } from "@workspace/api-zod";
-import { desc, eq, transfersTable, transfersWithPlayerQuery } from "../lib/queries";
+import { desc, eq, transfersTable, transfersWithPlayerQuery, withTransferBadges } from "../lib/queries";
 
 const router: IRouter = Router();
 
@@ -13,7 +13,8 @@ router.get("/transfers", async (req, res): Promise<void> => {
   const { status } = parsed.data;
 
   const query = transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt));
-  const rows = status ? await query.where(eq(transfersTable.status, status)) : await query;
+  const raw = status ? await query.where(eq(transfersTable.status, status)) : await query;
+  const rows = await withTransferBadges(raw);
 
   res.json(ListTransfersResponse.parse(rows));
 });

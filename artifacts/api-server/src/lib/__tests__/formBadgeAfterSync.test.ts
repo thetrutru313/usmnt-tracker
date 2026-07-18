@@ -1,23 +1,24 @@
 /**
- * Regression guard: confirms that after a player's `performanceTrend` value
- * changes in the database (simulating what a fresh sync run would do), the
- * next call to GET /injuries and GET /transfers returns the updated trend.
+ * Regression guard: confirms that the `performanceTrend` badge on GET /injuries,
+ * GET /transfers, and GET /players/:id is computed live from `player_stats`
+ * rather than read from the stale `players.performanceTrend` column.
  *
- * Why this matters: `injuryWithPlayerColumns` and `transferWithPlayerColumns`
- * both join from the `players` table to pull `performanceTrend`. If that join
- * were ever dropped or the column omitted from the SELECT, the badge on the
- * Injuries and Transfers pages would silently show a stale or missing value.
- * This test catches that regression before it reaches users.
+ * Why this matters: `recomputeFormTrends` was removed because it silently threw
+ * after every sync, leaving all 76 players showing "steady" indefinitely. Badges
+ * are now derived at query time via `computeFormBadgesForPlayerIds`. If a future
+ * change accidentally re-introduces a read of the stored column, these tests will
+ * catch it by demonstrating that writing an arbitrary tier to
+ * `players.performanceTrend` does NOT change the API response.
  *
  * How it works:
  *  1. Boots the Express app in-process via supertest (no separate server needed).
- *  2. Fetches the live injuries list; skips gracefully if the DB is empty.
- *  3. Writes a known `performanceTrend` value for the first player in that list.
- *  4. Re-fetches /injuries and /transfers, asserting the new value is reflected.
- *  5. Restores the original trend value (cleanup runs even if assertions fail).
- *
- * The test also verifies that `performanceTrend` is present and non-null in
- * both response schemas as parsed by the generated Zod validators.
+ *  2. Fetches the live injuries/transfers/player list; skips gracefully if empty.
+ *  3. Records the initial computed badge for the first player in that list.
+ *  4. Writes a DIFFERENT tier value directly to `players.performanceTrend`.
+ *  5. Re-fetches the endpoint and asserts the badge is UNCHANGED — proving it
+ *     is computed from stats, not the stored column.
+ *  6. Also verifies `performanceTrend` is present and non-null on every row.
+ *  7. Restores the original column value (cleanup runs even if assertions fail).
  */
 
 import { describe, it, expect, afterAll } from "vitest";
@@ -34,6 +35,15 @@ function fmtIssues(err: { issues: Array<{ path: unknown[]; message: string; code
   return err.issues.map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message} [${i.code}]`).join("\n");
 }
 
+const TIERS = ["on_fire", "rising", "steady", "falling", "ice_cold"] as const;
+type Tier = (typeof TIERS)[number];
+
+/** Pick a tier that is guaranteed to differ from `current`. */
+function differentTier(current: string): Tier {
+  const idx = TIERS.indexOf(current as Tier);
+  return TIERS[(idx === -1 ? 0 : idx + 2) % TIERS.length];
+}
+
 // Track which player (if any) we modified so afterAll can restore the original.
 let restoredPlayerId: number | null = null;
 let originalTrend: string | null = null;
@@ -42,18 +52,17 @@ afterAll(async () => {
   if (restoredPlayerId !== null && originalTrend !== null) {
     await db
       .update(playersTable)
-      .set({ performanceTrend: originalTrend as "on_fire" | "rising" | "steady" | "falling" | "ice_cold" })
+      .set({ performanceTrend: originalTrend as Tier })
       .where(eq(playersTable.id, restoredPlayerId));
   }
 });
 
-// ─── suite ──────────────────────────────────────────────────────────────────
+// ─── GET /injuries ───────────────────────────────────────────────────────────
 
-describe("GET /injuries — performanceTrend reflects latest DB value", () => {
+describe("GET /injuries — performanceTrend is computed from stats, not the stored column", () => {
   it(
-    "returns updated performanceTrend after a player row is written",
+    "badge does not change when players.performanceTrend is written with a different value",
     async () => {
-      // Step 1: fetch the injury list and bail early if no data is seeded.
       const initialRes = await request(app).get("/api/injuries").expect(200);
 
       const initial = ListInjuriesResponse.safeParse(initialRes.body);
@@ -63,13 +72,13 @@ describe("GET /injuries — performanceTrend reflects latest DB value", () => {
       ).toBe(true);
 
       if (!initial.data || initial.data.length === 0) {
-        console.warn("[formBadgeAfterSync] No injuries in DB — skipping trend-update check.");
+        console.warn("[formBadgeAfterSync] No injuries in DB — skipping trend-isolation check.");
         return;
       }
 
-      // Step 2: pick the first injury's player and remember the current trend.
       const firstInjury = initial.data[0];
       const playerId = firstInjury.player.id;
+      const initialComputedBadge = firstInjury.performanceTrend;
 
       const [playerRow] = await db
         .select({ performanceTrend: playersTable.performanceTrend })
@@ -81,41 +90,32 @@ describe("GET /injuries — performanceTrend reflects latest DB value", () => {
       restoredPlayerId = playerId;
       originalTrend = playerRow.performanceTrend;
 
-      // Step 3: write a new trend value that differs from the current one.
-      // Cycle through the five possible tiers so the test always writes
-      // something different regardless of the seed state.
-      const TIERS = ["on_fire", "rising", "steady", "falling", "ice_cold"] as const;
-      type Tier = (typeof TIERS)[number];
-      const currentTier = TIERS.includes(originalTrend as Tier)
-        ? (originalTrend as Tier)
-        : "steady";
-      const newTrend: Tier = TIERS[(TIERS.indexOf(currentTier) + 1) % TIERS.length];
-
+      // Write a DIFFERENT tier to the stored column to prove it has no effect.
+      const writtenTier = differentTier(playerRow.performanceTrend ?? "steady");
       await db
         .update(playersTable)
-        .set({ performanceTrend: newTrend })
+        .set({ performanceTrend: writtenTier })
         .where(eq(playersTable.id, playerId));
 
-      // Step 4: re-fetch /injuries and confirm the new trend is present.
       const updatedRes = await request(app).get("/api/injuries").expect(200);
-
       const updated = ListInjuriesResponse.safeParse(updatedRes.body);
       expect(
         updated.success,
         `Updated /injuries did not parse:\n${updated.success ? "" : fmtIssues(updated.error)}`,
       ).toBe(true);
 
-      // The injury list is ordered by startDate desc; find the row for our player.
       const injuryForPlayer = updated.data!.find((row) => row.player.id === playerId);
       expect(
         injuryForPlayer,
         `Injury for player ${playerId} not found in updated /injuries response`,
       ).toBeDefined();
 
-      // Core assertion: the route must reflect the newly written trend.
-      expect(injuryForPlayer!.performanceTrend).toBe(newTrend);
+      // Core: badge must equal the initial computed value, not the tier we wrote.
+      expect(
+        injuryForPlayer!.performanceTrend,
+        `Badge changed after writing to players.performanceTrend — route is reading the stale column instead of computing from stats`,
+      ).toBe(initialComputedBadge);
 
-      // Also confirm performanceTrend is non-null (not stripped by the route).
       expect(injuryForPlayer!.performanceTrend).not.toBeNull();
     },
     30_000,
@@ -148,11 +148,12 @@ describe("GET /injuries — performanceTrend reflects latest DB value", () => {
   );
 });
 
-describe("GET /transfers — performanceTrend reflects latest DB value", () => {
+// ─── GET /transfers ──────────────────────────────────────────────────────────
+
+describe("GET /transfers — performanceTrend is computed from stats, not the stored column", () => {
   it(
-    "returns updated performanceTrend after a player row is written",
+    "badge does not change when players.performanceTrend is written with a different value",
     async () => {
-      // Step 1: fetch the transfer list; skip if empty.
       const initialRes = await request(app).get("/api/transfers").expect(200);
 
       const initial = ListTransfersResponse.safeParse(initialRes.body);
@@ -162,13 +163,13 @@ describe("GET /transfers — performanceTrend reflects latest DB value", () => {
       ).toBe(true);
 
       if (!initial.data || initial.data.length === 0) {
-        console.warn("[formBadgeAfterSync] No transfers in DB — skipping trend-update check.");
+        console.warn("[formBadgeAfterSync] No transfers in DB — skipping trend-isolation check.");
         return;
       }
 
-      // Step 2: pick the first transfer's player.
       const firstTransfer = initial.data[0];
       const playerId = firstTransfer.player.id;
+      const initialComputedBadge = firstTransfer.performanceTrend;
 
       const [playerRow] = await db
         .select({ performanceTrend: playersTable.performanceTrend })
@@ -177,29 +178,19 @@ describe("GET /transfers — performanceTrend reflects latest DB value", () => {
 
       expect(playerRow, `Player ${playerId} not found in DB`).toBeDefined();
 
-      // If afterAll for injuries already registered this player, reuse it;
-      // otherwise register now for cleanup.
       if (restoredPlayerId === null) {
         restoredPlayerId = playerId;
         originalTrend = playerRow.performanceTrend;
       }
 
-      // Step 3: write a distinct trend value.
-      const TIERS = ["on_fire", "rising", "steady", "falling", "ice_cold"] as const;
-      type Tier = (typeof TIERS)[number];
-      const currentTier: Tier = TIERS.includes(playerRow.performanceTrend as Tier)
-        ? (playerRow.performanceTrend as Tier)
-        : "steady";
-      const newTrend: Tier = TIERS[(TIERS.indexOf(currentTier) + 2) % TIERS.length]; // +2 so injuries and transfers tests use a different value
-
+      // +2 steps so injuries and transfers tests write to a different tier.
+      const writtenTier = differentTier(differentTier(playerRow.performanceTrend ?? "steady"));
       await db
         .update(playersTable)
-        .set({ performanceTrend: newTrend })
+        .set({ performanceTrend: writtenTier })
         .where(eq(playersTable.id, playerId));
 
-      // Step 4: re-fetch /transfers and check the updated trend is reflected.
       const updatedRes = await request(app).get("/api/transfers").expect(200);
-
       const updated = ListTransfersResponse.safeParse(updatedRes.body);
       expect(
         updated.success,
@@ -212,7 +203,12 @@ describe("GET /transfers — performanceTrend reflects latest DB value", () => {
         `Transfer for player ${playerId} not found in updated /transfers response`,
       ).toBeDefined();
 
-      expect(transferForPlayer!.performanceTrend).toBe(newTrend);
+      // Core: badge must equal the initial computed value, not the tier we wrote.
+      expect(
+        transferForPlayer!.performanceTrend,
+        `Badge changed after writing to players.performanceTrend — route is reading the stale column instead of computing from stats`,
+      ).toBe(initialComputedBadge);
+
       expect(transferForPlayer!.performanceTrend).not.toBeNull();
     },
     30_000,
@@ -247,12 +243,11 @@ describe("GET /transfers — performanceTrend reflects latest DB value", () => {
 
 // ─── GET /players/:id round-trip ────────────────────────────────────────────
 //
-// Confirms that performanceTrend written to the players table is returned
-// correctly by GET /api/players/:id. This is the API surface the player
-// profile page reads from — if the route ever dropped the column from its
-// join or response shape, the form badge would silently vanish from the UI.
+// Confirms that performanceTrend on the player profile is computed from stats,
+// not the stored column. If the route ever reads players.performanceTrend directly
+// again, writing a different tier will change the response and the test will fail.
 
-describe("GET /players/:id — performanceTrend reflects latest DB value", () => {
+describe("GET /players/:id — performanceTrend is computed from stats, not the stored column", () => {
   let savedPlayerId: number | null = null;
   let savedOriginalTrend: string | null = null;
 
@@ -260,15 +255,14 @@ describe("GET /players/:id — performanceTrend reflects latest DB value", () =>
     if (savedPlayerId !== null && savedOriginalTrend !== null) {
       await db
         .update(playersTable)
-        .set({ performanceTrend: savedOriginalTrend as "on_fire" | "rising" | "steady" | "falling" | "ice_cold" })
+        .set({ performanceTrend: savedOriginalTrend as Tier })
         .where(eq(playersTable.id, savedPlayerId));
     }
   });
 
   it(
-    "returns the updated performanceTrend after a direct DB write",
+    "badge does not change when players.performanceTrend is written with a different value",
     async () => {
-      // Step 1: find any player in the DB.
       const [playerRow] = await db
         .select({ id: playersTable.id, performanceTrend: playersTable.performanceTrend })
         .from(playersTable)
@@ -282,27 +276,25 @@ describe("GET /players/:id — performanceTrend reflects latest DB value", () =>
       savedPlayerId = playerRow.id;
       savedOriginalTrend = playerRow.performanceTrend;
 
-      // Step 2: write a known trend that differs from the current one.
-      const TIERS = ["on_fire", "rising", "steady", "falling", "ice_cold"] as const;
-      type Tier = (typeof TIERS)[number];
-      const currentTier: Tier = TIERS.includes(playerRow.performanceTrend as Tier)
-        ? (playerRow.performanceTrend as Tier)
-        : "steady";
-      const newTrend: Tier = TIERS[(TIERS.indexOf(currentTier) + 1) % TIERS.length];
+      // Record the initial computed badge from the API.
+      const initialRes = await request(app).get(`/api/players/${playerRow.id}`).expect(200);
+      const initialComputedBadge = initialRes.body.performanceTrend;
 
+      // Write a DIFFERENT tier to the stored column.
+      const writtenTier = differentTier(playerRow.performanceTrend ?? "steady");
       await db
         .update(playersTable)
-        .set({ performanceTrend: newTrend })
+        .set({ performanceTrend: writtenTier })
         .where(eq(playersTable.id, playerRow.id));
 
-      // Step 3: fetch the player profile and confirm the trend is reflected.
+      // Re-fetch and confirm badge is UNCHANGED (computed from stats).
       const res = await request(app).get(`/api/players/${playerRow.id}`).expect(200);
 
       expect(res.body).toBeDefined();
       expect(
         res.body.performanceTrend,
-        `GET /api/players/${playerRow.id} must return performanceTrend='${newTrend}' after DB write`,
-      ).toBe(newTrend);
+        `Badge changed after writing to players.performanceTrend — GET /players/:id is reading the stale column instead of computing from stats`,
+      ).toBe(initialComputedBadge);
     },
     30_000,
   );

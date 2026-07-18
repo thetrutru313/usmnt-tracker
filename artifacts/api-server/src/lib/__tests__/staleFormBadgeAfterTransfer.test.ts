@@ -2,19 +2,20 @@
  * Regression guard: confirms that when a player transfers to a new club and
  * has no match logs there yet, the sync path:
  *   1. Deletes the stale "last5" row from a previous club (via deleteStatsRow,
- *      referenced at line ~681 of playerStatsSync.ts — the `deleteStatsRow(player.id, "last5")`
- *      call inside the `if (!last5) { ... }` branch).
+ *      referenced in the `if (!last5) { ... }` branch of playerStatsSync.ts).
  *   2. Deletes the stale "previous5" row similarly.
- *   3. Writes `performanceTrend = "steady"` to the players table (the correct
- *      reset value when computeFormTier receives null last5 — no data to judge).
  *
  * ## Why this matters
  * `syncClubMatchLogs` returns an empty map when a player has played no fixtures
  * for their new club. The sync path derives `last5 = aggregateFromMatchLogs([])`,
  * which is null, and must call `deleteStatsRow(player.id, "last5")` to clear any
  * row left by a prior sync at the old club.  If that delete were ever skipped
- * (e.g. due to a regression in the clear-stale-rows logic), the old tier badge
- * would silently persist in the DB and surface through the UI as stale data.
+ * (e.g. due to a regression in the clear-stale-rows logic), the old badge
+ * would silently persist as a stale player_stats row used by the on-demand
+ * form badge computation in queries.ts.
+ *
+ * Note: the sync no longer writes `performanceTrend` to the `players` table.
+ * The badge is computed on-demand from `player_stats` rows at query time.
  *
  * ## What is tested
  * - A player with a valid apiFootballPlayerId at a resolvable club (full sync
@@ -22,8 +23,6 @@
  * - afFetch returns empty fixtures → no match logs → last5 = null.
  * - db.delete(playerStatsTable) is called for both "last5" and "previous5" —
  *   i.e. the stale rows are cleared, not silently left.
- * - db.update(playersTable) is called with performanceTrend = "steady" —
- *   the expected reset value from computeFormTier(null, null, null).
  */
 
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -244,23 +243,6 @@ describe("stale form badge — no match logs at new club after transfer", () => 
     expect(prev5Deleted, "expected a db.delete(playerStatsTable).where(…) call targeting periodType='previous5'").toBe(true);
   });
 
-  it("writes performanceTrend = 'steady' — not a stale prior-club value", async () => {
-    await syncPlayerStatsAndInjuries(1);
-
-    // db.update(playersTable).set({ performanceTrend, trending }) must include
-    // performanceTrend = "steady" — the reset value from computeFormTier(null, null, null).
-    const trendUpdates = (capturedSetCalls as Array<Record<string, unknown>>).filter(
-      (data) => "performanceTrend" in data,
-    );
-
-    expect(trendUpdates.length).toBeGreaterThanOrEqual(1);
-
-    // The write for our player must be "steady" (no data → no badge inflation)
-    const lastWrite = trendUpdates[trendUpdates.length - 1];
-    expect(lastWrite.performanceTrend).toBe("steady");
-    expect(lastWrite.trending).toBe(false);
-  });
-
   it("does not insert any new last5 or previous5 rows", async () => {
     await syncPlayerStatsAndInjuries(1);
 
@@ -301,17 +283,13 @@ describe("stale form badge — no match logs at new club after transfer", () => 
 // ---------------------------------------------------------------------------
 // Exception-path guard
 // ---------------------------------------------------------------------------
-// Verifies that a stale form badge is cleared even when the season-stats API
-// call throws (e.g. rate-limit error) after the last5 row has been deleted.
-//
-// Without the early reset added alongside deleteStatsRow("last5"), the
-// club-level catch block would swallow the exception and the player's
-// performanceTrend would remain at whatever stale value was written by a
-// prior sync run. With the fix the reset is written before any fetch that
-// could throw, so the badge is always cleared when last5 is absent.
+// Verifies that the stale last5 stats row is still deleted even when the
+// season-stats API call throws (e.g. rate-limit error) partway through the
+// club sync block. The delete must happen before the throwing fetch so that
+// the stale player_stats row is cleared regardless of the exception.
 // ---------------------------------------------------------------------------
 
-describe("stale form badge — reset survives season-stats API exception", () => {
+describe("stale form badge — last5 delete survives season-stats API exception", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedSetCalls.length = 0;
@@ -348,28 +326,6 @@ describe("stale form badge — reset survives season-stats API exception", () =>
         return { where: vi.fn().mockResolvedValue(undefined) };
       }),
     }));
-  });
-
-  it("writes performanceTrend = 'steady' before the season-stats fetch throws", async () => {
-    // The club-level catch swallows the API error and increments failures.
-    // Despite the failure, the early reset (added alongside deleteStatsRow)
-    // must have fired before the exception was thrown.
-    await syncPlayerStatsAndInjuries(1);
-
-    const trendUpdates = (capturedSetCalls as Array<Record<string, unknown>>).filter(
-      (data) => "performanceTrend" in data,
-    );
-
-    expect(
-      trendUpdates.length,
-      "expected at least one db.update(playersTable).set({ performanceTrend }) — the early reset must fire before the API call that throws",
-    ).toBeGreaterThanOrEqual(1);
-
-    // Every trend write must be "steady" — no stale non-steady value should survive.
-    for (const write of trendUpdates) {
-      expect(write.performanceTrend, "all trend writes after last5 delete must be steady").toBe("steady");
-      expect(write.trending).toBe(false);
-    }
   });
 
   it("deletes the last5 row even when season-stats fetch throws", async () => {

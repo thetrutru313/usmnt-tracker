@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { SearchQueryParams, SearchResponse } from "@workspace/api-zod";
 import { db, clubsTable, playersTable } from "@workspace/db";
 import { eq, ilike, sql } from "drizzle-orm";
-import { playerSummaryQuery, resolveAge } from "../lib/queries";
+import { playerSummaryQuery, computeFormBadgesForPlayerIds, computePoolTier, resolveAge } from "../lib/queries";
 
 const router: IRouter = Router();
 
@@ -32,7 +32,7 @@ router.get("/search", searchLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  const [players, clubRows] = await Promise.all([
+  const [playersRaw, clubRows] = await Promise.all([
     playerSummaryQuery().where(ilike(playersTable.name, `%${q}%`)).limit(10),
     db
       .select({
@@ -49,11 +49,21 @@ router.get("/search", searchLimiter, async (req, res): Promise<void> => {
       .limit(10),
   ]);
 
-  const resolvedPlayers = players.map(({ dateOfBirth, age: storedAge, ...rest }) => ({
-    ...rest,
-    age: resolveAge(dateOfBirth, storedAge),
-  }));
-  res.json(SearchResponse.parse({ players: resolvedPlayers, clubs: clubRows }));
+  // Overlay live form badges — playerSummaryColumns no longer selects the stale
+  // players.performanceTrend column; badges are computed from player_stats here.
+  const badgeMap = await computeFormBadgesForPlayerIds(playersRaw.map((p) => p.id));
+
+  const players = playersRaw.map(({ worldCupRoster, dateOfBirth, age: storedAge, ...rest }) => {
+    const age = resolveAge(dateOfBirth, storedAge);
+    return {
+      ...rest,
+      age,
+      poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: rest.nationalTeamCaps, age }),
+      ...(badgeMap.get(rest.id) ?? { performanceTrend: "steady", trending: false }),
+    };
+  });
+
+  res.json(SearchResponse.parse({ players, clubs: clubRows }));
 });
 
 export default router;

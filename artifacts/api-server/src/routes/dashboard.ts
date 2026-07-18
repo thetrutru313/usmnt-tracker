@@ -12,8 +12,10 @@ import {
   injuriesWithPlayerQuery,
   transfersWithPlayerQuery,
   transfersTable,
-  playerSummaryQuery,
   playerSummaryColumns,
+  computeFormBadgesForPlayerIds,
+  withInjuryBadges,
+  withTransferBadges,
   computePoolTier,
   resolveAge,
 } from "../lib/queries";
@@ -31,11 +33,11 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     todaysGamesRaw,
     upcomingGamesRaw,
     latestNewsRaw,
-    injuries,
-    transfers,
-    topPerformers,
-    trending,
-    recentlyReturned,
+    injuriesRaw,
+    transfersRaw,
+    topPerformersRaw,
+    trendingCandidatesRaw,
+    recentlyReturnedRaw,
     nextScheduleEventRows,
   ] = await Promise.all([
     db
@@ -67,7 +69,15 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
       .orderBy(desc(playerStatsTable.avgRating))
       .limit(5),
-    playerSummaryQuery().where(eq(playersTable.trending, true)).limit(6),
+    // Over-fetch for "trending" — badge computation below filters to on_fire/rising only.
+    db
+      .select(playerSummaryColumns)
+      .from(playerStatsTable)
+      .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
+      .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+      .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
+      .orderBy(desc(playerStatsTable.avgRating))
+      .limit(50),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(4),
     db
       .select()
@@ -77,9 +87,21 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .limit(1),
   ]);
 
-  const [todaysGames, upcomingGames] = await Promise.all([
+  // Batch-compute live form badges for topPerformers + trending candidates.
+  const badgeCandidateIds = [
+    ...new Set([...topPerformersRaw.map((p) => p.id), ...trendingCandidatesRaw.map((p) => p.id)]),
+  ];
+  const badgeMap = await computeFormBadgesForPlayerIds(badgeCandidateIds);
+
+  const overlayBadge = <T extends { id: number }>(rows: T[]) =>
+    rows.map((p) => ({ ...p, ...(badgeMap.get(p.id) ?? { performanceTrend: "steady", trending: false }) }));
+
+  const [todaysGames, upcomingGames, injuries, transfers, recentlyReturned] = await Promise.all([
     attachFeaturedPlayers(todaysGamesRaw),
     attachFeaturedPlayers(upcomingGamesRaw),
+    withInjuryBadges(injuriesRaw),
+    withTransferBadges(transfersRaw),
+    withInjuryBadges(recentlyReturnedRaw),
   ]);
   const latestNews = await attachPlayersToNews(latestNewsRaw);
 
@@ -89,14 +111,22 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       return { ...row, age, poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: row.nationalTeamCaps, age }) };
     });
 
+  // Filter trending to players whose computed badge is on_fire or rising.
+  const trendingFiltered = trendingCandidatesRaw
+    .filter((p) => {
+      const b = badgeMap.get(p.id);
+      return b?.performanceTrend === "on_fire" || b?.performanceTrend === "rising";
+    })
+    .slice(0, 6);
+
   const payload = {
     todaysGames,
     upcomingGames,
     latestNews,
     injuries,
     transfers,
-    topPerformers: withPoolTier(topPerformers),
-    trending: withPoolTier(trending),
+    topPerformers: withPoolTier(overlayBadge(topPerformersRaw)),
+    trending: withPoolTier(overlayBadge(trendingFiltered)),
     recentlyReturned,
     nextScheduleEvent: nextScheduleEventRows[0],
   };

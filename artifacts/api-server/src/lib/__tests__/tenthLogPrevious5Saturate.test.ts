@@ -434,25 +434,6 @@ describe("10th match log — previous5 window fully saturates (5 of 5 slots fill
     ).toBe(true);
   });
 
-  it("passes non-null prev5 to computeFormTier (trajectory term is active with fully-saturated window)", async () => {
-    await syncPlayerStatsAndInjuries(3);
-
-    // computeFormTier is called and writes performanceTrend to the players table.
-    // If prev5 were null (e.g. aggregateFromMatchLogs returned null for a
-    // partially-full window at some intermediate count), the trajectory term
-    // would be inactive and the trend computation would be degraded.
-    // We verify that the performanceTrend update fires, confirming the code
-    // reached the branch where both last5 AND previous5 are non-null.
-    const trendUpdates = capturedSetCalls.filter((s) => {
-      const row = s as Record<string, unknown>;
-      return "performanceTrend" in row;
-    });
-    expect(
-      trendUpdates.length,
-      "expected db.update(playersTable).set({ performanceTrend, trending }) to fire — confirms computeFormTier ran with non-null prev5 (fully saturated previous5 window)",
-    ).toBeGreaterThanOrEqual(1);
-  });
-
   it("completes without throwing and reports zero failures", async () => {
     const result = await syncPlayerStatsAndInjuries(3);
     expect(result).toMatchObject({ failures: 0 });
