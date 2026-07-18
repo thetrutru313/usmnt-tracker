@@ -193,7 +193,7 @@ export default function MatchDetail() {
   const fixtureId = parseInt(id || "0", 10);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: fixture, isLoading, error } = useGetFixture(fixtureId, { query: { enabled: !!fixtureId, staleTime: 60_000, refetchInterval: (query: any) => fixtureRefetchInterval(query.state.data) } as any });
+  const { data: fixture, isLoading, error } = useGetFixture(fixtureId, { query: { enabled: !!fixtureId, refetchInterval: (query: any) => fixtureRefetchInterval(query.state.data) } as any });
 
   if (isLoading) {
     return (

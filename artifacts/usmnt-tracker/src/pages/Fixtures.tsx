@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { subDays, startOfDay } from "date-fns";
@@ -47,7 +48,7 @@ export default function Fixtures() {
     {
       query: {
         queryKey: getListFixturesQueryKey({ scope: 'all' }),
-        staleTime: 60_000,
+        placeholderData: keepPreviousData,
         refetchInterval: (query): number | false =>
           fixturesRefetchInterval(query.state.data as Fixture[] | undefined),
       },
