@@ -21,10 +21,10 @@
  *  7. Restores the original column value (cleanup runs even if assertions fail).
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
-import { db, playersTable, injuriesTable, transfersTable } from "@workspace/db";
+import { db, playersTable, injuriesTable, transfersTable, playerStatsTable, clubsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { ListInjuriesResponse, ListTransfersResponse } from "@workspace/api-zod";
 
@@ -405,4 +405,152 @@ describe("ListTransfersResponse schema — performanceTrend is required, not opt
     const result = ListTransfersResponse.safeParse([goodItem]);
     expect(result.success).toBe(true);
   });
+});
+
+// ─── GET /players/:id — badge tier matches seeded player_stats ───────────────
+//
+// These tests insert a dedicated test player + known player_stats rows so the
+// computed badge can be asserted against an *expected* tier, not just "is a
+// valid string".  Two cases are covered:
+//
+//   1. "on_fire" — last5 avg=8.0, season avg=7.0 → seasonDelta=1.0 →
+//      score = 50 * 1.0 = 50 ≥ 25, no prev5 so trajectoryIsDown=false → on_fire
+//
+//   2. "steady"  — no player_stats rows → computeFormBadge null-guard fires
+//      and returns STEADY regardless of the stored column.
+//
+// Cleanup removes all seeded rows even if assertions fail.
+
+describe("GET /players/:id — form badge tier matches seeded player_stats rows", () => {
+  let testPlayerId: number | null = null;
+  let testClubId: number | null = null;
+  let insertedClub = false;
+
+  beforeAll(async () => {
+    // Reuse the first existing club to avoid foreign-key complexity.
+    // If the DB is completely empty, insert a minimal test club.
+    const [existingClub] = await db
+      .select({ id: clubsTable.id })
+      .from(clubsTable)
+      .limit(1);
+
+    if (existingClub) {
+      testClubId = existingClub.id;
+    } else {
+      const [club] = await db
+        .insert(clubsTable)
+        .values({ name: "Test Club (form-badge)", league: "Test League", country: "USA" })
+        .returning({ id: clubsTable.id });
+      testClubId = club.id;
+      insertedClub = true;
+    }
+
+    // Insert a dedicated test player with a timestamped slug so it cannot
+    // collide with real seeded data even if the test suite runs in parallel.
+    const [player] = await db
+      .insert(playersTable)
+      .values({
+        name: "Test Badge Player (form-badge-after-sync)",
+        slug: `__test-badge-player-form-badge-${Date.now()}`,
+        position: "MF",
+        category: "fringe",
+        clubId: testClubId!,
+        age: 25,
+        performanceTrend: "steady",
+        trending: false,
+        bio: "",
+      })
+      .returning({ id: playersTable.id });
+
+    testPlayerId = player.id;
+  });
+
+  afterAll(async () => {
+    if (testPlayerId !== null) {
+      // Remove any stats rows that may have been left by a failing test.
+      await db
+        .delete(playerStatsTable)
+        .where(eq(playerStatsTable.playerId, testPlayerId));
+      await db
+        .delete(playersTable)
+        .where(eq(playersTable.id, testPlayerId));
+    }
+    if (insertedClub && testClubId !== null) {
+      await db
+        .delete(clubsTable)
+        .where(eq(clubsTable.id, testClubId));
+    }
+  });
+
+  it(
+    "seeded on_fire stats → GET /api/players/:id returns 'on_fire'",
+    async () => {
+      if (testPlayerId === null) {
+        console.warn("[formBadgeAfterSync] Test player not created — skipping on_fire check.");
+        return;
+      }
+
+      // Seed stats that produce on_fire:
+      //   score = 50 * (last5.avgRating − season.avgRating)
+      //         = 50 * (8.0 − 7.0) = 50  ≥ 25
+      //   no prev5 → trajectoryIsDown = false
+      //   → "on_fire"
+      await db.insert(playerStatsTable).values([
+        {
+          playerId: testPlayerId,
+          periodType: "last5",
+          season: "2025",
+          minutes: 450,
+          avgRating: 8.0,
+        },
+        {
+          playerId: testPlayerId,
+          periodType: "season",
+          season: "2025",
+          minutes: 2000,
+          avgRating: 7.0,
+        },
+      ]);
+
+      try {
+        const res = await request(app)
+          .get(`/api/players/${testPlayerId}`)
+          .expect(200);
+
+        expect(
+          res.body.performanceTrend,
+          `expected 'on_fire' from seeded stats (last5 avg=8.0 vs season avg=7.0 → score=50) but got '${res.body.performanceTrend}'`,
+        ).toBe("on_fire");
+      } finally {
+        // Always clean up stats so the "no stats → steady" test starts fresh.
+        await db
+          .delete(playerStatsTable)
+          .where(eq(playerStatsTable.playerId, testPlayerId));
+      }
+    },
+    30_000,
+  );
+
+  it(
+    "no player_stats rows → GET /api/players/:id returns 'steady'",
+    async () => {
+      if (testPlayerId === null) {
+        console.warn("[formBadgeAfterSync] Test player not created — skipping no-stats check.");
+        return;
+      }
+
+      // No player_stats rows exist for this player (cleaned up by the previous
+      // test's finally block, or never inserted if this test runs first).
+      // computeFormBadge should hit the null guard and return STEADY.
+      const res = await request(app)
+        .get(`/api/players/${testPlayerId}`)
+        .expect(200);
+
+      expect(
+        res.body.performanceTrend,
+        `expected 'steady' when no player_stats rows exist but got '${res.body.performanceTrend}'`,
+      ).toBe("steady");
+    },
+    30_000,
+  );
 });
