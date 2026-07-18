@@ -245,7 +245,7 @@ importers:
         version: 3.1.0
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
 
   artifacts/mockup-sandbox:
     devDependencies:
@@ -431,6 +431,10 @@ importers:
         version: 3.25.76
 
   artifacts/usmnt-tracker:
+    dependencies:
+      '@tanstack/react-virtual':
+        specifier: ^3.14.6
+        version: 3.14.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -638,7 +642,7 @@ importers:
         version: 1.3.0(@types/babel__core@7.20.5)(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
       wouter:
         specifier: ^3.3.5
         version: 3.10.0(react@19.1.0)
@@ -2404,6 +2408,15 @@ packages:
     resolution: {integrity: sha512-seDkr6kzGzX1okaaTtZPtgA688CDPlXUz1C6xSg0ESqn04Vuc8tlrYms1s3de+znBqhPVxFRfpAfUf+6XvfPWg==}
     peerDependencies:
       react: ^18 || ^19
+
+  '@tanstack/react-virtual@3.14.6':
+    resolution: {integrity: sha512-4+Uq8m0/gzO4kMCHUEpTtGX1RnONK0C+g88b2ltwPMWUBiaVarBuWKoPJaz7gj1cKCVRAdyu+U8GcKhwCc2beA==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  '@tanstack/virtual-core@3.17.4':
+    resolution: {integrity: sha512-nGm5KteqxasUdThLc2izl6dHUqLv0LQj7Nuyo5gYalTPf/U8a9ermvsl7reT+6ioBW1l8WfpP/mcU338nLXpqw==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -5039,6 +5052,7 @@ packages:
       '@vitest/ui': 4.1.10
       happy-dom: '*'
       jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -7136,6 +7150,14 @@ snapshots:
       '@tanstack/query-core': 5.101.2
       react: 19.1.0
 
+  '@tanstack/react-virtual@3.14.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.4
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  '@tanstack/virtual-core@3.17.4': {}
+
   '@testing-library/dom@10.4.1':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -7391,7 +7413,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
+      vitest: 4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
 
   '@vitest/utils@4.1.10':
     dependencies:
@@ -9868,7 +9890,7 @@ snapshots:
       tsx: 4.23.0
       yaml: 2.9.0
 
-  vitest@4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0):
+  vitest@4.1.10(@types/node@25.9.4)(@vitest/ui@4.1.10)(jsdom@29.1.1(@noble/hashes@1.8.0))(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@7.3.6(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -9895,17 +9917,7 @@ snapshots:
       '@vitest/ui': 4.1.10(vitest@4.1.10)
       jsdom: 29.1.1(@noble/hashes@1.8.0)
     transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   w3c-xmlserializer@5.0.0:
     dependencies:
