@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Search, SlidersHorizontal, Shield, Swords, Goal } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { PoolTierIcon, type PoolTier } from "@/components/FixtureCard";
+import { PoolTierIcon } from "@/components/FixtureCard";
+import { type PoolTier } from "@/lib/poolTiers";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },

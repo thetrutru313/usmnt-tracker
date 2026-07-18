@@ -5,7 +5,8 @@ import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspa
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { subDays, startOfDay } from "date-fns";
 import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
-import { FixtureCard, PoolTierIcon, type PoolTier, type FixtureCardFixture } from "@/components/FixtureCard";
+import { FixtureCard, PoolTierIcon, type FixtureCardFixture } from "@/components/FixtureCard";
+import { type PoolTier } from "@/lib/poolTiers";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
 import { utcDateLabel } from "@/lib/dateLabels";
 

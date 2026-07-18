@@ -5,20 +5,9 @@ import { formatTime, formatDate } from "@/lib/formatTime";
 import { memo } from "react";
 import { Link } from "wouter";
 import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
+import { type PoolTier, POOL_TIER_LABELS, POOL_TIER_STYLES } from "@/lib/poolTiers";
 
-export type PoolTier = "core" | "inMix" | "prospect";
-
-export const POOL_TIER_LABELS: Record<PoolTier, string> = {
-  core: "Core Squad — 2026 World Cup roster",
-  inMix: "In the Mix — 5+ national team caps",
-  prospect: "Prospect — under 25",
-};
-
-export const POOL_TIER_STYLES: Record<PoolTier, string> = {
-  core: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
-  inMix: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
-  prospect: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/40",
-};
+export type { PoolTier } from "@/lib/poolTiers";
 
 /** Small tricolor icon shown before a player's name, indicating pool tier. */
 export function PoolTierIcon({ tier }: { tier: PoolTier }) {

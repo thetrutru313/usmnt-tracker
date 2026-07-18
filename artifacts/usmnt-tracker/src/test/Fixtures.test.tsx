@@ -39,6 +39,23 @@ vi.mock("@/lib/livePolling", () => ({
     elapsedMinute ?? null,
 }));
 
+// @tanstack/react-virtual requires real DOM measurements (getBoundingClientRect)
+// to determine which items are in the viewport.  JSDOM returns all-zero rects,
+// so the virtualizer renders zero items.  Replace it with a pass-through that
+// always "virtualizes" every row so tests can assert on rendered content.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 142,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        key: index,
+        index,
+        start: index * 142,
+      })),
+    measureElement: () => {},
+  }),
+}));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a minimal fixture suitable for the Fixtures page. */
