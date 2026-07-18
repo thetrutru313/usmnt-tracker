@@ -2,7 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
-import { Link, useLocation } from "wouter";
+import { memo } from "react";
+import { Link } from "wouter";
 import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 
 export type PoolTier = "core" | "inMix" | "prospect";
@@ -100,16 +101,18 @@ function LiveIndicator({ size = "md" }: { size?: "sm" | "md" }) {
   );
 }
 
-export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
+export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCardFixture; showDate?: boolean }) {
   const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, fixture.status === "live");
-  const [, navigate] = useLocation();
 
   return (
-    <Card
-      className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer"
-      onClick={() => navigate(`/matches/${fixture.id}`)}
-    >
-      <div className="flex flex-col md:flex-row">
+    <Card className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer relative">
+      {/* Stretched link covers the entire card — no useLocation subscription needed */}
+      <Link
+        href={`/matches/${fixture.id}`}
+        className="absolute inset-0 z-0"
+        aria-label={`${fixture.homeTeam} vs ${fixture.awayTeam}`}
+      />
+      <div className="flex flex-col md:flex-row relative pointer-events-none">
         {/* Status / Time block */}
         <div className="md:w-32 bg-muted/30 p-2 md:p-3 flex md:flex-col items-center md:justify-center justify-between border-b md:border-b-0 md:border-r border-border shrink-0">
           {fixture.status === "live" ? (
@@ -247,7 +250,7 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
               href={fixture.broadcastLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 w-full text-center py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded uppercase tracking-wider hover:bg-primary/90 transition-colors"
+              className="mt-2 w-full text-center py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded uppercase tracking-wider hover:bg-primary/90 transition-colors relative pointer-events-auto"
             >
               Watch Live
             </a>
@@ -257,14 +260,13 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
 
       {/* Full-width player footer — outside the 3-col row so tags span the whole card */}
       {fixture.featuredPlayers.length > 0 && (
-        <div className="border-t border-border px-4 py-3 flex flex-wrap gap-2">
+        <div className="border-t border-border px-4 py-3 flex flex-wrap gap-2 relative pointer-events-none">
           {fixture.featuredPlayers.map((p) => (
             <Link
               key={p.id}
               href={`/players/${p.id}`}
-              className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border ${POOL_TIER_STYLES[p.poolTier]}`}
+              className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 font-medium transition-colors border pointer-events-auto ${POOL_TIER_STYLES[p.poolTier]}`}
               title={POOL_TIER_LABELS[p.poolTier]}
-              onClick={(e) => e.stopPropagation()}
             >
               <PoolTierIcon tier={p.poolTier} />
               {p.name}
@@ -274,4 +276,4 @@ export function FixtureCard({ fixture, showDate = false }: { fixture: FixtureCar
       )}
     </Card>
   );
-}
+});
