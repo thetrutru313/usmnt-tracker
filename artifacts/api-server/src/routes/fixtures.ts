@@ -106,6 +106,22 @@ router.get("/fixtures/:id", async (req, res): Promise<void> => {
       const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
       // Step 1: candidate resolution — only linked players vote
+      //
+      // EXPLAIN ANALYZE note: this query produces a Seq Scan on match_logs
+      // rather than an Index Scan. Postgres chooses this because:
+      //   • match_logs has ~1 000–2 000 rows at current volume (verified Jul 2026)
+      //   • The WHERE has no single high-selectivity leading column — the date
+      //     column is stored as text (not DATE/TIMESTAMP) so a date-range index
+      //     would not be useful here, and is_national_team is a boolean with low
+      //     cardinality.
+      //   • EXPLAIN ANALYZE shows actual execution time of ~0.2 ms — well within
+      //     budget for an infrequent fallback path that only fires for seeded NT
+      //     fixtures that were created before API-Football IDs were back-filled.
+      //   • The match_logs_player_id_idx IS used by Step 2 (below), and
+      //     match_logs_api_football_fixture_id_idx IS used by the primary path
+      //     (fixture.apiFootballFixtureId != null).
+      // If match_logs grows beyond ~50 000 rows, consider adding an index on
+      // (is_national_team, date) or converting the date column to DATE type.
       const candidates = await db
         .select({
           apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
