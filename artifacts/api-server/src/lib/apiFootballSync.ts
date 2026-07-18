@@ -200,8 +200,31 @@ function broadcastFor(leagueName: string): { tvNetwork: string | null; streaming
 // like a non-first-team squad.
 const RESERVE_TEAM_PATTERN = /\b(u1[5-9]|u2[0-3]|reserves?|development squad|academy)\b|(?:\sB|\sII)$/i;
 
-function isReserveOrYouthTeam(name: string): boolean {
+export function isReserveOrYouthTeam(name: string): boolean {
   return RESERVE_TEAM_PATTERN.test(name.trim());
+}
+
+/**
+ * Returns true when the fixture should be skipped for player tagging.
+ *
+ * A fixture is treated as a reserve/youth entry only when the club's own
+ * side in the fixture (a) carries a name that matches RESERVE_TEAM_PATTERN
+ * AND (b) differs from the club's registered name.
+ *
+ * The (b) condition prevents a club that is explicitly tracked under a name
+ * ending in " B" or " II" (e.g. "Benfica B") from being incorrectly
+ * excluded — the club is first-team for our purposes regardless of suffix.
+ *
+ * Exported for unit testing.
+ */
+export function isReserveFixtureForClub(
+  registeredClubName: string,
+  clubSideApiName: string,
+): boolean {
+  return (
+    clubSideApiName.toLowerCase() !== registeredClubName.toLowerCase() &&
+    isReserveOrYouthTeam(clubSideApiName)
+  );
 }
 
 // API-Football's search matches on short/informal names, not full official
@@ -400,6 +423,86 @@ export function scheduleLivePollStatsSync(
   }, delayMs);
 }
 
+/**
+ * Repair pass: backfills missing `fixture_players` links for every scheduled/
+ * live fixture that is present in `freshById` (the current season's API pull).
+ *
+ * Extracted from `syncApiFootballFixtures` so tests can drive it directly with
+ * controlled `freshById` data — bypassing the need to mock the internal `afFetch`
+ * call inside the parent function (ESM module-internal calls can't be spied on).
+ *
+ * ## Reserve-guard
+ * The pass applies the same side-aware `isReserveFixtureForClub` check used in
+ * the main upsert loop: only the club's OWN slot in the fixture (resolved via
+ * `teamId`) is checked, and a club explicitly registered under a name matching
+ * the reserve pattern (e.g. "Benfica B") is never blocked when the API name
+ * agrees with the registered name.  Fixtures absent from `freshById` are
+ * backfilled without a reserve check — they were validated as non-reserve when
+ * first inserted and are no longer in the live season window.
+ */
+export async function runRepairPass({
+  club,
+  teamId,
+  freshById,
+  clubPlayerIds,
+}: {
+  club: { id: number; name: string };
+  teamId: number;
+  freshById: Map<number, AfFixture>;
+  clubPlayerIds: number[];
+}): Promise<void> {
+  const freshApiIds = [...freshById.keys()];
+  if (freshApiIds.length === 0) return;
+
+  const dbFixtures = await db
+    .select({ id: fixturesTable.id, apiFootballFixtureId: fixturesTable.apiFootballFixtureId })
+    .from(fixturesTable)
+    .where(
+      and(
+        inArray(fixturesTable.apiFootballFixtureId, freshApiIds),
+        inArray(fixturesTable.status, ["scheduled", "live"]),
+      ),
+    );
+
+  for (const dbFixture of dbFixtures) {
+    // Apply the same side-aware reserve guard as the main upsert loop.
+    // `freshById` carries numeric team IDs — the only reliable way to
+    // determine which side of the fixture is the club we are tracking.
+    const apiFixture = dbFixture.apiFootballFixtureId !== null
+      ? freshById.get(dbFixture.apiFootballFixtureId)
+      : undefined;
+    if (apiFixture) {
+      const clubSideApiName =
+        apiFixture.teams.home.id === teamId
+          ? apiFixture.teams.home.name
+          : apiFixture.teams.away.name;
+      if (isReserveFixtureForClub(club.name, clubSideApiName)) {
+        // Genuine reserve entry (e.g. "Leeds United U21" in the club's
+        // season feed) — skip backfill to match the main loop's decision.
+        continue;
+      }
+    }
+    // Fixture not in freshById: validated as non-reserve on insertion;
+    // safe to backfill without the guard.
+
+    const existingLinks = await db
+      .select({ playerId: fixturePlayersTable.playerId })
+      .from(fixturePlayersTable)
+      .where(eq(fixturePlayersTable.fixtureId, dbFixture.id));
+    const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
+    const toLink = clubPlayerIds.filter((pid) => !alreadyLinked.has(pid));
+    if (toLink.length > 0) {
+      await db
+        .insert(fixturePlayersTable)
+        .values(toLink.map((playerId) => ({ fixtureId: dbFixture.id, playerId, clubId: club.id })));
+      logger.info(
+        { fixtureId: dbFixture.id, club: club.name, linked: toLink.length },
+        "Repair pass: backfilled missing fixture_players links",
+      );
+    }
+  }
+}
+
 export async function syncApiFootballFixtures(
   /** When provided, only syncs fixtures for the given club DB ids. Clubs
    *  outside this list are skipped entirely, incurring zero additional API
@@ -536,7 +639,26 @@ export async function syncApiFootballFixtures(
       }
 
       const clubPlayers = playersByClub.get(club.id) ?? [];
-      const isReserveFixture = isReserveOrYouthTeam(f.teams.home.name) || isReserveOrYouthTeam(f.teams.away.name);
+      // The guard's purpose: API-Football sometimes returns reserve/youth
+      // fixtures under a senior club's team ID (e.g. an EFL Trophy match
+      // appearing in Leeds United's feed as "Leeds United U21"). We skip
+      // tagging those because the senior player didn't actually play.
+      //
+      // Two original misfires that this logic fixes:
+      //   1. Clubs registered under a name that ends in " B" or " II"
+      //      (e.g. "Benfica B") were blocked on every one of their own
+      //      fixtures because the pattern matched their registered name.
+      //   2. MLS Next Pro clubs (e.g. Real Monarchs) were skipped whenever
+      //      their *opponent* ended in " II" (Timbers II, City II, etc.)
+      //      because the old guard checked both sides.
+      //
+      // Correct logic: only treat a fixture as "reserve" if the club's OWN
+      // slot carries a name that (a) looks like a reserve squad AND (b) does
+      // NOT match the club's own registered name. A club explicitly tracked
+      // under "Benfica B" is the first-team we care about — its fixtures
+      // must always be tagged regardless of the " B" suffix in the pattern.
+      const clubSideName = f.teams.home.id === teamId ? f.teams.home.name : f.teams.away.name;
+      const isReserveFixture = isReserveFixtureForClub(club.name, clubSideName);
       const eligiblePlayers = isReserveFixture ? [] : clubPlayers;
       if (eligiblePlayers.length > 0) {
         const existingLinks = await db
@@ -556,48 +678,8 @@ export async function syncApiFootballFixtures(
     }
 
     // ── Repair pass: backfill missing fixture_players links ──────────────────
-    // The upsert loop above only covers the top-8 upcoming (NS) fixtures.
-    // If a fixture was already in the DB from a previous cycle before the
-    // player's API ID was resolved, the original link step ran with an empty
-    // player list and left the fixture untagged.  This pass catches every
-    // non-finished fixture for this club's season pull and fills in any
-    // missing links, so club matches always show tagged players after the next
-    // sweep following player-ID resolution.
     if (clubPlayerIds.length > 0) {
-      const freshApiIds = [...freshById.keys()];
-      if (freshApiIds.length > 0) {
-        const dbFixtures = await db
-          .select({ id: fixturesTable.id, homeTeam: fixturesTable.homeTeam, awayTeam: fixturesTable.awayTeam })
-          .from(fixturesTable)
-          .where(
-            and(
-              inArray(fixturesTable.apiFootballFixtureId, freshApiIds),
-              inArray(fixturesTable.status, ["scheduled", "live"]),
-            ),
-          );
-
-        for (const dbFixture of dbFixtures) {
-          // Re-apply the reserve/youth guard using the team names already on
-          // the DB row — no need to re-fetch from the API.
-          if (isReserveOrYouthTeam(dbFixture.homeTeam) || isReserveOrYouthTeam(dbFixture.awayTeam)) continue;
-
-          const existingLinks = await db
-            .select({ playerId: fixturePlayersTable.playerId })
-            .from(fixturePlayersTable)
-            .where(eq(fixturePlayersTable.fixtureId, dbFixture.id));
-          const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
-          const toLink = clubPlayerIds.filter((pid) => !alreadyLinked.has(pid));
-          if (toLink.length > 0) {
-            await db
-              .insert(fixturePlayersTable)
-              .values(toLink.map((playerId) => ({ fixtureId: dbFixture.id, playerId, clubId: club.id })));
-            logger.info(
-              { fixtureId: dbFixture.id, club: club.name, linked: toLink.length },
-              "Repair pass: backfilled missing fixture_players links",
-            );
-          }
-        }
-      }
+      await runRepairPass({ club, teamId, freshById, clubPlayerIds });
     }
 
     clubsSynced++;
