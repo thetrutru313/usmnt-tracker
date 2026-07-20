@@ -8,7 +8,7 @@ import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type FixtureCardFixture } from "@/components/FixtureCard";
 import { type PoolTier } from "@/lib/poolTiers";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
-import { utcDateLabel } from "@/lib/dateLabels";
+import { localDateLabel, toLocalDateStr } from "@/lib/dateLabels";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -103,7 +103,7 @@ function RecentResults({
             <div key={dateStr} className="space-y-4">
               <h2 className="text-sm font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
                 <CalendarIcon size={14} />
-                {utcDateLabel(dateStr)}
+                {localDateLabel(dateStr)}
               </h2>
               <div className="space-y-3">
                 {groupedFinished[dateStr].map((fixture) => (
@@ -174,7 +174,7 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
                   }`}
                 >
                   <CalendarIcon size={16} />
-                  {utcDateLabel(row.dateStr)}
+                  {localDateLabel(row.dateStr)}
                 </h2>
               ) : (
                 <div className="mt-3">
@@ -196,7 +196,7 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
 function groupByDate(list: FixtureCardFixture[]): Record<string, FixtureCardFixture[]> {
   return list.reduce(
     (acc, fixture) => {
-      const dateStr = new Date(fixture.kickoff).toISOString().substring(0, 10);
+      const dateStr = toLocalDateStr(new Date(fixture.kickoff));
       if (!acc[dateStr]) acc[dateStr] = [];
       acc[dateStr]!.push(fixture);
       return acc;
