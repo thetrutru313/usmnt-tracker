@@ -98,6 +98,15 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   // then replace null with the verified number and run trigger-sync for the
   // corresponding player row.
   "Manu Romero": null,
+  // Cole Campbell (born 2006-02-20, Houston Dynamo MF): verified 2026-07-20
+  // against /players/teams?player=328617 — "William Cole Campbell", Houston
+  // Dynamo history matches. The automated search was resolving to id 102301,
+  // a female Houston Dash player, because the name search matched the wrong
+  // team roster. The " W" suffix guard now blocks that id from being used as
+  // a primary club, but without this pin the player would stay stuck with
+  // club_id=1883 (Houston Dash W) indefinitely. Pin the correct id so the
+  // next club sync assigns him to Houston Dynamo instead.
+  "Cole Campbell": 328617,
 };
 
 /**
