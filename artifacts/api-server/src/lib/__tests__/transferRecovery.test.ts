@@ -187,7 +187,10 @@ describe("Transfer recovery — purge + runRepairPass restores fixture card with
       insertedFixtureIds.push(fixtureB.id);
 
       // ── 5. Purge: removes the stale Club A link ────────────────────────────
-      const { purged } = await purgeStaleTransferredPlayerLinks();
+      // Scope the purge to only the players inserted by this test so the
+      // function cannot accidentally delete live fixture_players rows while
+      // the test suite runs against the development database.
+      const { purged } = await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
       expect(purged, "purge should have removed at least the Club A stale link").toBeGreaterThanOrEqual(1);
 
       // Stale link must be gone.

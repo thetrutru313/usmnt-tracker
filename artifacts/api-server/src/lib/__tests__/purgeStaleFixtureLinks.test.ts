@@ -27,7 +27,7 @@ import {
   fixturePlayersTable,
 } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
-import { purgeStaleTransferredPlayerLinks } from "../apiFootballSync.js";
+import { purgeStaleTransferredPlayerLinks, backfillLegacyFixturePlayerClubIds } from "../apiFootballSync.js";
 
 // ─── cleanup ─────────────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ describe("purgeStaleTransferredPlayerLinks", () => {
       // Link was created when player was at oldClub — club_id = oldClubId but player.club_id = newClubId
       await linkPlayerToFixture(fixtureId, playerId, oldClubId);
 
-      const { purged } = await purgeStaleTransferredPlayerLinks();
+      const { purged } = await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
 
       expect(purged).toBeGreaterThanOrEqual(1);
       expect(await countLinks(fixtureId)).toBe(0);
@@ -157,7 +157,7 @@ describe("purgeStaleTransferredPlayerLinks", () => {
 
       await linkPlayerToFixture(fixtureId, playerId, oldClubId);
 
-      const { purged } = await purgeStaleTransferredPlayerLinks();
+      const { purged } = await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
 
       expect(purged).toBeGreaterThanOrEqual(1);
       expect(await countLinks(fixtureId)).toBe(0);
@@ -176,7 +176,7 @@ describe("purgeStaleTransferredPlayerLinks", () => {
       // Historical link — should never be deleted regardless of current club
       await linkPlayerToFixture(fixtureId, playerId, oldClubId);
 
-      await purgeStaleTransferredPlayerLinks();
+      await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
 
       // Link must still exist
       expect(await countLinks(fixtureId)).toBe(1);
@@ -207,7 +207,7 @@ describe("purgeStaleTransferredPlayerLinks", () => {
       // National-team link has club_id = null (curated, not club-sync created)
       await linkPlayerToFixture(fixtureRow.id, playerId, null);
 
-      await purgeStaleTransferredPlayerLinks();
+      await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
 
       // Link must be preserved
       expect(await countLinks(fixtureRow.id)).toBe(1);
@@ -225,9 +225,96 @@ describe("purgeStaleTransferredPlayerLinks", () => {
       // club_id matches player.club_id — this is a fresh, valid link
       await linkPlayerToFixture(fixtureId, playerId, clubId);
 
-      await purgeStaleTransferredPlayerLinks();
+      await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: insertedPlayerIds });
 
       expect(await countLinks(fixtureId)).toBe(1);
+    },
+    30_000,
+  );
+
+  it(
+    "is a no-op and returns purged=0 when scopeToPlayerIds is an empty array — never touches live rows",
+    async () => {
+      // Create a stale link that WOULD be purged if the full table were scanned.
+      const oldClubId = await insertClub("Old Empty Scope F");
+      const newClubId = await insertClub("New Empty Scope F");
+      const playerId = await insertPlayer(newClubId, "Empty Scope Player F");
+      const fixtureId = await insertFixture("scheduled", "Empty Scope F");
+      await linkPlayerToFixture(fixtureId, playerId, oldClubId);
+
+      // Empty array provided → must be a strict no-op; the stale link survives.
+      const { purged } = await purgeStaleTransferredPlayerLinks({ scopeToPlayerIds: [] });
+
+      expect(purged).toBe(0);
+      expect(await countLinks(fixtureId)).toBe(1);
+    },
+    30_000,
+  );
+});
+
+// ─── backfillLegacyFixturePlayerClubIds — scope safety ───────────────────────
+
+describe("backfillLegacyFixturePlayerClubIds — empty-scope safety", () => {
+  it(
+    "is a no-op and returns backfilled=0 when scopeToFixtureIds is an empty array — never touches live rows",
+    async () => {
+      // Insert a club + fixture + fixture_players row with club_id = null.
+      // Without scoping, the backfill would fill in club_id from the fixture's team name.
+      const [clubRow] = await db
+        .insert(clubsTable)
+        .values({ name: "__BackfillScopeTest Club G__", league: "Test League", country: "USA" })
+        .returning({ id: clubsTable.id });
+      if (!clubRow) throw new Error("Club insert failed");
+      insertedClubIds.push(clubRow.id);
+
+      const [playerRow] = await db
+        .insert(playersTable)
+        .values({
+          name: "__BackfillScopeTest Player G__",
+          slug: "__backfillscopetest-player-g__",
+          position: "MF",
+          category: "current",
+          clubId: clubRow.id,
+          age: 25,
+          nationalTeamCaps: 0,
+          nationalTeamGoals: 0,
+          performanceTrend: "steady",
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+      if (!playerRow) throw new Error("Player insert failed");
+      insertedPlayerIds.push(playerRow.id);
+
+      const [fixtureRow] = await db
+        .insert(fixturesTable)
+        .values({
+          isNationalTeam: false,
+          competition: "Test League",
+          kickoff: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          venue: "Test Stadium",
+          homeTeam: "__BackfillScopeTest Club G__",
+          awayTeam: "__BackfillScopeTest Opponent G__",
+          status: "scheduled",
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixtureRow) throw new Error("Fixture insert failed");
+      insertedFixtureIds.push(fixtureRow.id);
+
+      // Link with club_id = null — this is the legacy shape the backfill targets.
+      await db.insert(fixturePlayersTable).values({ fixtureId: fixtureRow.id, playerId: playerRow.id, clubId: null });
+
+      // Empty scope → must be a strict no-op; club_id must remain null.
+      const { backfilled } = await backfillLegacyFixturePlayerClubIds({ scopeToFixtureIds: [] });
+
+      expect(backfilled).toBe(0);
+
+      const [link] = await db
+        .select({ clubId: fixturePlayersTable.clubId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureRow.id));
+      expect(link?.clubId).toBeNull();
     },
     30_000,
   );

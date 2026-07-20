@@ -343,8 +343,30 @@ export async function resolveTeamId(club: { id: number; name: string; apiFootbal
  * Recovery path: the per-club `runRepairPass` that follows in the same sweep
  * creates fresh links for the player's current club's upcoming fixtures, so
  * the fixture card is restored within one full sync cycle.
+ *
+ * @param scopeToPlayerIds  When provided, only `fixture_players` rows whose
+ *   `player_id` is in this list are eligible for deletion.  Pass the list of
+ *   player ids inserted by the current test run so the purge cannot touch live
+ *   data while the test suite is executing against the development database.
+ *   Omit (or pass `undefined`) in production — the full table is scanned.
  */
-export async function purgeStaleTransferredPlayerLinks(): Promise<{ purged: number }> {
+export async function purgeStaleTransferredPlayerLinks(
+  { scopeToPlayerIds }: { scopeToPlayerIds?: number[] } = {},
+): Promise<{ purged: number }> {
+  // When a scope is explicitly requested but the list is empty (e.g. no rows
+  // were inserted yet in the current test), treat the call as a no-op rather
+  // than falling through to an unscoped full-table DELETE.
+  if (scopeToPlayerIds !== undefined && scopeToPlayerIds.length === 0) {
+    return { purged: 0 };
+  }
+
+  // Build a fully-parameterized scope clause — never use sql.raw for IDs so
+  // the query is safe regardless of who calls this function.
+  const scopeClause =
+    scopeToPlayerIds && scopeToPlayerIds.length > 0
+      ? sql` AND fp.player_id IN (${sql.join(scopeToPlayerIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
+
   const result = await db.execute(sql`
     DELETE FROM fixture_players fp
     USING players p, fixtures f
@@ -353,6 +375,7 @@ export async function purgeStaleTransferredPlayerLinks(): Promise<{ purged: numb
       AND fp.club_id IS NOT NULL
       AND fp.club_id != p.club_id
       AND f.status IN ('scheduled', 'live')
+      ${scopeClause}
   `);
   const purged = (result as unknown as { rowCount?: number }).rowCount ?? 0;
   if (purged > 0) {
@@ -374,8 +397,28 @@ export async function purgeStaleTransferredPlayerLinks(): Promise<{ purged: numb
  * that's the club this sync originally created the link for. Idempotent and
  * safe to run on every sync so any future gaps self-heal without a manual
  * one-off migration.
+ *
+ * @param scopeToFixtureIds  When provided, only `fixture_players` rows whose
+ *   `fixture_id` is in this list are eligible for the UPDATE.  Pass the list
+ *   of fixture ids inserted by the current test run so the backfill cannot
+ *   touch live data while the test suite is executing against the development
+ *   database.  Omit (or pass `undefined`) in production.
  */
-export async function backfillLegacyFixturePlayerClubIds(): Promise<{ backfilled: number }> {
+export async function backfillLegacyFixturePlayerClubIds(
+  { scopeToFixtureIds }: { scopeToFixtureIds?: number[] } = {},
+): Promise<{ backfilled: number }> {
+  // When a scope is explicitly requested but the list is empty, treat the call
+  // as a no-op rather than falling through to an unscoped full-table UPDATE.
+  if (scopeToFixtureIds !== undefined && scopeToFixtureIds.length === 0) {
+    return { backfilled: 0 };
+  }
+
+  // Build a fully-parameterized scope clause — never use sql.raw for IDs.
+  const scopeClause =
+    scopeToFixtureIds && scopeToFixtureIds.length > 0
+      ? sql` AND fp.fixture_id IN (${sql.join(scopeToFixtureIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
+
   const result = await db.execute(sql`
     UPDATE fixture_players fp
     SET club_id = c.id
@@ -384,6 +427,7 @@ export async function backfillLegacyFixturePlayerClubIds(): Promise<{ backfilled
     WHERE fp.fixture_id = f.id
       AND f.is_national_team = false
       AND fp.club_id IS NULL
+      ${scopeClause}
   `);
   const backfilled = (result as unknown as { rowCount?: number }).rowCount ?? 0;
   if (backfilled > 0) {
