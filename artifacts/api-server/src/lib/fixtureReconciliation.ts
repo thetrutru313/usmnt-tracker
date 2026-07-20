@@ -8,7 +8,7 @@
  */
 
 import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray, lt } from "drizzle-orm";
+import { eq, and, inArray, lt, gt, notExists, sql } from "drizzle-orm";
 import { logger } from "./logger.js";
 
 // ─── API-Football fixture shape ───────────────────────────────────────────────
@@ -224,6 +224,69 @@ const POSTPONED_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  * fixture_players rows are deleted first to satisfy the foreign-key constraint,
  * then the parent fixture rows are removed.
  */
+/**
+ * Deletes upcoming (scheduled/live) fixture rows for non-national-team clubs
+ * that have accumulated no `fixture_players` links — i.e. no tracked player
+ * is associated with the fixture.  These rows are left behind whenever a
+ * player transfers away from a club: the club's future fixtures become
+ * invisible at the query layer (Task #372) but the rows remain in the DB.
+ *
+ * **Retention window**: fixtures whose kickoff is within the next 30 days are
+ * kept regardless, giving a grace period for near-term matches in case a
+ * player is re-linked or a data error is corrected.  Only fixtures more than
+ * 30 days out are eligible for deletion.
+ *
+ * **Safety guards** (never deleted by this function):
+ * - `is_national_team = true` rows — curated/seeded; managed separately.
+ * - Any fixture that has at least one `fixture_players` link.
+ * - Any fixture whose kickoff falls within the next 30 days.
+ *
+ * fixture_players rows are deleted first to satisfy the foreign-key
+ * constraint, then the parent fixture rows are removed.  (In practice the
+ * NOT EXISTS guard means there are no child rows to delete first, but the
+ * step is kept for safety in case a link was inserted after the guard ran.)
+ */
+export async function purgeOrphanedUpcomingFixtures(
+  now: number = Date.now(),
+): Promise<{ purged: number }> {
+  const retentionCutoff = new Date(now + 30 * 24 * 60 * 60 * 1000);
+
+  // Find upcoming non-national-team fixtures that have no fixture_players links
+  // and whose kickoff is beyond the 30-day retention window.
+  const orphans = await db
+    .select({ id: fixturesTable.id })
+    .from(fixturesTable)
+    .where(
+      and(
+        eq(fixturesTable.isNationalTeam, false),
+        inArray(fixturesTable.status, ["scheduled", "live"]),
+        gt(fixturesTable.kickoff, retentionCutoff),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(fixturePlayersTable)
+            .where(eq(fixturePlayersTable.fixtureId, fixturesTable.id)),
+        ),
+      ),
+    );
+
+  if (orphans.length === 0) return { purged: 0 };
+
+  const orphanIds = orphans.map((f) => f.id);
+
+  // Satisfy the FK constraint (no-op in practice — the NOT EXISTS guard above
+  // ensures no child rows exist, but we delete defensively).
+  await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, orphanIds));
+  await db.delete(fixturesTable).where(inArray(fixturesTable.id, orphanIds));
+
+  logger.info(
+    { purged: orphans.length, retentionCutoffIso: retentionCutoff.toISOString() },
+    "Purged orphaned upcoming fixtures with no tracked players (beyond 30-day retention window)",
+  );
+
+  return { purged: orphans.length };
+}
+
 export async function purgeStalePostponedFixtures(
   now: number = Date.now(),
 ): Promise<{ purged: number }> {

@@ -7,6 +7,7 @@ import {
   mapStatus,
   reconcileClubFixtures,
   purgeStalePostponedFixtures,
+  purgeOrphanedUpcomingFixtures,
 } from "./fixtureReconciliation.js";
 
 // Re-export so existing callers (usmntSync, playerStatsSync, etc.) keep working.
@@ -1363,8 +1364,21 @@ export async function syncApiFootballFixtures(
     logger.warn({ err }, "Stale postponed fixture purge failed — will retry on next sync cycle");
   }
 
+  // Purge upcoming fixture rows for non-national-team clubs that have no
+  // tracked players (no fixture_players links) and whose kickoff is more than
+  // 30 days away. These accumulate when players transfer away from a club —
+  // the rows become invisible at the query layer but still occupy the DB.
+  // A failure here must never abort the sync result.
+  let purgedOrphaned = 0;
+  try {
+    const purgeResult = await purgeOrphanedUpcomingFixtures();
+    purgedOrphaned = purgeResult.purged;
+  } catch (err) {
+    logger.warn({ err }, "Orphaned upcoming fixture purge failed — will retry on next sync cycle");
+  }
+
   logger.info(
-    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, failures },
+    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, purgedOrphaned, failures },
     "API-Football fixtures sync complete",
   );
   return { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures };
