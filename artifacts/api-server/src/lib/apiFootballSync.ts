@@ -330,6 +330,38 @@ export async function resolveTeamId(club: { id: number; name: string; apiFootbal
 }
 
 /**
+ * Purges `fixture_players` links for players who have since transferred away
+ * from the club the link was created for.  Only scheduled/live fixtures are
+ * affected — finished fixtures keep their links as a historical record of
+ * who was tagged at the time the fixture was played.
+ *
+ * Run at the start of every fixture-sync sweep (after
+ * `backfillLegacyFixturePlayerClubIds` so every link already has a club_id
+ * stamped before we compare).  Idempotent: no rows are touched when no
+ * transfers have occurred since the last sweep.
+ *
+ * Recovery path: the per-club `runRepairPass` that follows in the same sweep
+ * creates fresh links for the player's current club's upcoming fixtures, so
+ * the fixture card is restored within one full sync cycle.
+ */
+export async function purgeStaleTransferredPlayerLinks(): Promise<{ purged: number }> {
+  const result = await db.execute(sql`
+    DELETE FROM fixture_players fp
+    USING players p, fixtures f
+    WHERE fp.player_id = p.id
+      AND fp.fixture_id = f.id
+      AND fp.club_id IS NOT NULL
+      AND fp.club_id != p.club_id
+      AND f.status IN ('scheduled', 'live')
+  `);
+  const purged = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+  if (purged > 0) {
+    logger.info({ purged }, "Purged stale fixture_players links for transferred players — runRepairPass will recreate links for current clubs");
+  }
+  return { purged };
+}
+
+/**
  * Syncs upcoming club fixtures from API-Football for every club that has a
  * tracked player. National-team fixtures (World Cup qualifiers etc.) stay
  * curated/seeded — API-Football club fixtures are the part that changes
@@ -509,7 +541,11 @@ export async function syncApiFootballFixtures(
    *  calls. The hourly scheduled run omits this parameter to sync all clubs. */
   clubIds?: number[],
 ): Promise<{ clubsSynced: number; fixturesUpserted: number; fixturesReconciled: number; fixturesRemoved: number; failures: number }> {
+  // Step 1: stamp club_id on any legacy links that predate the column.
   await backfillLegacyFixturePlayerClubIds();
+  // Step 2: remove future links for players who've since transferred — the
+  // per-club runRepairPass below will recreate links under their new club.
+  await purgeStaleTransferredPlayerLinks();
 
   const allClubs = await db
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
