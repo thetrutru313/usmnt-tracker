@@ -169,6 +169,26 @@ app.listen(port, async (err) => {
     }
   })();
 
+  // One-time startup: backfill Fox One streaming info on existing CONCACAF U20
+  // fixtures. New fixtures will get the value from BROADCAST_BY_LEAGUE during
+  // sync; this covers the rows already in the DB. Idempotent.
+  (async () => {
+    try {
+      const result = await db.execute(sql`
+        UPDATE fixtures
+        SET streaming_service = 'Fox One', tv_network = 'FOX Sports'
+        WHERE competition = 'CONCACAF U20'
+          AND (streaming_service IS NULL OR streaming_service != 'Fox One')
+      `);
+      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+      if (rowCount > 0) {
+        logger.info({ rowCount }, "Startup: backfilled Fox One streaming info on CONCACAF U20 fixtures");
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup: CONCACAF U20 streaming backfill failed (non-fatal)");
+    }
+  })();
+
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).

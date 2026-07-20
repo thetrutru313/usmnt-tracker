@@ -178,6 +178,7 @@ const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingS
 
   // ── CONCACAF club competitions ────────────────────────────────────────────
   "CONCACAF Champions Cup":  { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
+  "CONCACAF U20":            { tvNetwork: "FOX Sports", streamingService: "Fox One" },
 
   // ── International / national team ─────────────────────────────────────────
   "FIFA World Cup":          { tvNetwork: "FOX",        streamingService: "FOX Sports App" },
