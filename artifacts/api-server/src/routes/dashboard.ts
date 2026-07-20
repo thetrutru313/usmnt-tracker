@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, desc, eq, gte, isNotNull, lt, notIlike, notInArray, or } from "drizzle-orm";
+import { and, asc, avg, desc, eq, gte, inArray, isNotNull, lt, notIlike, notInArray, or } from "drizzle-orm";
 import {
   fixturesTable,
+  matchLogsTable,
   newsArticlesTable,
   injuriesTable,
   playerStatsTable,
@@ -28,6 +29,9 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
   const endOfDay = new Date(startOfDay);
   endOfDay.setDate(endOfDay.getDate() + 1);
   const todayStr = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
 
   const [
     todaysGamesRaw,
@@ -35,7 +39,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     latestNewsRaw,
     injuriesRaw,
     transfersRaw,
-    topPerformersRaw,
+    recentRatings,
     trendingCandidatesRaw,
     recentlyReturnedRaw,
     nextScheduleEventRows,
@@ -63,13 +67,21 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     db.select().from(newsArticlesTable).orderBy(desc(newsArticlesTable.publishedAt)).limit(8),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "active")).orderBy(desc(injuriesTable.startDate)).limit(6),
     transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt)).limit(6),
+    // Rank by average match rating over the past 7 days — more time-sensitive
+    // than the pre-computed last5 average, which can keep a player at the top
+    // for weeks after their hot streak ended.
     db
-      .select(playerSummaryColumns)
-      .from(playerStatsTable)
-      .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
-      .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(and(eq(playerStatsTable.periodType, "last5"), isNotNull(playerStatsTable.avgRating)))
-      .orderBy(desc(playerStatsTable.avgRating))
+      .select({
+        playerId: matchLogsTable.playerId,
+        avgRating7d: avg(matchLogsTable.rating),
+      })
+      .from(matchLogsTable)
+      .where(and(
+        gte(matchLogsTable.date, sevenDaysAgoStr),
+        isNotNull(matchLogsTable.rating),
+      ))
+      .groupBy(matchLogsTable.playerId)
+      .orderBy(desc(avg(matchLogsTable.rating)))
       .limit(5),
     // Over-fetch for "trending" — badge computation below filters to on_fire/rising only.
     db
@@ -88,6 +100,24 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .orderBy(asc(scheduleEventsTable.sortOrder), asc(scheduleEventsTable.startDate))
       .limit(1),
   ]);
+
+  // Resolve player profiles for the 7-day top performers in ranked order.
+  const topPlayerIds = recentRatings.map((r) => r.playerId);
+  const topProfiles = topPlayerIds.length > 0
+    ? await db
+        .select(playerSummaryColumns)
+        .from(playerStatsTable)
+        .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
+        .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+        .where(and(
+          eq(playerStatsTable.periodType, "last5"),
+          inArray(playerStatsTable.playerId, topPlayerIds),
+        ))
+    : [];
+  const profileMap = new Map(topProfiles.map((p) => [p.id, p]));
+  const topPerformersRaw = topPlayerIds
+    .map((id) => profileMap.get(id))
+    .filter((p): p is NonNullable<typeof p> => p !== undefined);
 
   // Batch-compute live form badges for topPerformers + trending candidates.
   const badgeCandidateIds = [

@@ -33,12 +33,12 @@ export default function Rankings() {
         <p className="text-muted-foreground text-sm">Dynamic leaderboards based on recent performance, minutes, and momentum.</p>
       </div>
 
-      {/* Featured Metric - Best Weekend Performances */}
+      {/* Featured Metric - Best Performances this week */}
       <Card className="border-secondary/30 shadow-lg shadow-secondary/5">
         <CardHeader className="bg-secondary/5 border-b border-border pb-4">
           <CardTitle className="text-lg uppercase tracking-tight flex items-center gap-2 text-foreground">
             <Star size={18} className="text-secondary fill-secondary" />
-            Best Weekend Performances
+            Best Performances this week
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

@@ -30,6 +30,10 @@ function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: num
 const router: IRouter = Router();
 
 router.get("/rankings", async (_req, res): Promise<void> => {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
   const [
     mostInFormRaw,
     bestWeekendPerformancesRaw,
@@ -71,10 +75,13 @@ router.get("/rankings", async (_req, res): Promise<void> => {
       })
       .from(matchLogsTable)
       .innerJoin(playersTable, eq(matchLogsTable.playerId, playersTable.id))
-      // Only real, rated appearances can be a "best performance" — brief
-      // cameos with no API-Football rating are excluded rather than sorted
-      // to the top by a null-as-highest ordering quirk.
-      .where(isNotNull(matchLogsTable.rating))
+      // Only real, rated appearances from the past 7 days qualify — brief
+      // cameos with no rating are excluded, and the window keeps results
+      // current rather than showing all-time highlights.
+      .where(and(
+        isNotNull(matchLogsTable.rating),
+        gte(matchLogsTable.date, sevenDaysAgoStr),
+      ))
       .orderBy(desc(matchLogsTable.rating))
       .limit(8),
     db
