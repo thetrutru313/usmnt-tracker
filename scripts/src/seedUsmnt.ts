@@ -373,9 +373,11 @@ async function main() {
     // Note: Yunus Musah did not make the final 26-man World Cup roster, so he
     // is deliberately left off this fixture's featured tags (2026-07-13 audit).
     { isNationalTeam: true, competition: "FIFA World Cup", daysFromNow: -4, hour: 15, venue: "AT&T Stadium, Arlington", homeTeam: "USA", awayTeam: "Belgium", homeScore: 1, awayScore: 4, status: "finished", tvNetwork: "Fox", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Matt Turner"] },
-    // CONCACAF Nations League - Group Stage window (next up after the World Cup).
-    { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 42, hour: 19, venue: "Allianz Field, Saint Paul", homeTeam: "USA", awayTeam: "Jamaica", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Weston McKennie", "Tyler Adams", "Antonee Robinson", "Ricardo Pepi", "Matt Turner"] },
-    { isNationalTeam: true, competition: "CONCACAF Nations League", daysFromNow: 46, hour: 20, venue: "Q2 Stadium, Austin", homeTeam: "USA", awayTeam: "Trinidad and Tobago", homeScore: null, awayScore: null, status: "scheduled", tvNetwork: "TNT", streamingService: "Fubo", broadcastLink: null, featured: ["Christian Pulisic", "Malik Tillman", "Folarin Balogun", "Timothy Weah", "Chris Richards"] },
+    // Future USMNT fixtures are intentionally NOT seeded here. Speculative
+    // entries with daysFromNow offsets caused phantom fixtures (e.g. Jamaica /
+    // Trinidad and Tobago) that couldn't be deleted because re-seeding
+    // recreated them. Real upcoming fixtures are sourced exclusively via
+    // syncNationalTeamFixtures() matching against API-Football's USMNT schedule.
   ];
 
   for (const f of fixtureDefs) {

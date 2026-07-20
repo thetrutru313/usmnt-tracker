@@ -114,6 +114,34 @@ app.listen(port, async (err) => {
     }
   })();
 
+  // One-time startup: remove phantom CONCACAF Nations League fixtures (USA vs
+  // Jamaica, USA vs Trinidad and Tobago) that were seeded as speculative entries.
+  // They don't correspond to real, announced matches. Idempotent — no-ops once
+  // the rows are gone. The syncNationalTeamFixtures() guard prevents recurrence.
+  (async () => {
+    try {
+      const phantomRows = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(
+          and(
+            eq(fixturesTable.homeTeam, "USA"),
+            eq(fixturesTable.competition, "CONCACAF Nations League"),
+            eq(fixturesTable.status, "scheduled"),
+            isNull(fixturesTable.apiFootballFixtureId),
+            inArray(fixturesTable.awayTeam, ["Jamaica", "Trinidad and Tobago"]),
+          ),
+        );
+      if (phantomRows.length === 0) return;
+      const ids = phantomRows.map((r) => r.id);
+      await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, ids));
+      await db.delete(fixturesTable).where(inArray(fixturesTable.id, ids));
+      logger.info({ removedIds: ids }, "Startup: removed phantom CONCACAF Nations League fixtures (Jamaica / T&T)");
+    } catch (err) {
+      logger.warn({ err }, "Startup: phantom Nations League fixture cleanup failed (non-fatal)");
+    }
+  })();
+
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
