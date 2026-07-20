@@ -2,3 +2,4 @@
 - [API-Football player search quirks](api-football-player-search.md) — search param rejects accents/multi-word names; surname collisions, nicknames, and compound surnames all need manual `/players/teams` verification before trusting a match.
 - [National-team caps/goals data source](national-team-caps-source.md) — ESPN/Wikidata both fail for career totals; Wikipedia infobox wikitext works but needs relevance-sort + title-match fixes.
 - [API-Football rate-limit queue](api-football-rate-limit-queue.md) — shared throttle must reserve slots synchronously or concurrent callers race and burst past the limit together.
+- [API-Football squad national flag unreliability](api-football-squad-national-flag.md) — `national: true` is omitted during international windows; name-based heuristic required alongside the flag check.

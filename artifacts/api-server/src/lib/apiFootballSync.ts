@@ -542,31 +542,63 @@ export async function runRepairPass({
  * which team(s) a player is currently registered with.
  */
 interface AfSquadEntry {
-  team: { id: number; name: string; logo: string | null };
+  team: { id: number; name: string; logo: string | null; national?: boolean };
   players: Array<{ id: number; name: string }>;
 }
 
 /**
+ * Returns true when a squad-entry team name looks like a national team.
+ *
+ * API-Football does not reliably set `team.national = true` during
+ * international windows — the field is sometimes omitted or set to false even
+ * for full national-team entries.  This heuristic catches the gap:
+ *
+ *   • Youth national teams (any country): name contains "U" + 2 digits, e.g.
+ *     "Germany U18", "United States U20", "USA U19".
+ *   • Senior US national teams: "USA" alone, or "United States" alone, or
+ *     the women's side "USA W".
+ *
+ * Over-matching is worse than under-matching here — we fall back to the stored
+ * club_id when in doubt, which is safe.
+ */
+function isLikelyNationalTeamName(name: string): boolean {
+  // Youth national team suffix — "U17" … "U23"
+  if (/\bU(1[5-9]|2[0-3])\b/.test(name)) return true;
+  // Senior US national squads (exact or near-exact name match)
+  const trimmed = name.trim();
+  return trimmed === "USA" || trimmed === "United States" || trimmed === "USA W";
+}
+
+/**
  * Asks API-Football which squad a player is currently in by calling
- * `/players/squads?player={id}`.  Returns the primary team entry, or null
- * when the player has no current squad data or the call fails.
+ * `/players/squads?player={id}`.  Returns the primary *club* team entry, or
+ * null when the player has no current squad data or the call fails.
  *
  * This is the authoritative source of "where is this player right now" — it
  * reflects current squad membership rather than historical stats, so it
  * handles mid-season transfers, loans, and pre-season moves without waiting
  * for stats data to accumulate under the new club.
+ *
+ * During international windows API-Football may list the national team
+ * call-up as the first (or only) entry.  We prefer any non-national entry so
+ * that we track the player's club fixtures rather than USMNT fixtures (which
+ * are curated separately).  If every entry is a national team — e.g. for a
+ * player who is currently between club contracts — we return null and let the
+ * caller fall back to the stored `players.club_id`.
  */
 async function fetchPlayerCurrentTeam(
   apiFootballPlayerId: number,
 ): Promise<{ teamId: number; teamName: string; logoUrl: string | null } | null> {
   try {
     const data = await afFetch<AfSquadEntry[]>(`/players/squads?player=${apiFootballPlayerId}`);
-    // The endpoint may return multiple entries when a player is on dual
-    // registration (loan + parent club).  Take the first, which API-Football
-    // typically orders as the active/primary club.
-    const first = data[0];
-    if (!first) return null;
-    return { teamId: first.team.id, teamName: first.team.name, logoUrl: first.team.logo };
+    if (!data.length) return null;
+    // Prefer a club (non-national) squad entry. During international windows,
+    // API-Football often lists the national team call-up first.  The `national`
+    // flag is unreliable — the API sometimes omits it — so we also apply a
+    // name-based heuristic to catch entries API-Football didn't flag correctly.
+    const entry = data.find((e) => e.team.national !== true && !isLikelyNationalTeamName(e.team.name)) ?? null;
+    if (!entry) return null; // Only national-team entries — fall back to stored club.
+    return { teamId: entry.team.id, teamName: entry.team.name, logoUrl: entry.team.logo };
   } catch (err) {
     logger.warn({ err, apiFootballPlayerId }, "fetchPlayerCurrentTeam: API call failed — will fall back to stored club");
     return null;
