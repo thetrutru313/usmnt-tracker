@@ -1385,6 +1385,74 @@ export async function syncApiFootballFixtures(
 }
 
 /**
+ * Purges upcoming seeded NT fixtures that API-Football has no knowledge of.
+ *
+ * A seeded NT fixture (no `api_football_fixture_id`) that is:
+ *   - still in the future, AND
+ *   - within the next 90 days (the window API-Football reliably covers), AND
+ *   - not matchable to any entry in `afFixtures` within ±1 day of its kickoff
+ *
+ * …is treated as a phantom (speculative seed entry that was never confirmed
+ * by the real fixture scheduler) and deleted from both `fixtures` and
+ * `fixture_players`.
+ *
+ * Extracted from `syncNationalTeamFixtures` so the loop can be integration-
+ * tested directly with a real DB and a controlled `afFixtures` list — avoiding
+ * the need to mock the API-Football HTTP client in integration tests.
+ *
+ * @param usaRows    USA-participant NT fixture rows read from the DB.
+ * @param afFixtures The flat list of AfFixtures returned by the USMNT seasons
+ *                   fetch (current + previous year concatenated).
+ * @param nowMs      Current epoch milliseconds — injectable for deterministic
+ *                   testing without clock manipulation.
+ */
+export async function purgePhantomNtFixtures(
+  usaRows: Array<{
+    id: number;
+    apiFootballFixtureId: number | null;
+    kickoff: Date;
+    homeTeam: string;
+    awayTeam: string;
+  }>,
+  afFixtures: AfFixture[],
+  nowMs: number,
+): Promise<{ phantomsPurged: number; failures: number }> {
+  // Using 90 days because API-Football typically lists fixtures 2–3 months out.
+  const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  let phantomsPurged = 0;
+  let failures = 0;
+
+  for (const row of usaRows) {
+    if (row.apiFootballFixtureId !== null) continue; // already bound — not a phantom
+    const kickoffMs = row.kickoff.getTime();
+    if (kickoffMs <= nowMs) continue; // past fixture — leave historical rows alone
+    if (kickoffMs > nowMs + NINETY_DAYS_MS) continue; // too far out — may not be in API-Football yet
+
+    // If no afFixture falls within ±1 day of this kickoff, it's unresolvable.
+    const hasApiMatch = afFixtures.some(
+      (af) => Math.abs(new Date(af.fixture.date).getTime() - kickoffMs) <= ONE_DAY_MS,
+    );
+    if (hasApiMatch) continue;
+
+    logger.warn(
+      { fixtureId: row.id, homeTeam: row.homeTeam, awayTeam: row.awayTeam, kickoff: row.kickoff },
+      "NT fixture sync: upcoming seeded fixture has no API-Football match within 90-day window — purging as phantom",
+    );
+    try {
+      await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, row.id));
+      await db.delete(fixturesTable).where(eq(fixturesTable.id, row.id));
+      phantomsPurged++;
+    } catch (err) {
+      logger.warn({ err, fixtureId: row.id }, "NT fixture sync: failed to purge phantom fixture");
+      failures++;
+    }
+  }
+
+  return { phantomsPurged, failures };
+}
+
+/**
  * Syncs scores and statuses for seeded national-team fixtures
  * (`is_national_team = true`) where USA is a participant. Because seeded rows
  * have no `api_football_fixture_id`, matching is done by kickoff date (±1 day)
@@ -1519,40 +1587,12 @@ export async function syncNationalTeamFixtures(): Promise<{
   }
 
   // Purge upcoming seeded NT fixtures that API-Football has no knowledge of.
-  // These are speculative entries (kickoff still in the future, never matched
-  // to an API-Football id) that don't correspond to real announced matches.
-  // A real fixture scheduled within the next 90 days would appear in API-
-  // Football's USMNT season schedule — if it doesn't, it's a phantom.
-  // Using 90 days because API-Football typically lists fixtures 2–3 months out.
-  const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-  const nowMs = Date.now();
-  let phantomsPurged = 0;
-
-  for (const row of usaRows) {
-    if (row.apiFootballFixtureId !== null) continue; // already bound — not a phantom
-    const kickoffMs = row.kickoff.getTime();
-    if (kickoffMs <= nowMs) continue; // past fixture — leave historical rows alone
-    if (kickoffMs > nowMs + NINETY_DAYS_MS) continue; // too far out — may not be in API-Football yet
-
-    // If no afFixture falls within ±1 day of this kickoff, it's unresolvable.
-    const hasApiMatch = afFixtures.some(
-      (af) => Math.abs(new Date(af.fixture.date).getTime() - kickoffMs) <= ONE_DAY_MS,
-    );
-    if (hasApiMatch) continue;
-
-    logger.warn(
-      { fixtureId: row.id, homeTeam: row.homeTeam, awayTeam: row.awayTeam, kickoff: row.kickoff },
-      "NT fixture sync: upcoming seeded fixture has no API-Football match within 90-day window — purging as phantom",
-    );
-    try {
-      await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, row.id));
-      await db.delete(fixturesTable).where(eq(fixturesTable.id, row.id));
-      phantomsPurged++;
-    } catch (err) {
-      logger.warn({ err, fixtureId: row.id }, "NT fixture sync: failed to purge phantom fixture");
-      failures++;
-    }
-  }
+  const { phantomsPurged, failures: phantomFailures } = await purgePhantomNtFixtures(
+    usaRows,
+    afFixtures,
+    Date.now(),
+  );
+  failures += phantomFailures;
 
   const result = { fixturesChecked: usaRows.length, fixturesUpdated, idsBound, phantomsPurged, failures };
   logger.info(result, "National-team fixture sync complete");
