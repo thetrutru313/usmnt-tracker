@@ -182,6 +182,7 @@ const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingS
 
   // ── International / national team ─────────────────────────────────────────
   "FIFA World Cup":          { tvNetwork: "FOX",        streamingService: "FOX Sports App" },
+  "World Cup - U17":         { tvNetwork: null,         streamingService: "FIFA+" },
   "FIFA Club World Cup":     { tvNetwork: null,         streamingService: "DAZN" },
   "CONCACAF Nations League": { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
   "CONCACAF Gold Cup":       { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },

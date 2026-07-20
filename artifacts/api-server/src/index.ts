@@ -189,6 +189,26 @@ app.listen(port, async (err) => {
     }
   })();
 
+  // One-time startup: backfill FIFA+ streaming info on existing U17 World Cup
+  // fixtures. New fixtures will get the value from BROADCAST_BY_LEAGUE during
+  // sync; this covers rows already in the DB. Idempotent.
+  (async () => {
+    try {
+      const result = await db.execute(sql`
+        UPDATE fixtures
+        SET streaming_service = 'FIFA+'
+        WHERE competition = 'World Cup - U17'
+          AND (streaming_service IS NULL OR streaming_service != 'FIFA+')
+      `);
+      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+      if (rowCount > 0) {
+        logger.info({ rowCount }, "Startup: backfilled FIFA+ streaming info on U17 World Cup fixtures");
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup: U17 World Cup streaming backfill failed (non-fatal)");
+    }
+  })();
+
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
