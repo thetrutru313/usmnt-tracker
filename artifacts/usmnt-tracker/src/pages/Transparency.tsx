@@ -108,27 +108,27 @@ function SingleMonthCard({ month }: { month: TransparencyMonth }) {
       <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
         {name} — first report
       </p>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         {[
           {
             label: "Raised",
-            value: `$${dollars(month.donationsCents)}`,
+            value: `${dollars(month.donationsCents)}`,
             color: "text-green-400",
           },
           {
             label: "Expenses",
-            value: `$${dollars(month.expensesCents)}`,
+            value: `${dollars(month.expensesCents)}`,
             color: "text-foreground",
           },
           {
             label: "Goal Foundation",
-            value: `$${dollars(month.goalFoundationCents)}`,
+            value: `${dollars(month.goalFoundationCents)}`,
             color: "text-primary",
           },
         ].map(({ label, value, color }) => (
           <div key={label} className="text-center">
-            <p className={`text-xl font-bold font-mono ${color}`}>{value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+            <p className={`text-base sm:text-xl font-bold font-mono ${color}`}>{value}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{label}</p>
           </div>
         ))}
       </div>
@@ -277,34 +277,34 @@ export default function Transparency() {
         <div className="space-y-8">
           {/* All-time totals */}
           {totals && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {[
                 {
                   label: "Total Raised",
-                  value: `$${dollars(totals.totalDonationsCents)}`,
+                  value: `${dollars(totals.totalDonationsCents)}`,
                   color: "text-green-400",
                   sub: "from Buy Me a Coffee",
                 },
                 {
                   label: "Operating Costs",
-                  value: `$${dollars(totals.totalExpensesCents)}`,
+                  value: `${dollars(totals.totalExpensesCents)}`,
                   color: "text-foreground",
                   sub: "APIs, hosting, Replit",
                 },
                 {
                   label: "Goal Foundation",
-                  value: `$${dollars(totals.totalGoalFoundationCents)}`,
+                  value: `${dollars(totals.totalGoalFoundationCents)}`,
                   color: "text-primary",
                   sub: "donated so far",
                 },
               ].map(({ label, value, color, sub }) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-border bg-card p-4 text-center"
+                  className="rounded-xl border border-border bg-card p-2 sm:p-4 text-center"
                 >
-                  <p className={`text-2xl font-bold font-mono ${color}`}>{value}</p>
-                  <p className="text-xs font-semibold mt-1">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+                  <p className={`text-base sm:text-2xl font-bold font-mono ${color}`}>{value}</p>
+                  <p className="text-[10px] sm:text-xs font-semibold mt-1 leading-tight">{label}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</p>
                 </div>
               ))}
             </div>
