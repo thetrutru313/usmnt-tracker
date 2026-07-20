@@ -1,6 +1,6 @@
 /**
- * Regression guard: confirms that GET /fixtures?scope=upcoming excludes
- * non-national-team fixture cards that have zero fixture_players entries.
+ * Regression guard: confirms that GET /fixtures hides upcoming non-national-team
+ * fixture cards that have zero fixture_players entries, regardless of scope.
  *
  * ## Why this matters
  * When a player transfers away from a club, `purgeStaleTransferredPlayerLinks`
@@ -8,21 +8,23 @@
  * a historical record. Without a filter, the fixture card still appears in the
  * UI but shows zero player chips — confusing and misleading.
  *
- * The fix adds an EXISTS filter on `fixture_players` for date-scoped requests
- * (`scope=upcoming`, `scope=today`), so only fixtures with at least one
- * currently-linked tracked player are returned.
+ * The Fixtures page calls scope=all (so it can render both upcoming and recent
+ * finished matches in one request), so the filter must apply regardless of scope
+ * parameter. It is gated on kickoff time — upcoming chipless fixtures are hidden,
+ * past chipless fixtures remain as historical records.
  *
  * ## What is tested
- * 1. A future non-national-team fixture with NO fixture_players entry is
- *    NOT returned by GET /fixtures?scope=upcoming.
- * 2. A future non-national-team fixture WITH a fixture_players entry IS
- *    returned by GET /fixtures?scope=upcoming.
- * 3. Adding a fixture_players entry to the formerly-chipless fixture causes it
- *    to appear in the response immediately (no restart needed).
- * 4. A future national-team fixture with NO fixture_players entry IS returned
- *    (national-team fixtures are always shown regardless of player links).
- * 5. The filter does not apply when scope is absent (no scope param) — the
- *    route is used for historical/admin views; chipless old fixtures are fine there.
+ * 1. A future non-NT fixture with NO fixture_players entry is NOT returned by
+ *    GET /fixtures?scope=upcoming.
+ * 2. A future non-NT fixture WITH a fixture_players entry IS returned.
+ * 3. Adding a fixture_players link to a chipless fixture makes it appear
+ *    immediately (no restart needed).
+ * 4. A future national-team fixture with NO fixture_players IS returned
+ *    (NT fixtures always show regardless of player links).
+ * 5. A future chipless non-NT fixture is also hidden when scope=all (Fixtures
+ *    page path).
+ * 6. A PAST chipless non-NT fixture IS returned even without a scope param —
+ *    historical records must remain visible.
  *
  * ## Test data isolation
  * Every inserted row uses a name prefix "__CFF_" so cleanup is predictable.
@@ -229,22 +231,43 @@ describe("GET /fixtures?scope=upcoming — chipless club fixture filter", () => 
     expect(ntFixture).toBeDefined();
   });
 
-  it("does NOT filter chipless club fixtures when no scope param is provided", async () => {
-    // The no-scope route is used for historical/admin views; filtering there
-    // would hide legitimate past records. Chipless upcoming fixtures should
-    // still be visible when no scope is requested.
-    const club = await insertClub("__CFF NoScope Club__");
+  it("hides an upcoming chipless club fixture even when scope=all is used (Fixtures page path)", async () => {
+    // The Fixtures page calls scope=all so it can render both upcoming and recent
+    // finished games. The filter must still suppress chipless upcoming fixtures
+    // on this path — scope=all is NOT a bypass.
+    const club = await insertClub("__CFF ScopeAll Club__");
     const fixture = await insertFixture({
-      homeTeam: "__CFF NoScope Home FC__",
-      awayTeam: "__CFF NoScope Away FC__",
+      homeTeam: "__CFF ScopeAll Home FC__",
+      awayTeam: "__CFF ScopeAll Away FC__",
     });
     // No fixture_players link.
 
-    const res = await request(app).get("/api/fixtures").expect(200);
-    const fixtures = parseUpcoming(res.body); // schema is same regardless of scope
+    const res = await request(app).get("/api/fixtures?scope=all").expect(200);
+    const fixtures = parseUpcoming(res.body);
 
-    const noScopeFixture = fixtures.find((f) => f.id === fixture.id);
-    expect(noScopeFixture).toBeDefined();
+    const scopeAllFixture = fixtures.find((f) => f.id === fixture.id);
+    expect(scopeAllFixture).toBeUndefined();
+
+    void club;
+  });
+
+  it("always shows a PAST chipless club fixture — historical records are preserved", async () => {
+    // A fixture whose kickoff has already passed is a historical record even if
+    // its player links were later removed (e.g. the player transferred). It must
+    // remain visible so past match history is not lost.
+    const club = await insertClub("__CFF Past Club__");
+    const fixture = await insertFixture({
+      homeTeam: "__CFF Past Home FC__",
+      awayTeam: "__CFF Past Away FC__",
+      kickoffOffsetHours: -48, // 2 days in the past
+    });
+    // No fixture_players link — simulates a post-transfer purge.
+
+    const res = await request(app).get("/api/fixtures").expect(200);
+    const fixtures = parseUpcoming(res.body);
+
+    const pastFixture = fixtures.find((f) => f.id === fixture.id);
+    expect(pastFixture).toBeDefined();
 
     void club;
   });
