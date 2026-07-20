@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ListFixturesQueryParams, ListFixturesResponse, GetFixtureParams, GetFixtureResponse } from "@workspace/api-zod";
 import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, clubsTable } from "@workspace/db";
-import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "../lib/pickBestNtFixtureId.js";
 import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
 import { z } from "zod/v4";
@@ -214,14 +214,30 @@ router.get("/fixtures", async (req, res): Promise<void> => {
   // Exclude club friendlies; keep national-team fixtures regardless of competition name.
   const conditions = [or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%"))];
 
+  // For date-scoped requests hide non-national-team fixture cards that have no
+  // fixture_players entries. This happens when a player transfers away from a
+  // club: purgeStaleTransferredPlayerLinks removes the link rows but the fixture
+  // row itself is kept as a historical record. Filtering here prevents empty
+  // "ghost" cards from appearing in the UI for clubs that no longer have any
+  // tracked players.
+  //
+  // National-team fixtures are never filtered — they're curated/seeded and
+  // always relevant regardless of which players are currently linked.
+  const hasTrackedPlayer = or(
+    eq(fixturesTable.isNationalTeam, true),
+    sql`EXISTS (SELECT 1 FROM fixture_players fp WHERE fp.fixture_id = ${fixturesTable.id})`,
+  );
+
   if (scope === "today") {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(startOfDay);
     endOfDay.setDate(endOfDay.getDate() + 1);
     conditions.push(gte(fixturesTable.kickoff, startOfDay), lt(fixturesTable.kickoff, endOfDay));
+    if (!playerId) conditions.push(hasTrackedPlayer);
   } else if (scope === "upcoming") {
     conditions.push(gte(fixturesTable.kickoff, new Date()));
+    if (!playerId) conditions.push(hasTrackedPlayer);
   }
 
   if (playerId) {
