@@ -205,6 +205,20 @@ export function isReserveOrYouthTeam(name: string): boolean {
 }
 
 /**
+ * Returns true when a team name refers to a US men's national team — either
+ * the senior side ("USA") or a men's youth age-group side ("USA U17",
+ * "USA U20", "United States U17", etc.).
+ *
+ * Deliberately excludes the women's programme: "USA W" and
+ * "United States W" do NOT match.
+ */
+function isUsMensNationalTeamName(name: string): boolean {
+  if (name === "USA") return true;
+  // Men's youth age-group pattern: "USA U17", "USA U20", "United States U20", …
+  return /^(USA|United States) U\d+$/.test(name);
+}
+
+/**
  * Returns true when the fixture should be skipped for player tagging.
  *
  * A fixture is treated as a reserve/youth entry only when the club's own
@@ -577,6 +591,95 @@ export async function runRepairPass({
       );
     }
   }
+}
+
+/**
+ * Repair pass for national-team fixtures: ensures every player who has a
+ * `fixture_players` link on a *finished* national-team fixture in a given
+ * competition is also linked to all *upcoming* national-team fixtures in the
+ * same competition.
+ *
+ * ## Why this is safe and future-proof
+ * Currently there are no tracked youth national-team players, so this pass is a
+ * complete no-op.  When U20/U17 roster data is eventually added and players
+ * accumulate match history, links appear automatically the next time the sync
+ * runs — no separate migration needed.
+ *
+ * Using finished-fixture history (rather than a hardcoded player list) means
+ * the pass is self-healing: it never over-links (a player can only be linked
+ * to a competition they've already appeared in) and never requires schema
+ * changes when new age-group teams are added.
+ *
+ * club_id is left NULL for national-team links because the player is
+ * representing their country, not a club.  `purgeStaleTransferredPlayerLinks`
+ * skips rows where club_id IS NULL, so these links are permanent until the
+ * fixture itself is deleted.
+ */
+export async function runNationalTeamRepairPass(): Promise<{ linked: number }> {
+  // Find all upcoming / live national-team fixtures.
+  const upcoming = await db
+    .select({ id: fixturesTable.id, competition: fixturesTable.competition })
+    .from(fixturesTable)
+    .where(
+      and(
+        eq(fixturesTable.isNationalTeam, true),
+        inArray(fixturesTable.status, ["scheduled", "live"]),
+      ),
+    );
+
+  if (upcoming.length === 0) return { linked: 0 };
+
+  // Group upcoming fixtures by competition for efficient per-competition lookup.
+  const byCompetition = new Map<string, number[]>();
+  for (const f of upcoming) {
+    const ids = byCompetition.get(f.competition) ?? [];
+    ids.push(f.id);
+    byCompetition.set(f.competition, ids);
+  }
+
+  let linked = 0;
+
+  for (const [competition, fixtureIds] of byCompetition) {
+    // Find players who have ever played in a *finished* NT fixture in this
+    // competition — they should be linked to all upcoming ones too.
+    const veterans = await db
+      .selectDistinct({ playerId: fixturePlayersTable.playerId })
+      .from(fixturePlayersTable)
+      .innerJoin(fixturesTable, eq(fixturePlayersTable.fixtureId, fixturesTable.id))
+      .where(
+        and(
+          eq(fixturesTable.isNationalTeam, true),
+          eq(fixturesTable.competition, competition),
+          eq(fixturesTable.status, "finished"),
+        ),
+      );
+
+    if (veterans.length === 0) continue;
+    const playerIds = veterans.map((r) => r.playerId);
+
+    for (const fixtureId of fixtureIds) {
+      const existing = await db
+        .select({ playerId: fixturePlayersTable.playerId })
+        .from(fixturePlayersTable)
+        .where(eq(fixturePlayersTable.fixtureId, fixtureId));
+
+      const alreadyLinked = new Set(existing.map((r) => r.playerId));
+      const toLink = playerIds.filter((pid) => !alreadyLinked.has(pid));
+
+      if (toLink.length > 0) {
+        await db
+          .insert(fixturePlayersTable)
+          .values(toLink.map((playerId) => ({ fixtureId, playerId, clubId: null })));
+        logger.info(
+          { fixtureId, competition, linked: toLink.length },
+          "NT repair pass: backfilled fixture_players links for national-team fixture",
+        );
+        linked += toLink.length;
+      }
+    }
+  }
+
+  return { linked };
 }
 
 // ─── Player-to-team resolution helpers ───────────────────────────────────────
@@ -1068,7 +1171,13 @@ export async function syncApiFootballFixtures(
       const broadcast = broadcastFor(f.league.name);
       const values = {
         apiFootballFixtureId: f.fixture.id,
-        isNationalTeam: false,
+        // Mark as national-team if either participant is a US men's national
+        // team (senior or youth).  This ensures U20/U17 fixtures that enter
+        // via the club sync bypass the chipless-fixture filter and always
+        // appear on the Fixtures page even before roster data is available.
+        isNationalTeam:
+          isUsMensNationalTeamName(f.teams.home.name) ||
+          isUsMensNationalTeamName(f.teams.away.name),
         competition: f.league.name,
         kickoff: new Date(f.fixture.date),
         venue: f.fixture.venue.name ?? "TBD",
@@ -1146,6 +1255,15 @@ export async function syncApiFootballFixtures(
     // Lazy require avoids circular import: playerStatsSync → apiFootballSync.
     const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
     dispatchPostMatchTriggers(allNewlyFinished, syncStatsForFinishedFixture);
+  }
+
+  // National-team repair pass: link players with finished NT match history to
+  // all upcoming NT fixtures in the same competition.  No-op today (no tracked
+  // youth players), but activates automatically when roster data is added.
+  try {
+    await runNationalTeamRepairPass();
+  } catch (err) {
+    logger.warn({ err }, "NT repair pass failed — will retry on next sync cycle");
   }
 
   // Purge postponed fixtures whose original kickoff was more than 24 hours ago.

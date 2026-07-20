@@ -7,7 +7,7 @@ import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
-import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
 const rawPort = process.env["PORT"];
 
@@ -139,6 +139,33 @@ app.listen(port, async (err) => {
       logger.info({ removedIds: ids }, "Startup: removed phantom CONCACAF Nations League fixtures (Jamaica / T&T)");
     } catch (err) {
       logger.warn({ err }, "Startup: phantom Nations League fixture cleanup failed (non-fatal)");
+    }
+  })();
+
+  // One-time startup: flag US men's national team fixtures (youth and senior)
+  // as is_national_team = true. These rows arrive via the club fixture sync
+  // with is_national_team = false because the upsert path hardcodes false;
+  // that path is now fixed, but existing rows need a one-time correction.
+  // Idempotent — no-ops once all rows are already flagged.
+  (async () => {
+    try {
+      const result = await db.execute(sql`
+        UPDATE fixtures
+        SET is_national_team = true
+        WHERE is_national_team = false
+          AND (
+            home_team = 'USA'
+            OR home_team ~ '^(USA|United States) U[0-9]+'
+            OR away_team = 'USA'
+            OR away_team ~ '^(USA|United States) U[0-9]+'
+          )
+      `);
+      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+      if (rowCount > 0) {
+        logger.info({ rowCount }, "Startup: flagged US men's national team fixtures as is_national_team=true");
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup: US national team fixture flag backfill failed (non-fatal)");
     }
   })();
 
