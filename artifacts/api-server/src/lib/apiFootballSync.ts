@@ -549,24 +549,163 @@ interface AfSquadEntry {
 /**
  * Returns true when a squad-entry team name looks like a national team.
  *
- * API-Football does not reliably set `team.national = true` during
- * international windows — the field is sometimes omitted or set to false even
- * for full national-team entries.  This heuristic catches the gap:
+ * This is the name-based backstop used when the API's `national` flag is
+ * absent or incorrect (e.g. United States U20 returns national=false from
+ * `/teams?id=10306`).  The ID-based cache in `isNationalTeamId` is the
+ * primary check; this function is secondary.
  *
  *   • Youth national teams (any country): name contains "U" + 2 digits, e.g.
- *     "Germany U18", "United States U20", "USA U19".
- *   • Senior US national teams: "USA" alone, or "United States" alone, or
- *     the women's side "USA W".
- *
- * Over-matching is worse than under-matching here — we fall back to the stored
- * club_id when in doubt, which is safe.
+ *     "Germany U18", "United States U20", "USA U19".  Note this also matches
+ *     club reserve names like "RB Leipzig U19" — acceptable because those
+ *     players are preserved via the stored club_id fallback (their stats
+ *     correctly identify them when they later enter the senior squad).
+ *   • Senior US national teams: "USA" alone or "United States" alone.
+ *   • Women's sides: any name ending in " W" (e.g. "Houston Dash W",
+ *     "USA W").  All tracked players are male; women's team entries should
+ *     never become a player's primary club.
  */
-function isLikelyNationalTeamName(name: string): boolean {
-  // Youth national team suffix — "U17" … "U23"
-  if (/\bU(1[5-9]|2[0-3])\b/.test(name)) return true;
-  // Senior US national squads (exact or near-exact name match)
+/** @internal Exported for unit-testing only — not part of the public API. */
+export function isLikelyNationalTeamName(name: string): boolean {
   const trimmed = name.trim();
-  return trimmed === "USA" || trimmed === "United States" || trimmed === "USA W";
+  // Women's side — trailing " W" (e.g. "Houston Dash W", "USA W")
+  if (trimmed.endsWith(" W")) return true;
+  // Youth national team suffix — "U17" … "U23"
+  if (/\bU(1[5-9]|2[0-3])\b/.test(trimmed)) return true;
+  // Senior US national squads (exact match)
+  return trimmed === "USA" || trimmed === "United States";
+}
+
+/**
+ * In-process cache: API-Football team id → is this a national team?
+ *
+ * Populated lazily via `/teams?id={teamId}` on first encounter.  Persists for
+ * the lifetime of the server process, so each unique team id costs at most one
+ * extra API call across all sync runs.  The handful of national-team ids that
+ * recur across every player (e.g. 2384 = USA senior) are looked up once and
+ * then served from cache for every subsequent player.
+ */
+const nationalTeamIdCache = new Map<number, boolean>();
+
+/**
+ * Returns true when the given API-Football team id represents a national team.
+ *
+ * Resolution order:
+ *  1. In-process cache (instant, no API call).
+ *  2. Name fast-path for known senior US names ("USA", "United States") and
+ *     women's suffixes — avoids an API call for the most common entries.
+ *  3. `/teams?id={teamId}` lookup — stores the `national` flag; falls back to
+ *     `isLikelyNationalTeamName` when the API flag is wrong (e.g. US U20
+ *     returns national=false despite being a national youth side).
+ *  4. Name-heuristic-only fallback when the API call fails.
+ */
+async function isNationalTeamId(teamId: number, teamName: string): Promise<boolean> {
+  if (nationalTeamIdCache.has(teamId)) return nationalTeamIdCache.get(teamId)!;
+
+  // Fast-path for senior US national teams and women's entries — saves an API
+  // call for the most common squad entries we encounter.
+  const trimmed = teamName.trim();
+  if (trimmed === "USA" || trimmed === "United States" || trimmed.endsWith(" W")) {
+    nationalTeamIdCache.set(teamId, true);
+    return true;
+  }
+
+  // Look up the team's national flag from the API.  The flag is authoritative
+  // for most teams; isLikelyNationalTeamName is a backstop for the cases where
+  // the API returns the wrong value (confirmed: US U20 / team 10306 → false).
+  try {
+    const results = await afFetch<AfTeamSearchResult[]>(`/teams?id=${teamId}`);
+    const isNational =
+      results.length > 0 &&
+      (results[0].team.national === true || isLikelyNationalTeamName(results[0].team.name));
+    nationalTeamIdCache.set(teamId, isNational);
+    return isNational;
+  } catch (err) {
+    logger.warn({ err, teamId, teamName }, "isNationalTeamId: /teams lookup failed — using name heuristic");
+    const isNational = isLikelyNationalTeamName(teamName);
+    nationalTeamIdCache.set(teamId, isNational);
+    return isNational;
+  }
+}
+
+/**
+ * API-Football player-statistics response shape — `/players?id={id}&season={year}`.
+ * Each element in `statistics` represents one competition the player appeared in;
+ * multiple entries may share the same `team.id` (e.g. Premier League + FA Cup
+ * both for Fulham).  Summing minutes by team id identifies the primary club.
+ */
+interface AfPlayerStatsEntry {
+  player: { id: number; name: string };
+  statistics: Array<{
+    team: { id: number; name: string; logo: string | null };
+    league: { id: number; name: string; country: string; season: number };
+    games: { minutes: number | null; appearences: number | null };
+  }>;
+}
+
+/**
+ * Secondary club-resolution strategy used when `/players/squads` returns only
+ * national-team entries (e.g. during a Gold Cup or Nations League window).
+ *
+ * Calls `/players?id={id}&season={year}` and sums `games.minutes` by team,
+ * filtering out national teams via the ID cache.  The team with the most total
+ * minutes across all competitions is returned as the player's current club.
+ *
+ * Tries the current calendar year first (covers MLS, which uses Jan–Dec
+ * seasons), then year-1 (covers European leagues where season 2024 = Aug
+ * 2024 – May 2025).  Returns null when neither season yields a resolvable club.
+ */
+async function fetchPlayerCurrentTeamFromStats(
+  apiFootballPlayerId: number,
+): Promise<{ teamId: number; teamName: string; logoUrl: string | null } | null> {
+  const currentYear = new Date().getUTCFullYear();
+  for (const season of [currentYear, currentYear - 1]) {
+    try {
+      const results = await afFetch<AfPlayerStatsEntry[]>(`/players?id=${apiFootballPlayerId}&season=${season}`);
+      if (!results.length || !results[0].statistics.length) continue;
+
+      // Aggregate minutes per team, skipping national-team entries.
+      const minutesByTeam = new Map<number, { minutes: number; teamName: string; logoUrl: string | null }>();
+      for (const stat of results[0].statistics) {
+        if (await isNationalTeamId(stat.team.id, stat.team.name)) continue;
+        const minutes = stat.games.minutes ?? 0;
+        const existing = minutesByTeam.get(stat.team.id);
+        if (existing) {
+          existing.minutes += minutes;
+        } else {
+          minutesByTeam.set(stat.team.id, { minutes, teamName: stat.team.name, logoUrl: stat.team.logo });
+        }
+      }
+      if (minutesByTeam.size === 0) continue;
+
+      // Pick the team with the most accumulated minutes.
+      let bestTeamId = 0;
+      let bestMinutes = -1;
+      let bestName = "";
+      let bestLogo: string | null = null;
+      for (const [teamId, entry] of minutesByTeam) {
+        if (entry.minutes > bestMinutes) {
+          bestTeamId = teamId;
+          bestMinutes = entry.minutes;
+          bestName = entry.teamName;
+          bestLogo = entry.logoUrl;
+        }
+      }
+
+      logger.info(
+        { apiFootballPlayerId, teamId: bestTeamId, teamName: bestName, season, minutes: bestMinutes },
+        "fetchPlayerCurrentTeam: resolved via season-stats fallback (squads returned only national-team entries)",
+      );
+      return { teamId: bestTeamId, teamName: bestName, logoUrl: bestLogo };
+    } catch (err) {
+      logger.warn({ err, apiFootballPlayerId, season }, "fetchPlayerCurrentTeam: season-stats fallback failed for season");
+    }
+  }
+
+  logger.warn(
+    { apiFootballPlayerId },
+    "fetchPlayerCurrentTeam: season-stats fallback found no club data — will fall back to stored club_id",
+  );
+  return null;
 }
 
 /**
@@ -579,12 +718,16 @@ function isLikelyNationalTeamName(name: string): boolean {
  * handles mid-season transfers, loans, and pre-season moves without waiting
  * for stats data to accumulate under the new club.
  *
- * During international windows API-Football may list the national team
- * call-up as the first (or only) entry.  We prefer any non-national entry so
- * that we track the player's club fixtures rather than USMNT fixtures (which
- * are curated separately).  If every entry is a national team — e.g. for a
- * player who is currently between club contracts — we return null and let the
- * caller fall back to the stored `players.club_id`.
+ * During international windows API-Football may list only national-team
+ * call-ups.  When that happens the function falls back to
+ * `fetchPlayerCurrentTeamFromStats`, which resolves the club from the
+ * player's season-statistics data — unaffected by international windows.
+ *
+ * National-team identification uses a two-layer check:
+ *  1. `isNationalTeamId` — looks up the team's `national` flag via
+ *     `/teams?id={teamId}` (cached per team id for the process lifetime).
+ *  2. `isLikelyNationalTeamName` — name-pattern backstop for cases where the
+ *     API flag is wrong (e.g. US U20 returns national=false).
  */
 async function fetchPlayerCurrentTeam(
   apiFootballPlayerId: number,
@@ -592,13 +735,21 @@ async function fetchPlayerCurrentTeam(
   try {
     const data = await afFetch<AfSquadEntry[]>(`/players/squads?player=${apiFootballPlayerId}`);
     if (!data.length) return null;
-    // Prefer a club (non-national) squad entry. During international windows,
-    // API-Football often lists the national team call-up first.  The `national`
-    // flag is unreliable — the API sometimes omits it — so we also apply a
-    // name-based heuristic to catch entries API-Football didn't flag correctly.
-    const entry = data.find((e) => e.team.national !== true && !isLikelyNationalTeamName(e.team.name)) ?? null;
-    if (!entry) return null; // Only national-team entries — fall back to stored club.
-    return { teamId: entry.team.id, teamName: entry.team.name, logoUrl: entry.team.logo };
+
+    // Walk the squad entries and return the first non-national club.
+    for (const entry of data) {
+      if (!(await isNationalTeamId(entry.team.id, entry.team.name))) {
+        return { teamId: entry.team.id, teamName: entry.team.name, logoUrl: entry.team.logo };
+      }
+    }
+
+    // All squad entries are national teams — this is expected during
+    // international windows.  Try the season-stats fallback before giving up.
+    logger.info(
+      { apiFootballPlayerId, squadEntries: data.map((e) => e.team.name) },
+      "fetchPlayerCurrentTeam: all squad entries are national teams — trying season-stats fallback",
+    );
+    return await fetchPlayerCurrentTeamFromStats(apiFootballPlayerId);
   } catch (err) {
     logger.warn({ err, apiFootballPlayerId }, "fetchPlayerCurrentTeam: API call failed — will fall back to stored club");
     return null;
