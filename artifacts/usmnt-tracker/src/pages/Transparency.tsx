@@ -239,7 +239,7 @@ export default function Transparency() {
           . Operating costs include data APIs, Replit, and hosting. When
           donations exceed those costs, every extra dollar goes to the{" "}
           <a
-            href="https://goalfoundation.org"
+            href="https://goal-foundation.com"
             target="_blank"
             rel="noopener noreferrer"
             className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
