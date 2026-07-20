@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, desc, eq, gte, isNotNull, lt, notIlike, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt, notIlike, notInArray, or } from "drizzle-orm";
 import {
   fixturesTable,
   newsArticlesTable,
@@ -46,6 +46,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .where(and(
         gte(fixturesTable.kickoff, startOfDay),
         lt(fixturesTable.kickoff, endOfDay),
+        notInArray(fixturesTable.status, ["finished", "cancelled", "postponed"]),
         or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%")),
       ))
       .orderBy(asc(fixturesTable.kickoff)),
@@ -54,6 +55,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .from(fixturesTable)
       .where(and(
         gte(fixturesTable.kickoff, endOfDay),
+        notInArray(fixturesTable.status, ["finished", "cancelled", "postponed"]),
         or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%")),
       ))
       .orderBy(asc(fixturesTable.kickoff))
