@@ -44,6 +44,11 @@ import {
 } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { ListFixturesResponse } from "@workspace/api-zod";
+import {
+  purgeStaleTransferredPlayerLinks,
+  runRepairPass,
+} from "../apiFootballSync.js";
+import type { AfFixture } from "../fixtureReconciliation.js";
 
 // ─── Cleanup state ─────────────────────────────────────────────────────────
 
@@ -271,4 +276,135 @@ describe("GET /fixtures?scope=upcoming — chipless club fixture filter", () => 
 
     void club;
   });
+
+  it(
+    "fixture card reappears after player transfers back to the original club and runRepairPass runs",
+    async () => {
+      // This test covers the full round-trip:
+      //
+      //   1. Player at Club A, linked to Club A's upcoming fixture  → fixture visible
+      //   2. Player transfers to Club B (players.club_id updated)
+      //   3. purgeStaleTransferredPlayerLinks removes the stale Club A link
+      //      → fixture disappears (chipless)
+      //   4. Player transfers back to Club A (players.club_id restored)
+      //   5. runRepairPass(Club A) recreates the fixture_players link
+      //      → fixture reappears in GET /fixtures?scope=upcoming
+      //
+      // The apiFootballFixtureId on the fixture is required so runRepairPass
+      // can match the DB row via its freshById map.
+
+      // ── 1a. Insert Club A (home of the fixture) and Club B (temporary club) ─
+      const clubA = await insertClub("__CFF Return Club A__");
+      const clubB = await insertClub("__CFF Return Club B__");
+
+      // ── 1b. Insert the player — initially at Club A ───────────────────────
+      const player = await insertPlayer("__CFF Return Player__", clubA.id);
+
+      // ── 1c. Insert an upcoming fixture belonging to Club A ─────────────────
+      //    A stable fake API-Football fixture id is required by runRepairPass.
+      const FAKE_API_ID = 9_740_001; // large, collision-free with other suites
+      const FAKE_TEAM_ID = 974_001;
+
+      const [fixtureRow] = await db
+        .insert(fixturesTable)
+        .values({
+          isNationalTeam: false,
+          competition: "__CFF Return League__",
+          kickoff: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+          venue: "__CFF Return Stadium__",
+          homeTeam: "__CFF Return Club A__",
+          awayTeam: "__CFF Return Opponent__",
+          status: "scheduled",
+          apiFootballFixtureId: FAKE_API_ID,
+        })
+        .returning({ id: fixturesTable.id });
+      if (!fixtureRow) throw new Error("Return fixture insert failed");
+      insertedFixtureIds.push(fixtureRow.id);
+
+      // Link the player to the fixture (club_id = Club A, as a fresh sync would).
+      await linkPlayer(fixtureRow.id, player.id, clubA.id);
+
+      // Confirm the fixture is visible at this point.
+      const res1 = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      expect(
+        parseUpcoming(res1.body).find((f) => f.id === fixtureRow.id),
+        "fixture must be visible before the transfer",
+      ).toBeDefined();
+
+      // ── 2. Simulate a transfer away: move the player to Club B ────────────
+      await db
+        .update(playersTable)
+        .set({ clubId: clubB.id })
+        .where(eq(playersTable.id, player.id));
+
+      // ── 3. Purge: removes the stale Club A link ───────────────────────────
+      //    Scope the purge to only the players inserted by this test.
+      const { purged } = await purgeStaleTransferredPlayerLinks({
+        scopeToPlayerIds: [player.id],
+      });
+      expect(purged, "purge should remove at least the stale Club A link").toBeGreaterThanOrEqual(1);
+
+      // The fixture must now be hidden (chipless).
+      const res2 = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      expect(
+        parseUpcoming(res2.body).find((f) => f.id === fixtureRow.id),
+        "fixture must be hidden after the player transfers away (chipless)",
+      ).toBeUndefined();
+
+      // ── 4. Simulate the return transfer: move the player back to Club A ───
+      await db
+        .update(playersTable)
+        .set({ clubId: clubA.id })
+        .where(eq(playersTable.id, player.id));
+
+      // ── 5. Repair pass: recreates the Club A link ─────────────────────────
+      //    Build a minimal AfFixture stub so runRepairPass can match the
+      //    DB fixture via its apiFootballFixtureId.
+      const freshById = new Map<number, AfFixture>([
+        [
+          FAKE_API_ID,
+          {
+            fixture: {
+              id: FAKE_API_ID,
+              date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+              status: { short: "NS", elapsed: null },
+              venue: { name: "__CFF Return Stadium__" },
+            },
+            league: { name: "__CFF Return League__" },
+            teams: {
+              home: { id: FAKE_TEAM_ID, name: "__CFF Return Club A__", logo: null },
+              away: { id: FAKE_TEAM_ID + 1, name: "__CFF Return Opponent__", logo: null },
+            },
+            goals: { home: null, away: null },
+          },
+        ],
+      ]);
+
+      await runRepairPass({
+        club: { id: clubA.id, name: "__CFF Return Club A__" },
+        teamId: FAKE_TEAM_ID,
+        freshById,
+        clubPlayerIds: [player.id],
+      });
+
+      // ── 6. Fixture must reappear in the route response ────────────────────
+      const res3 = await request(app).get("/api/fixtures?scope=upcoming").expect(200);
+      const reappeared = parseUpcoming(res3.body).find((f) => f.id === fixtureRow.id);
+      expect(
+        reappeared,
+        "fixture must reappear after the player returns to Club A and runRepairPass runs",
+      ).toBeDefined();
+
+      // The player chip must be present in featuredPlayers.
+      const featuredIds = (reappeared!.featuredPlayers ?? []).map((p: { id: number }) => p.id);
+      expect(
+        featuredIds,
+        `player id=${player.id} must appear in featuredPlayers after the return transfer + repair pass`,
+      ).toContain(player.id);
+
+      // Keep TS happy for unused-variable lint; cleanup is handled by afterAll.
+      void clubB;
+    },
+    60_000,
+  );
 });
