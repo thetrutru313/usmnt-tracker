@@ -145,7 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { label: "Injuries",     path: "/injuries",    icon: HeartPulse,   onHover: () => prefetch(getListInjuriesQueryOptions()) },
     { label: "Transfers",    path: "/transfers",   icon: RefreshCw,    onHover: () => prefetch(getListTransfersQueryOptions()) },
     { label: "Rankings",     path: "/rankings",    icon: Trophy,       onHover: () => prefetch(getGetRankingsQueryOptions()) },
-    { label: "Schedule",     path: "/schedule",    icon: CalendarRange, onHover: () => prefetch(getListScheduleEventsQueryOptions()) },
+    { label: "USMNT Schedule", path: "/schedule",    icon: CalendarRange, onHover: () => prefetch(getListScheduleEventsQueryOptions()) },
     { label: "About",        path: "/about",       icon: Info },
     { label: "Transparency", path: "/transparency", icon: DollarSign,  onHover: () => prefetch(getListTransparencyMonthsQueryOptions()) },
   ]
