@@ -80,7 +80,7 @@ export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
 }
 
 interface AfTeamSearchResult {
-  team: { id: number; name: string; logo: string | null; national?: boolean };
+  team: { id: number; name: string; logo: string | null; national?: boolean; country?: string };
 }
 
 // API-Football's fixtures endpoint doesn't return US broadcast info on our
@@ -734,6 +734,43 @@ export function isLikelyNationalTeamName(name: string): boolean {
 const nationalTeamIdCache = new Map<number, boolean>();
 
 /**
+ * In-process cache: API-Football team id → country name.
+ *
+ * Populated as a side-effect whenever `/teams?id={teamId}` is called — either
+ * by `isNationalTeamId` (Phase A squad walk) or by `fetchTeamCountry` (new-
+ * club enrichment in `ensureClubForTeam`).  Ensures a genuinely new club
+ * costs at most one extra API call even if `isNationalTeamId` already fetched
+ * the team details earlier in the same sweep.
+ */
+const teamCountryCache = new Map<number, string>();
+
+/**
+ * Returns the country name for the given API-Football team id.
+ *
+ * Checks `teamCountryCache` first (populated as a side-effect of
+ * `isNationalTeamId`), then calls `/teams?id={teamId}` if needed.  Falls back
+ * to "Unknown" on error so the clubs row is always in a consistent state.
+ */
+async function fetchTeamCountry(teamId: number): Promise<string> {
+  if (teamCountryCache.has(teamId)) return teamCountryCache.get(teamId)!;
+  try {
+    const results = await afFetch<AfTeamSearchResult[]>(`/teams?id=${teamId}`);
+    const country = results[0]?.team?.country ?? "Unknown";
+    teamCountryCache.set(teamId, country);
+    // Also populate the national-team cache as a free side-effect.
+    if (!nationalTeamIdCache.has(teamId) && results.length > 0) {
+      const isNational =
+        results[0].team.national === true || isLikelyNationalTeamName(results[0].team.name);
+      nationalTeamIdCache.set(teamId, isNational);
+    }
+    return country;
+  } catch (err) {
+    logger.warn({ err, teamId }, "fetchTeamCountry: /teams lookup failed — defaulting to 'Unknown'");
+    return "Unknown";
+  }
+}
+
+/**
  * Returns true when the given API-Football team id represents a national team.
  *
  * Resolution order:
@@ -765,6 +802,11 @@ async function isNationalTeamId(teamId: number, teamName: string): Promise<boole
       results.length > 0 &&
       (results[0].team.national === true || isLikelyNationalTeamName(results[0].team.name));
     nationalTeamIdCache.set(teamId, isNational);
+    // Populate country cache as a free side-effect — fetchTeamCountry can
+    // skip the API call for any team already seen here.
+    if (!teamCountryCache.has(teamId) && results[0]?.team?.country) {
+      teamCountryCache.set(teamId, results[0].team.country);
+    }
     return isNational;
   } catch (err) {
     logger.warn({ err, teamId, teamName }, "isNationalTeamId: /teams lookup failed — using name heuristic");
@@ -940,15 +982,21 @@ async function ensureClubForTeam(
     return byName;
   }
 
-  // New club — insert a minimal row.
+  // New club — fetch the country from the API then insert.  The league is
+  // set to "Unknown" here; it will be filled in by Phase B of the fixture
+  // sweep once the fixture list is available (first fixture's competition).
+  // fetchTeamCountry is cached by team id, so this call is free for any team
+  // whose /teams?id=… was already fetched earlier in the same sweep by
+  // isNationalTeamId.
+  const country = await fetchTeamCountry(teamId);
   const [inserted] = await db
     .insert(clubsTable)
-    .values({ name: teamName, league: "Unknown", country: "Unknown", apiFootballTeamId: teamId, logoUrl })
+    .values({ name: teamName, league: "Unknown", country, apiFootballTeamId: teamId, logoUrl })
     .onConflictDoNothing()
     .returning({ id: clubsTable.id, name: clubsTable.name });
 
   if (inserted) {
-    logger.info({ teamId, teamName }, "Fixture sync: inserted new club row for auto-resolved team");
+    logger.info({ teamId, teamName, country }, "Fixture sync: inserted new club row for auto-resolved team");
     return inserted;
   }
 
@@ -1068,7 +1116,7 @@ export async function syncApiFootballFixtures(
   const allClubIds = [...clubPlayerMap.keys()];
   const clubRows = allClubIds.length > 0
     ? await db
-        .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
+        .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId, league: clubsTable.league, country: clubsTable.country })
         .from(clubsTable)
         .where(inArray(clubsTable.id, allClubIds))
     : [];
@@ -1130,6 +1178,43 @@ export async function syncApiFootballFixtures(
     if (!anySeasonFetchSucceeded) {
       failures++;
       continue;
+    }
+
+    // ── Enrich auto-created clubs whose metadata is still "Unknown" ───────────
+    // `ensureClubForTeam` already fills country at insert time; this branch
+    // handles: (a) the race where country was set to "Unknown" before this
+    // feature shipped, and (b) league, which can only be inferred from the
+    // first fixture in the sweep (not available at insert time).
+    //
+    // We do a single conditional DB update, touching only the rows that still
+    // need enrichment, so existing well-formed clubs are never written to.
+    {
+      const needsLeague  = club.league  === "Unknown";
+      const needsCountry = club.country === "Unknown";
+      if (needsLeague || needsCountry) {
+        const enriched: { league?: string; country?: string } = {};
+
+        if (needsLeague) {
+          // Use the competition name from the first fixture in the season list
+          // (before filtering to upcoming-only) — this includes finished
+          // fixtures whose competition name is still authoritative.
+          const firstFixture = seasonFixtures[0];
+          if (firstFixture) {
+            enriched.league = firstFixture.league.name;
+          }
+        }
+
+        if (needsCountry) {
+          // fetchTeamCountry is cached; if isNationalTeamId already hit
+          // /teams?id={teamId} earlier in Phase A this call is free.
+          enriched.country = await fetchTeamCountry(teamId);
+        }
+
+        if (Object.keys(enriched).length > 0) {
+          await db.update(clubsTable).set(enriched).where(eq(clubsTable.id, club.id));
+          logger.info({ clubId: club.id, club: club.name, ...enriched }, "Fixture sync: enriched club metadata that was previously 'Unknown'");
+        }
+      }
     }
 
     const upcoming = seasonFixtures
