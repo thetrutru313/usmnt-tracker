@@ -292,24 +292,24 @@ router.post("/admin/trigger-club-sync", async (_req, res): Promise<void> => {
 
 /**
  * POST /admin/trigger-fixtures-sync
- * Body (optional): { clubIds?: number[] }
- * Triggers syncApiFootballFixtures scoped to the given club IDs (or all clubs
- * if clubIds is omitted). Returns immediately; sync runs in the background.
- * Use clubIds to seed fixtures for newly-added clubs without re-syncing every
- * club and burning API-Football quota unnecessarily.
+ * Body (optional): { playerIds?: number[] }
+ * Triggers syncApiFootballFixtures scoped to the given player IDs (or all
+ * tracked players if playerIds is omitted). Returns immediately; sync runs in
+ * the background. Use playerIds to seed fixtures for a specific subset of
+ * players without re-sweeping everyone and burning API-Football quota.
  */
 router.post("/admin/trigger-fixtures-sync", async (req, res): Promise<void> => {
   if (!apiKey()) {
     res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
     return;
   }
-  const clubIds: number[] | undefined = Array.isArray(req.body?.clubIds)
-    ? (req.body.clubIds as unknown[]).filter((v): v is number => typeof v === "number")
+  const playerIds: number[] | undefined = Array.isArray(req.body?.playerIds)
+    ? (req.body.playerIds as unknown[]).filter((v): v is number => typeof v === "number")
     : undefined;
-  const scope = clubIds ? `${clubIds.length} clubs` : "all clubs";
-  logger.info({ scope, clubIds }, "Admin: trigger-fixtures-sync started");
+  const scope = playerIds ? `${playerIds.length} players` : "all players";
+  logger.info({ scope, playerIds }, "Admin: trigger-fixtures-sync started");
   res.json({ ok: true, scope });
-  syncApiFootballFixtures(clubIds).catch((err) =>
+  syncApiFootballFixtures(playerIds).catch((err) =>
     logger.error({ err }, "Admin trigger-fixtures-sync failed"),
   );
 });

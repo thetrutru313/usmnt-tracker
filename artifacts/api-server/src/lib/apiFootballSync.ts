@@ -535,11 +535,128 @@ export async function runRepairPass({
   }
 }
 
+// ─── Player-to-team resolution helpers ───────────────────────────────────────
+
+/**
+ * API-Football squad response shape — `/players/squads?player={id}` returns
+ * which team(s) a player is currently registered with.
+ */
+interface AfSquadEntry {
+  team: { id: number; name: string; logo: string | null };
+  players: Array<{ id: number; name: string }>;
+}
+
+/**
+ * Asks API-Football which squad a player is currently in by calling
+ * `/players/squads?player={id}`.  Returns the primary team entry, or null
+ * when the player has no current squad data or the call fails.
+ *
+ * This is the authoritative source of "where is this player right now" — it
+ * reflects current squad membership rather than historical stats, so it
+ * handles mid-season transfers, loans, and pre-season moves without waiting
+ * for stats data to accumulate under the new club.
+ */
+async function fetchPlayerCurrentTeam(
+  apiFootballPlayerId: number,
+): Promise<{ teamId: number; teamName: string; logoUrl: string | null } | null> {
+  try {
+    const data = await afFetch<AfSquadEntry[]>(`/players/squads?player=${apiFootballPlayerId}`);
+    // The endpoint may return multiple entries when a player is on dual
+    // registration (loan + parent club).  Take the first, which API-Football
+    // typically orders as the active/primary club.
+    const first = data[0];
+    if (!first) return null;
+    return { teamId: first.team.id, teamName: first.team.name, logoUrl: first.team.logo };
+  } catch (err) {
+    logger.warn({ err, apiFootballPlayerId }, "fetchPlayerCurrentTeam: API call failed — will fall back to stored club");
+    return null;
+  }
+}
+
+/**
+ * Ensures a `clubs` row exists for the given API-Football team id, creating a
+ * minimal one when necessary.  Resolution order:
+ *   1. Existing row already keyed by this `api_football_team_id` (fast path).
+ *   2. Existing row whose `name` matches and has no team id yet (back-fill it).
+ *   3. Insert a new minimal row (`league` and `country` default to "Unknown";
+ *      the fixture `competition` field drives all display and broadcast logic
+ *      so the club-level league string is not critical).
+ * Handles concurrent sync runs via `onConflictDoNothing` + re-fetch on race.
+ */
+async function ensureClubForTeam(
+  teamId: number,
+  teamName: string,
+  logoUrl: string | null,
+): Promise<{ id: number; name: string }> {
+  // Fast path: already tracked by team id.
+  const [byTeamId] = await db
+    .select({ id: clubsTable.id, name: clubsTable.name })
+    .from(clubsTable)
+    .where(eq(clubsTable.apiFootballTeamId, teamId));
+  if (byTeamId) return byTeamId;
+
+  // Back-fill an existing name-matched row that has no team id yet
+  // (e.g. a club added manually before it was first synced).
+  const [byName] = await db
+    .select({ id: clubsTable.id, name: clubsTable.name })
+    .from(clubsTable)
+    .where(and(eq(clubsTable.name, teamName), sql`${clubsTable.apiFootballTeamId} IS NULL`));
+  if (byName) {
+    try {
+      await db.update(clubsTable).set({ apiFootballTeamId: teamId, logoUrl }).where(eq(clubsTable.id, byName.id));
+    } catch {
+      // Lost the race to a concurrent run — not a problem.
+    }
+    return byName;
+  }
+
+  // New club — insert a minimal row.
+  const [inserted] = await db
+    .insert(clubsTable)
+    .values({ name: teamName, league: "Unknown", country: "Unknown", apiFootballTeamId: teamId, logoUrl })
+    .onConflictDoNothing()
+    .returning({ id: clubsTable.id, name: clubsTable.name });
+
+  if (inserted) {
+    logger.info({ teamId, teamName }, "Fixture sync: inserted new club row for auto-resolved team");
+    return inserted;
+  }
+
+  // Race: another concurrent sync beat us to the insert — look it up now.
+  const [raceWinner] = await db
+    .select({ id: clubsTable.id, name: clubsTable.name })
+    .from(clubsTable)
+    .where(eq(clubsTable.apiFootballTeamId, teamId));
+  if (!raceWinner) {
+    throw new Error(`ensureClubForTeam: could not find or create club for teamId=${teamId} name=${teamName}`);
+  }
+  return raceWinner;
+}
+
+// ─── Main fixture sync (player-centric) ──────────────────────────────────────
+
+/**
+ * Syncs upcoming club fixtures from API-Football for every tracked player.
+ *
+ * **Player-centric approach**: instead of starting from the `clubs` table
+ * (whose player assignments can lag behind real-world transfers), we ask
+ * API-Football what team each player is currently in via `/players/squads`,
+ * then pull fixtures for those teams.  A player who moves clubs gets the
+ * correct fixture cards on the very next sweep — no separate club-assignment
+ * sync step required.
+ *
+ * Players without an `api_football_player_id` (null-pinned, currently 3 of
+ * 76) fall back to their stored `players.club_id` so they are never dropped.
+ * `players.club_id` is updated as a side-effect whenever the live API
+ * disagrees, keeping the stored value accurate for subsequent reads.
+ *
+ * National-team fixtures (World Cup qualifiers etc.) stay curated/seeded and
+ * are handled separately by `syncNationalTeamFixtures`.
+ */
 export async function syncApiFootballFixtures(
-  /** When provided, only syncs fixtures for the given club DB ids. Clubs
-   *  outside this list are skipped entirely, incurring zero additional API
-   *  calls. The hourly scheduled run omits this parameter to sync all clubs. */
-  clubIds?: number[],
+  /** When provided, only syncs fixtures for the given player DB ids.  The
+   *  hourly scheduled run omits this to sweep all tracked players. */
+  playerIds?: number[],
 ): Promise<{ clubsSynced: number; fixturesUpserted: number; fixturesReconciled: number; fixturesRemoved: number; failures: number }> {
   // Step 1: stamp club_id on any legacy links that predate the column.
   await backfillLegacyFixturePlayerClubIds();
@@ -547,25 +664,109 @@ export async function syncApiFootballFixtures(
   // per-club runRepairPass below will recreate links under their new club.
   await purgeStaleTransferredPlayerLinks();
 
-  const allClubs = await db
-    .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
-    .from(clubsTable);
-  const clubs = clubIds ? allClubs.filter((c) => clubIds.includes(c.id)) : allClubs;
-  const players = await db.select({ id: playersTable.id, clubId: playersTable.clubId }).from(playersTable);
-  const playersByClub = new Map<number, typeof players>();
-  for (const p of players) playersByClub.set(p.clubId, [...(playersByClub.get(p.clubId) ?? []), p]);
+  // ── Phase A: derive each player's current club from the live API ──────────
+  const allPlayers = await db
+    .select({
+      id: playersTable.id,
+      clubId: playersTable.clubId,
+      apiFootballPlayerId: playersTable.apiFootballPlayerId,
+    })
+    .from(playersTable);
+  const scopedPlayers = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
+
+  // clubPlayerMap: club DB id → list of player DB ids currently at that club
+  // (derived from the live API squad data, not the stale DB column).
+  const clubPlayerMap = new Map<number, number[]>();
+  // preResolvedTeamId: club DB id → API-Football team id (short-circuits
+  // resolveTeamId's name-search for clubs we auto-resolved in this pass).
+  const preResolvedTeamId = new Map<number, number>();
+
+  let failures = 0;
+
+  for (const player of scopedPlayers) {
+    const apiId = player.apiFootballPlayerId;
+
+    if (!apiId) {
+      // No API-Football id — fall back to the player's stored club.
+      const list = clubPlayerMap.get(player.clubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(player.clubId, list);
+      continue;
+    }
+
+    // Ask API-Football which squad this player is currently registered with.
+    const current = await fetchPlayerCurrentTeam(apiId);
+    if (!current) {
+      // Call failed or no squad data returned — fall back gracefully.
+      failures++;
+      const list = clubPlayerMap.get(player.clubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(player.clubId, list);
+      continue;
+    }
+
+    // Ensure the club row exists in our DB (upsert by team id, creating a
+    // minimal row when the club is brand-new to our tracker).
+    let club: { id: number; name: string };
+    try {
+      club = await ensureClubForTeam(current.teamId, current.teamName, current.logoUrl);
+    } catch (err) {
+      logger.warn({ err, teamId: current.teamId, playerId: player.id }, "ensureClubForTeam failed — falling back to stored club");
+      failures++;
+      const list = clubPlayerMap.get(player.clubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(player.clubId, list);
+      continue;
+    }
+
+    // Keep players.club_id current as a side-effect — no separate sync needed.
+    if (club.id !== player.clubId) {
+      await db.update(playersTable).set({ clubId: club.id }).where(eq(playersTable.id, player.id));
+      logger.info(
+        { playerId: player.id, fromClubId: player.clubId, toClubId: club.id, toClub: club.name },
+        "Fixture sync: corrected player club assignment from live API squad data",
+      );
+    }
+
+    preResolvedTeamId.set(club.id, current.teamId);
+    const list = clubPlayerMap.get(club.id) ?? [];
+    list.push(player.id);
+    clubPlayerMap.set(club.id, list);
+  }
+
+  // ── Phase B: load club rows and fetch fixtures for each unique team ───────
+  const allClubIds = [...clubPlayerMap.keys()];
+  const clubRows = allClubIds.length > 0
+    ? await db
+        .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
+        .from(clubsTable)
+        .where(inArray(clubsTable.id, allClubIds))
+    : [];
+  const clubById = new Map(clubRows.map((c) => [c.id, c]));
+
+  const now = Date.now();
+  const currentYear = new Date(now).getUTCFullYear();
 
   let clubsSynced = 0;
   let fixturesUpserted = 0;
   let fixturesReconciled = 0;
   let fixturesRemoved = 0;
-  let failures = 0;
   // Accumulates every fixture that transitioned to "finished" across all clubs
   // this sweep, keyed by fixture id to deduplicate clubs sharing a fixture.
   const allNewlyFinished = new Map<number, Set<number>>();
 
-  for (const club of clubs) {
-    const teamId = await resolveTeamId(club);
+  for (const [clubId, clubPlayerIds] of clubPlayerMap) {
+    const club = clubById.get(clubId);
+    if (!club) {
+      logger.warn({ clubId }, "No club row found for player-derived clubId — skipping");
+      failures++;
+      continue;
+    }
+
+    // Phase A may have already resolved the team id via fetchPlayerCurrentTeam;
+    // if so, skip the name-search entirely.  For fallback clubs (no API id on
+    // the player), resolveTeamId searches by club name as before.
+    const teamId = preResolvedTeamId.get(clubId) ?? (await resolveTeamId(club));
     if (!teamId) {
       failures++;
       continue;
@@ -575,8 +776,6 @@ export async function syncApiFootballFixtures(
     // fixture list instead and filter to not-yet-started matches ourselves.
     // Straddle two season labels (leagues use Aug-May seasons, MLS uses the
     // calendar year) so we don't miss fixtures right around a season boundary.
-    const now = Date.now();
-    const currentYear = new Date(now).getUTCFullYear();
     let seasonFixtures: AfFixture[] = [];
     let anySeasonFetchSucceeded = false;
     let anySeasonFetchFailed = false;
@@ -617,9 +816,7 @@ export async function syncApiFootballFixtures(
     // we're after. reconcileClubFixtures checks both statuses so a match
     // that went live in a previous cycle (and was correctly written as
     // "live, 0-0") will be updated to "finished" with the real score on
-    // the next run. Only fixtures linked to this club's players are checked
-    // here, since that's the scope this sync can safely reason about without
-    // extra rate-limited API calls.
+    // the next run.
     //
     // Removing a fixture that's genuinely missing from the fresh pull is only
     // safe when we trust that pull completely — if any season fetch for this
@@ -630,14 +827,13 @@ export async function syncApiFootballFixtures(
     // find are unaffected by this and stay on regardless.
     const removalsTrustworthy = anySeasonFetchSucceeded && !anySeasonFetchFailed;
     const freshById = new Map(seasonFixtures.map((f) => [f.fixture.id, f]));
-    const clubPlayerIds = (playersByClub.get(club.id) ?? []).map((p) => p.id);
     const reconciled = await reconcileClubFixtures({ club, clubPlayerIds, freshById, removalsTrustworthy, now });
     fixturesReconciled += reconciled.fixturesReconciled;
     fixturesRemoved += reconciled.fixturesRemoved;
     // Merge this club's newly-finished fixtures into the sweep-level map.
-    for (const { fixtureId, playerIds } of reconciled.newlyFinished) {
+    for (const { fixtureId, playerIds: pids } of reconciled.newlyFinished) {
       const existing = allNewlyFinished.get(fixtureId) ?? new Set<number>();
-      for (const pid of playerIds) existing.add(pid);
+      for (const pid of pids) existing.add(pid);
       allNewlyFinished.set(fixtureId, existing);
     }
 
@@ -674,19 +870,10 @@ export async function syncApiFootballFixtures(
         fixtureId = inserted.id;
       }
 
-      const clubPlayers = playersByClub.get(club.id) ?? [];
       // The guard's purpose: API-Football sometimes returns reserve/youth
       // fixtures under a senior club's team ID (e.g. an EFL Trophy match
       // appearing in Leeds United's feed as "Leeds United U21"). We skip
       // tagging those because the senior player didn't actually play.
-      //
-      // Two original misfires that this logic fixes:
-      //   1. Clubs registered under a name that ends in " B" or " II"
-      //      (e.g. "Benfica B") were blocked on every one of their own
-      //      fixtures because the pattern matched their registered name.
-      //   2. MLS Next Pro clubs (e.g. Real Monarchs) were skipped whenever
-      //      their *opponent* ended in " II" (Timbers II, City II, etc.)
-      //      because the old guard checked both sides.
       //
       // Correct logic: only treat a fixture as "reserve" if the club's OWN
       // slot carries a name that (a) looks like a reserve squad AND (b) does
@@ -695,14 +882,14 @@ export async function syncApiFootballFixtures(
       // must always be tagged regardless of the " B" suffix in the pattern.
       const clubSideName = f.teams.home.id === teamId ? f.teams.home.name : f.teams.away.name;
       const isReserveFixture = isReserveFixtureForClub(club.name, clubSideName);
-      const eligiblePlayers = isReserveFixture ? [] : clubPlayers;
-      if (eligiblePlayers.length > 0) {
+      const eligibleIds = isReserveFixture ? [] : clubPlayerIds;
+      if (eligibleIds.length > 0) {
         const existingLinks = await db
           .select({ playerId: fixturePlayersTable.playerId })
           .from(fixturePlayersTable)
           .where(eq(fixturePlayersTable.fixtureId, fixtureId));
         const alreadyLinked = new Set(existingLinks.map((l) => l.playerId));
-        const toLink = eligiblePlayers.filter((p) => !alreadyLinked.has(p.id)).map((p) => p.id);
+        const toLink = eligibleIds.filter((pid) => !alreadyLinked.has(pid));
         if (toLink.length > 0) {
           // Stamp the club this link was created for so reads can tell when
           // a player has since transferred away — see the `clubId` comment
