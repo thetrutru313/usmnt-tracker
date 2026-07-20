@@ -83,7 +83,7 @@ const pages = [
   },
   {
     icon: CalendarRange,
-    label: "Schedule",
+    label: "USMNT Schedule",
     blurb:
       "The long-range calendar from now through the 2030 FIFA World Cup — friendlies, Nations League, Gold Cup, Copa América, and World Cup qualifying all in one timeline.",
   },
