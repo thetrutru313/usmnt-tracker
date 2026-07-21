@@ -1,30 +1,23 @@
 /**
- * Regression guard: confirms GET /api/players/:id returns a clean 200 with
- * graceful null/empty fields for Cole Campbell (player id=47, SV Elversberg)
- * while API-Football has not yet synced stats for his new player ID (328617).
+ * Regression guard: confirms GET /api/players/:id returns a clean, populated
+ * response for Cole Campbell (player id=47, SV Elversberg) after real
+ * Bundesliga stats were synced for his player ID (328617).
  *
  * ## What & Why
- * Cole Campbell has api_football_player_id=328617 and club team id=1660 set
- * correctly.  Until the next daily stats sync runs and API-Football returns
- * data for this ID, the DB holds no player_stats or match_logs rows for him.
- *
- * The route falls back to `emptyStats` in that case — but a regression (e.g.
- * an unguarded `.season` access or a missing null-check) could silently turn
- * the fallback into a 500.  This test catches that.
+ * Cole Campbell's api_football_player_id=328617 is now synced and the DB
+ * holds real season_all rows for 2025 and 2024.  This guard verifies:
+ *   - The profile returns HTTP 200 and parses against the Zod schema
+ *   - Real club seasons are surfaced (not the N/A fallback)
+ *   - avgRating is a non-null number (real data, not a fabricated value)
+ *   - The response shape is stable — a future route change that breaks the
+ *     season-all path would fail here before reaching users.
  *
  * ## What is asserted
- * 1. GET /api/players/47 returns HTTP 200 (not 404, not 500).
+ * 1. GET /api/players/47 returns HTTP 200.
  * 2. The response body parses cleanly against GetPlayerResponse (Zod schema).
- * 3. `availableClubSeasons` is empty  → UI shows "N/A" chip, not a season selector.
- * 4. `clubSeasonStats.season` is "N/A" (the emptyStats sentinel).
- * 5. `clubSeasonStats.avgRating` is null → UI shows '–', not fabricated zeros.
- * 6. `matchLog` is empty → no fabricated history rows.
- * 7. `clubSeasonStats.minutes` is 0 (known-absent data, not a bad parse).
- *
- * ## When this test should be updated
- * Once the daily stats sync runs and populates real Bundesliga data for
- * player 328617, assertions 3-6 should be replaced with positive checks on
- * the real stats values.
+ * 3. `availableClubSeasons` contains at least one real season (e.g. "2025").
+ * 4. `clubSeasonStats.avgRating` is a positive number (real API-Football data).
+ * 5. `clubSeasonStats.minutes` is > 0 (player actually appeared in matches).
  */
 
 import { describe, it, expect } from "vitest";
@@ -34,9 +27,9 @@ import { GetPlayerResponse } from "@workspace/api-zod";
 
 const COLE_CAMPBELL_ID = 47;
 
-describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", () => {
+describe("GET /api/players/47 (Cole Campbell) — real stats response", () => {
   it(
-    "returns HTTP 200 and a schema-valid body when no stats rows exist",
+    "returns HTTP 200 and a schema-valid body",
     async () => {
       const res = await request(app)
         .get(`/api/players/${COLE_CAMPBELL_ID}`)
@@ -53,8 +46,6 @@ describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", (
       }
 
       const player = result.data;
-
-      // Basic identity
       expect(player.id).toBe(COLE_CAMPBELL_ID);
       expect(player.name).toBe("Cole Campbell");
     },
@@ -62,7 +53,7 @@ describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", (
   );
 
   it(
-    "shows no available club seasons (triggers N/A chip in UI)",
+    "surfaces real club seasons (not the N/A fallback)",
     async () => {
       const res = await request(app)
         .get(`/api/players/${COLE_CAMPBELL_ID}`)
@@ -70,20 +61,20 @@ describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", (
       const player = GetPlayerResponse.parse(res.body);
 
       expect(
-        player.availableClubSeasons,
-        "availableClubSeasons must be empty when no stats rows exist",
-      ).toHaveLength(0);
+        player.availableClubSeasons.length,
+        "availableClubSeasons must be non-empty now that real season_all rows exist",
+      ).toBeGreaterThan(0);
 
       expect(
         player.clubSeasonStats.season,
-        "clubSeasonStats.season must be the N/A sentinel when no stats rows exist",
-      ).toBe("N/A");
+        "clubSeasonStats.season must be a real year, not the N/A sentinel",
+      ).not.toBe("N/A");
     },
     30_000,
   );
 
   it(
-    "returns null for clubSeasonStats.avgRating (shows '–' in UI, not a fabricated value)",
+    "returns a positive avgRating from real API-Football data",
     async () => {
       const res = await request(app)
         .get(`/api/players/${COLE_CAMPBELL_ID}`)
@@ -92,14 +83,15 @@ describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", (
 
       expect(
         player.clubSeasonStats.avgRating,
-        "avgRating must be null when API-Football has no rating data — UI renders '–'",
-      ).toBeNull();
+        "avgRating must be a positive number now that real stats exist",
+      ).not.toBeNull();
+      expect(player.clubSeasonStats.avgRating!).toBeGreaterThan(0);
     },
     30_000,
   );
 
   it(
-    "returns an empty matchLog (no fabricated history rows)",
+    "returns minutes > 0 (player appeared in real matches)",
     async () => {
       const res = await request(app)
         .get(`/api/players/${COLE_CAMPBELL_ID}`)
@@ -107,9 +99,9 @@ describe("GET /api/players/47 (Cole Campbell) — graceful no-stats response", (
       const player = GetPlayerResponse.parse(res.body);
 
       expect(
-        player.matchLog,
-        "matchLog must be empty when no match_logs rows exist for this player",
-      ).toHaveLength(0);
+        player.clubSeasonStats.minutes,
+        "minutes must be > 0 now that real season stats exist",
+      ).toBeGreaterThan(0);
     },
     30_000,
   );
