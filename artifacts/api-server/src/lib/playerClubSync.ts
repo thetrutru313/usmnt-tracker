@@ -107,6 +107,16 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   // club_id=1883 (Houston Dash W) indefinitely. Pin the correct id so the
   // next club sync assigns him to Houston Dynamo instead.
   "Cole Campbell": 328617,
+  // Damion Downs (born 2004-07-06, Hamburger SV / Southampton FW): verified
+  // 2026-07-21 via cross-reference against TheFishy (thefishy.co.uk), which
+  // uses API-Football player IDs in its URLs — confirmed by checking that
+  // Cavan Sullivan's TheFishy URL contains id 462853, matching our pinned
+  // value exactly. Damion Downs' TheFishy URL contains id 334362.
+  // The automated resolver had stored id 291521 ("Dylan Downs", an English
+  // player born 2002-01-07) — a surname-only collision with no first-name or
+  // nationality gate at the time the row was written. The wrong id was causing
+  // a white English player's photo to appear on Damion Downs' profile page.
+  "Damion Downs": 334362,
 };
 
 /**
