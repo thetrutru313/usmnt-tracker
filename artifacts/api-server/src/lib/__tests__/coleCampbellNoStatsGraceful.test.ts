@@ -18,6 +18,11 @@
  * 3. `availableClubSeasons` contains at least one real season (e.g. "2025").
  * 4. `clubSeasonStats.avgRating` is a positive number (real API-Football data).
  * 5. `clubSeasonStats.minutes` is > 0 (player actually appeared in matches).
+ *
+ * ## When this test should be updated
+ * If Cole Campbell's player id pin changes or he moves to a club not covered
+ * by API-Football, re-check that the route still returns 200 with the new
+ * values (or graceful nulls if data is temporarily absent).
  */
 
 import { describe, it, expect } from "vitest";
