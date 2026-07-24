@@ -4,6 +4,105 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>USMNT Tracker</title>
+
+    <!--
+      Content-Security-Policy
+      ═══════════════════════
+      This meta tag is the primary CSP for the HTML document. Replit's static
+      handler serves index.html — not Express — so the helmet CSP on the API
+      server does not reach this file. This tag supplements the API server's
+      response headers (which tightly lock down /api/* JSON responses).
+
+      WHY each directive is present:
+
+      default-src 'self'
+        Catch-all baseline: anything not covered by a more specific directive
+        must come from the same origin.
+
+      script-src 'self'
+        The Vite production build emits only external hashed JS bundles
+        (/assets/index-*.js, /registerSW.js). No inline <script> blocks exist
+        in the built HTML — confirmed from the production output. 'self' is
+        sufficient; 'unsafe-inline' and 'unsafe-eval' are intentionally absent.
+
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com
+        'self'                — the bundled /assets/index-*.css file.
+        https://fonts.googleapis.com — index.css contains
+          @import url('https://fonts.googleapis.com/css2?family=Outfit...')
+          which the browser fetches as a stylesheet at runtime. Omitting this
+          origin breaks the Outfit and JetBrains Mono fonts site-wide.
+        'unsafe-inline'       — REQUIRED by React's style={{ }} prop pattern.
+          React renders style props as HTML style="" attributes (e.g. the
+          TanStack virtualizer sets style="transform: translateY(Npx)").
+          CSP treats these as inline styles; without 'unsafe-inline' they are
+          blocked. Eliminating all inline styles would require replacing every
+          dynamic style prop with CSS custom properties or CSS modules — a
+          significant refactor with no functional benefit for this app.
+          NOTE: 'unsafe-inline' applies only to styles, not scripts. The
+          script-src directive remains 'self' with no inline allowance.
+
+      font-src 'self' https://fonts.gstatic.com
+        Google's CSS stylesheet (above) @imports the actual font binary files
+        from fonts.gstatic.com. Both origins are required: googleapis.com for
+        the CSS descriptor, gstatic.com for the woff2 files.
+
+      img-src 'self' data: https://media.api-sports.io https://assets.goal.com
+        'self'                     — local badge PNGs (/badges/*, /icons/*).
+        data:                      — SVG data URIs used by some UI components
+                                     (Lucide icon toolkit).
+        https://media.api-sports.io — API-Football's CDN: all 73 team and
+                                     player photo URLs stored in the database
+                                     point here. Blocking it removes every
+                                     club badge and player photo from the UI.
+        https://assets.goal.com    — Goal.com's CDN: one player photo currently
+                                     in the database uses this origin.
+
+      connect-src 'self'
+        All API calls go to /api/* on the same origin (same-origin in
+        production; proxied through Vite in dev). No external fetch targets.
+
+      frame-src 'none'
+        The app never embeds iframes. Prevents accidental embedding.
+
+      object-src 'none'
+        Disables Flash, Java applets, and other plugin content entirely.
+
+      base-uri 'self'
+        Prevents injected <base> tags from redirecting relative URLs to an
+        attacker-controlled origin.
+
+      form-action 'self'
+        The app has no HTML forms; this prevents any injected form from
+        exfiltrating data to an external origin.
+
+      upgrade-insecure-requests
+        Instructs the browser to silently upgrade any http:// sub-resource
+        references to https:// before fetching. Belt-and-suspenders alongside
+        HSTS on the API server.
+
+      WHAT IS NOT HERE:
+        frame-ancestors — ignored by browsers inside a <meta> CSP tag (spec
+          §7.2). X-Frame-Options: DENY on the static file server provides this
+          protection. The API server's helmet config sets both
+          X-Frame-Options: DENY and frame-ancestors 'none' on /api/* responses.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data: https://media.api-sports.io https://assets.goal.com;
+        connect-src 'self';
+        frame-src 'none';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+        upgrade-insecure-requests;
+      "
+    />
+
     <!-- PWA theme -->
     <meta name="theme-color" content="#002966" />
     <!-- iOS PWA support -->
