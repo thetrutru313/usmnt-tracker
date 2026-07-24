@@ -1996,6 +1996,7 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
       apiFootballFixtureId: fixturesTable.apiFootballFixtureId,
       homeScore: fixturesTable.homeScore,
       awayScore: fixturesTable.awayScore,
+      elapsedMinute: fixturesTable.elapsedMinute,
     })
     .from(fixturesTable)
     .where(and(eq(fixturesTable.status, "live"), isNotNull(fixturesTable.apiFootballFixtureId)));
@@ -2017,8 +2018,15 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
       const freshAwayScore = fresh.goals.away ?? null;
       const freshElapsed = freshStatus === "live" ? (fresh.fixture.status.elapsed ?? null) : null;
 
-      // Skip no-op writes: still live, score unchanged.
-      if (freshStatus === "live" && row.homeScore === freshHomeScore && row.awayScore === freshAwayScore) continue;
+      // Skip no-op writes: still live, score unchanged, and elapsed minute unchanged.
+      // NOTE: elapsedMinute must be included here — omitting it caused the elapsed
+      // minute to freeze in the DB whenever a match had no score change between polls.
+      if (
+        freshStatus === "live" &&
+        row.homeScore === freshHomeScore &&
+        row.awayScore === freshAwayScore &&
+        row.elapsedMinute === freshElapsed
+      ) continue;
 
       await db
         .update(fixturesTable)
