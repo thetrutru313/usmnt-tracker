@@ -1,0 +1,255 @@
+/**
+ * Integration guard: confirms that syncYouthNtFixtures inserts a newly-
+ * discovered knockout-round fixture into the DB and that it surfaces on
+ * GET /api/fixtures with is_national_team=true and correct field values —
+ * without a code change or server redeploy.
+ *
+ * ## What is tested
+ * 1. A fixture returned by API-Football that does NOT yet exist in the DB
+ *    (new knockout round, not in the startup seed) is inserted by
+ *    syncYouthNtFixtures and immediately appears in GET /api/fixtures.
+ *    - is_national_team is true
+ *    - homeTeam, awayTeam, competition, status, streamingService are correct
+ *    - The response parses against the Zod schema
+ * 2. Edge case: a fixture already present in the DB (seeded by startup or a
+ *    prior sync run) is NOT duplicated when the sync re-encounters it —
+ *    ON CONFLICT by api_football_fixture_id is safe.
+ *
+ * ## How it works
+ * - vi.stubGlobal("fetch", mockFetch) intercepts the afFetch calls made by
+ *   syncYouthNtFixtures so no real network traffic is needed.
+ * - The mock returns one "new" fixture (FAKE_NEW_AF_ID) and one "pre-seeded"
+ *   fixture (FAKE_PRESEEDED_AF_ID) for each of the four team/season requests.
+ * - syncYouthNtFixtures is called directly; no separate HTTP server is needed
+ *   for the sync itself.
+ * - The Fixtures endpoint is exercised via supertest(app) to confirm DB changes
+ *   are immediately visible without a restart.
+ * - afterAll removes only the rows this test inserted, keyed by the fake IDs.
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { vi } from "vitest";
+import request from "supertest";
+import app from "../../app.js";
+import { db, fixturesTable } from "@workspace/db";
+import { eq, inArray, sql } from "drizzle-orm";
+import { ListFixturesResponse } from "@workspace/api-zod";
+import { syncYouthNtFixtures } from "../apiFootballSync.js";
+
+// ─── constants ───────────────────────────────────────────────────────────────
+
+/** Fake api_football_fixture_id for the brand-new fixture the sync should insert. */
+const FAKE_NEW_AF_ID = 9_999_200;
+
+/** Fake api_football_fixture_id for the fixture pre-seeded before sync runs. */
+const FAKE_PRESEEDED_AF_ID = 9_999_201;
+
+/** Kickoff 30 days from now — well into the "upcoming" window. */
+const FAKE_KICKOFF_NEW = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+const FAKE_KICKOFF_PRESEEDED = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString();
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function fmtIssues(err: { issues: Array<{ path: unknown[]; message: string; code: string }> }): string {
+  return err.issues.map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message} [${i.code}]`).join("\n");
+}
+
+/** Wraps data in the `{ response, errors }` envelope that afFetch expects. */
+function fakeResponse(data: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ response: data, errors: {} }),
+    text: async () => JSON.stringify({ response: data, errors: {} }),
+  } as unknown as Response;
+}
+
+/**
+ * Returns two fixtures for every /fixtures?team=...&season=... call:
+ * - FAKE_NEW_AF_ID: a brand-new knockout-round fixture (United States U20 vs
+ *   Brazil U20) that represents a dynamically-scheduled round not in the seed.
+ * - FAKE_PRESEEDED_AF_ID: a fixture that will be pre-inserted before the sync
+ *   runs, used to verify ON CONFLICT idempotency.
+ *
+ * Both fixtures include "United States U20" as a participant so they pass
+ * the isUsMensNationalTeamName filter inside syncYouthNtFixtures.
+ *
+ * All other URL patterns (team search, squad lookup, etc.) receive an empty
+ * array response so afFetch doesn't throw.
+ */
+function mockFetch(url: string | URL | Request): Promise<Response> {
+  const urlStr = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+
+  if (urlStr.includes("/fixtures?team=")) {
+    return Promise.resolve(
+      fakeResponse([
+        {
+          fixture: {
+            id: FAKE_NEW_AF_ID,
+            date: FAKE_KICKOFF_NEW,
+            status: { short: "NS", elapsed: null },
+            venue: { name: "Estadio Universitario BUAP" },
+          },
+          league: { name: "CONCACAF U20" },
+          teams: {
+            home: {
+              id: 10306,
+              name: "United States U20",
+              logo: "https://media.api-sports.io/football/teams/10306.png",
+            },
+            away: {
+              id: 19_000,
+              name: "Brazil U20",
+              logo: "https://media.api-sports.io/football/teams/9.png",
+            },
+          },
+          goals: { home: null, away: null },
+        },
+        {
+          fixture: {
+            id: FAKE_PRESEEDED_AF_ID,
+            date: FAKE_KICKOFF_PRESEEDED,
+            status: { short: "NS", elapsed: null },
+            venue: { name: "Estadio Test" },
+          },
+          league: { name: "CONCACAF U20" },
+          teams: {
+            home: {
+              id: 10306,
+              name: "United States U20",
+              logo: "https://media.api-sports.io/football/teams/10306.png",
+            },
+            away: {
+              id: 19_001,
+              name: "Colombia U20",
+              logo: "https://media.api-sports.io/football/teams/111.png",
+            },
+          },
+          goals: { home: null, away: null },
+        },
+      ]),
+    );
+  }
+
+  // Anything else: return empty so afFetch doesn't throw.
+  return Promise.resolve(fakeResponse([]));
+}
+
+// ─── cleanup state ────────────────────────────────────────────────────────────
+
+const fakeAfIds = [FAKE_NEW_AF_ID, FAKE_PRESEEDED_AF_ID];
+
+afterAll(async () => {
+  vi.unstubAllGlobals();
+  // Remove only the rows this test suite inserted, identified by fake IDs.
+  await db
+    .delete(fixturesTable)
+    .where(inArray(fixturesTable.apiFootballFixtureId, fakeAfIds));
+});
+
+// ─── test suite ───────────────────────────────────────────────────────────────
+
+describe("syncYouthNtFixtures — newly-scheduled knockout fixture appears without a redeploy", () => {
+  /**
+   * Pre-insert the "already seeded" fixture so it exists before syncYouthNtFixtures
+   * runs. This lets Test 2 verify the ON CONFLICT path is safe.
+   */
+  beforeAll(async () => {
+    // Ensure no leftover rows from a previous run.
+    await db
+      .delete(fixturesTable)
+      .where(inArray(fixturesTable.apiFootballFixtureId, fakeAfIds));
+
+    // Insert the pre-seeded row (simulates what the startup seed does).
+    await db.insert(fixturesTable).values({
+      apiFootballFixtureId: FAKE_PRESEEDED_AF_ID,
+      isNationalTeam: true,
+      competition: "CONCACAF U20",
+      kickoff: new Date(FAKE_KICKOFF_PRESEEDED),
+      venue: "Estadio Test",
+      homeTeam: "United States U20",
+      awayTeam: "Colombia U20",
+      homeLogoUrl: "https://media.api-sports.io/football/teams/10306.png",
+      awayLogoUrl: "https://media.api-sports.io/football/teams/111.png",
+      status: "scheduled",
+      tvNetwork: "FOX Sports",
+      streamingService: "Fox One",
+    });
+
+    // Run the sync with the mocked fetch.
+    vi.stubGlobal("fetch", mockFetch);
+    await syncYouthNtFixtures();
+    vi.unstubAllGlobals();
+  }, 60_000);
+
+  it(
+    "1. newly-inserted fixture appears in GET /api/fixtures with is_national_team=true and correct fields",
+    async () => {
+      // Confirm the row exists in the DB first — isolates a DB miss from a route miss.
+      const dbRows = await db
+        .select()
+        .from(fixturesTable)
+        .where(eq(fixturesTable.apiFootballFixtureId, FAKE_NEW_AF_ID));
+
+      expect(
+        dbRows,
+        `syncYouthNtFixtures should have inserted a row with api_football_fixture_id=${FAKE_NEW_AF_ID} ` +
+          `but no such row exists in the fixtures table — the upsert may have silently failed`,
+      ).toHaveLength(1);
+
+      const dbRow = dbRows[0]!;
+      expect(dbRow.isNationalTeam).toBe(true);
+      expect(dbRow.homeTeam).toBe("United States U20");
+      expect(dbRow.awayTeam).toBe("Brazil U20");
+      expect(dbRow.competition).toBe("CONCACAF U20");
+      expect(dbRow.status).toBe("scheduled");
+      // BROADCAST_BY_LEAGUE maps "CONCACAF U20" to Fox One
+      expect(dbRow.streamingService).toBe("Fox One");
+      expect(dbRow.tvNetwork).toBe("FOX Sports");
+
+      // Now confirm the route immediately reflects the new row — no restart.
+      const res = await request(app).get("/api/fixtures").expect(200);
+
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `GET /api/fixtures response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === dbRow.id);
+      expect(
+        found,
+        `Fixture id=${dbRow.id} (api_football_fixture_id=${FAKE_NEW_AF_ID}, ` +
+          `newly inserted by syncYouthNtFixtures) is missing from GET /api/fixtures — ` +
+          `the route may be filtering national-team fixtures or caching stale data`,
+      ).toBeDefined();
+
+      expect(found!.isNationalTeam).toBe(true);
+      expect(found!.homeTeam).toBe("United States U20");
+      expect(found!.awayTeam).toBe("Brazil U20");
+      expect(found!.competition).toBe("CONCACAF U20");
+      expect(found!.status).toBe("scheduled");
+    },
+    30_000,
+  );
+
+  it(
+    "2. fixture already in the DB is not duplicated when sync re-encounters it (ON CONFLICT is safe)",
+    async () => {
+      // syncYouthNtFixtures returned FAKE_PRESEEDED_AF_ID which was already in the DB.
+      // The function should have updated the existing row (not inserted a second one).
+      const countResult = await db.execute(
+        sql`SELECT COUNT(*)::int AS cnt FROM fixtures WHERE api_football_fixture_id = ${FAKE_PRESEEDED_AF_ID}`,
+      ) as unknown as { rows: Array<{ cnt: number }> };
+
+      const count = countResult.rows[0]?.cnt ?? 0;
+      expect(
+        count,
+        `Expected exactly 1 fixture row with api_football_fixture_id=${FAKE_PRESEEDED_AF_ID} ` +
+          `after syncYouthNtFixtures re-encountered the pre-seeded fixture, but found ${count} rows — ` +
+          `the ON CONFLICT / upsert path may be inserting duplicates instead of updating`,
+      ).toBe(1);
+    },
+    30_000,
+  );
+});
