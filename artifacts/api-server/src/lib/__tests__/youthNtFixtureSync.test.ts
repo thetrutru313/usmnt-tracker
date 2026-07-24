@@ -5,6 +5,7 @@
  * without a code change or server redeploy.
  *
  * ## What is tested
+ * Suite A — existing sync-path coverage:
  * 1. A fixture returned by API-Football that does NOT yet exist in the DB
  *    (new knockout round, not in the startup seed) is inserted by
  *    syncYouthNtFixtures and immediately appears in GET /api/fixtures.
@@ -14,6 +15,13 @@
  * 2. Edge case: a fixture already present in the DB (seeded by startup or a
  *    prior sync run) is NOT duplicated when the sync re-encounters it —
  *    ON CONFLICT by api_football_fixture_id is safe.
+ *
+ * Suite B — fresh-DB / startup-seed + first-sync integration:
+ * 3. After a blank fixture table is populated only by the startup seed
+ *    (group-stage rows) and syncYouthNtFixtures is then run, every fixture
+ *    the API returns (group-stage + knockout) appears on GET /api/fixtures.
+ * 4. The startup-seeded group-stage rows survive the sync — the phantom purge
+ *    must not delete them when the API still returns their ids.
  *
  * ## How it works
  * - vi.stubGlobal("fetch", mockFetch) intercepts the afFetch calls made by
@@ -249,6 +257,266 @@ describe("syncYouthNtFixtures — newly-scheduled knockout fixture appears witho
           `after syncYouthNtFixtures re-encountered the pre-seeded fixture, but found ${count} rows — ` +
           `the ON CONFLICT / upsert path may be inserting duplicates instead of updating`,
       ).toBe(1);
+    },
+    30_000,
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Suite B: fresh DB + startup seed + first sync cycle
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Fake api_football_fixture_ids used exclusively by this suite — chosen to
+// avoid colliding with Suite A's IDs (9_999_200 / 9_999_201) or any real data.
+const FAKE_SEED_GS_ID_1  = 9_998_100; // group-stage fixture 1, pre-seeded before sync
+const FAKE_SEED_GS_ID_2  = 9_998_101; // group-stage fixture 2, pre-seeded before sync
+const FAKE_KNOCKOUT_ID   = 9_998_102; // knockout fixture, NOT pre-seeded — sync inserts it
+
+const seedFakeAfIds = [FAKE_SEED_GS_ID_1, FAKE_SEED_GS_ID_2, FAKE_KNOCKOUT_ID];
+
+// Kickoffs sufficiently far in the future so the phantom-purge's "kickoff already
+// passed" guard does not skip the seeded group-stage rows.
+const FAKE_GS_KICKOFF_1  = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString();
+const FAKE_GS_KICKOFF_2  = new Date(Date.now() + 43 * 24 * 60 * 60 * 1000).toISOString();
+const FAKE_KO_KICKOFF    = new Date(Date.now() + 50 * 24 * 60 * 60 * 1000).toISOString();
+
+/**
+ * Mock for Suite B: returns all three fixtures (both group-stage seeds AND the
+ * knockout round) for every /fixtures?team=... call.  This simulates the real
+ * API-Football behaviour where both group-stage and knockout fixtures appear
+ * together in the team's fixture list once the knockout is scheduled.
+ *
+ * Returning the group-stage ids is critical: it keeps them out of the "phantom"
+ * set so purgePhantomYouthNtFixtures does not delete them after the sync.
+ *
+ * Both fixtures use "United States U20" as a participant so they pass the
+ * isUsMensNationalTeamName filter inside syncYouthNtFixtures.
+ */
+function mockFetchB(url: string | URL | Request): Promise<Response> {
+  const urlStr = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+
+  if (urlStr.includes("/fixtures?team=")) {
+    return Promise.resolve(
+      fakeResponse([
+        // Group-stage fixture 1 — matches what the startup seed inserted.
+        {
+          fixture: {
+            id: FAKE_SEED_GS_ID_1,
+            date: FAKE_GS_KICKOFF_1,
+            status: { short: "NS", elapsed: null },
+            venue: { name: "Estadio Universitario BUAP" },
+          },
+          league: { name: "CONCACAF U20" },
+          teams: {
+            home: {
+              id: 10306,
+              name: "United States U20",
+              logo: "https://media.api-sports.io/football/teams/10306.png",
+            },
+            away: {
+              id: 11003,
+              name: "Haiti U20",
+              logo: "https://media.api-sports.io/football/teams/11003.png",
+            },
+          },
+          goals: { home: null, away: null },
+        },
+        // Group-stage fixture 2 — matches what the startup seed inserted.
+        {
+          fixture: {
+            id: FAKE_SEED_GS_ID_2,
+            date: FAKE_GS_KICKOFF_2,
+            status: { short: "NS", elapsed: null },
+            venue: { name: "Estadio Universitario BUAP" },
+          },
+          league: { name: "CONCACAF U20" },
+          teams: {
+            home: {
+              id: 10998,
+              name: "El Salvador U20",
+              logo: "https://media.api-sports.io/football/teams/10998.png",
+            },
+            away: {
+              id: 10306,
+              name: "United States U20",
+              logo: "https://media.api-sports.io/football/teams/10306.png",
+            },
+          },
+          goals: { home: null, away: null },
+        },
+        // Knockout fixture — brand-new, NOT in the startup seed.
+        {
+          fixture: {
+            id: FAKE_KNOCKOUT_ID,
+            date: FAKE_KO_KICKOFF,
+            status: { short: "NS", elapsed: null },
+            venue: { name: "Estadio Knockout" },
+          },
+          league: { name: "CONCACAF U20" },
+          teams: {
+            home: {
+              id: 10306,
+              name: "United States U20",
+              logo: "https://media.api-sports.io/football/teams/10306.png",
+            },
+            away: {
+              id: 9,
+              name: "Brazil U20",
+              logo: "https://media.api-sports.io/football/teams/9.png",
+            },
+          },
+          goals: { home: null, away: null },
+        },
+      ]),
+    );
+  }
+
+  return Promise.resolve(fakeResponse([]));
+}
+
+afterAll(async () => {
+  await db
+    .delete(fixturesTable)
+    .where(inArray(fixturesTable.apiFootballFixtureId, seedFakeAfIds));
+});
+
+describe("syncYouthNtFixtures — fresh-DB startup seed + first sync cycle produces complete fixture list", () => {
+  /**
+   * Simulate what happens on a fresh deploy:
+   * 1. Wipe any leftover rows from a previous test run.
+   * 2. Insert only the group-stage fixtures (what index.ts startup seed does).
+   * 3. Run syncYouthNtFixtures — the sync should insert the knockout fixture
+   *    AND leave the group-stage rows untouched.
+   */
+  beforeAll(async () => {
+    // Ensure a clean slate for this suite's fake ids.
+    await db
+      .delete(fixturesTable)
+      .where(inArray(fixturesTable.apiFootballFixtureId, seedFakeAfIds));
+
+    // Simulate the startup seed: insert only the group-stage fixtures.
+    await db.insert(fixturesTable).values([
+      {
+        apiFootballFixtureId: FAKE_SEED_GS_ID_1,
+        isNationalTeam: true,
+        competition: "CONCACAF U20",
+        kickoff: new Date(FAKE_GS_KICKOFF_1),
+        venue: "Estadio Universitario BUAP",
+        homeTeam: "United States U20",
+        awayTeam: "Haiti U20",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/10306.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/11003.png",
+        status: "scheduled",
+        tvNetwork: "FOX Sports",
+        streamingService: "Fox One",
+      },
+      {
+        apiFootballFixtureId: FAKE_SEED_GS_ID_2,
+        isNationalTeam: true,
+        competition: "CONCACAF U20",
+        kickoff: new Date(FAKE_GS_KICKOFF_2),
+        venue: "Estadio Universitario BUAP",
+        homeTeam: "El Salvador U20",
+        awayTeam: "United States U20",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/10998.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/10306.png",
+        status: "scheduled",
+        tvNetwork: "FOX Sports",
+        streamingService: "Fox One",
+      },
+    ]);
+
+    // First sync run — the API now also returns the knockout fixture.
+    vi.stubGlobal("fetch", mockFetchB);
+    await syncYouthNtFixtures();
+    vi.unstubAllGlobals();
+  }, 60_000);
+
+  it(
+    "3. knockout fixture returned by the API appears in GET /api/fixtures after the first sync",
+    async () => {
+      // Confirm the knockout row exists in the DB.
+      const dbRows = await db
+        .select()
+        .from(fixturesTable)
+        .where(eq(fixturesTable.apiFootballFixtureId, FAKE_KNOCKOUT_ID));
+
+      expect(
+        dbRows,
+        `syncYouthNtFixtures should have inserted a knockout fixture with ` +
+          `api_football_fixture_id=${FAKE_KNOCKOUT_ID}, but no such row was found — ` +
+          `the insert path may be broken or the mock is not reaching the upsert`,
+      ).toHaveLength(1);
+
+      const dbRow = dbRows[0]!;
+      expect(dbRow.isNationalTeam).toBe(true);
+      expect(dbRow.homeTeam).toBe("United States U20");
+      expect(dbRow.awayTeam).toBe("Brazil U20");
+      expect(dbRow.competition).toBe("CONCACAF U20");
+      expect(dbRow.status).toBe("scheduled");
+      expect(dbRow.streamingService).toBe("Fox One"); // BROADCAST_BY_LEAGUE["CONCACAF U20"]
+
+      // Confirm it surfaces on the route.
+      const res = await request(app).get("/api/fixtures").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `GET /api/fixtures response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === dbRow.id);
+      expect(
+        found,
+        `Knockout fixture id=${dbRow.id} (api_football_fixture_id=${FAKE_KNOCKOUT_ID}) ` +
+          `is missing from GET /api/fixtures — the route may be filtering national-team fixtures`,
+      ).toBeDefined();
+      expect(found!.isNationalTeam).toBe(true);
+    },
+    30_000,
+  );
+
+  it(
+    "4. startup-seeded group-stage fixtures survive the sync — phantom purge must not remove them",
+    async () => {
+      // Both group-stage rows must still exist with count = 1 each.
+      for (const afId of [FAKE_SEED_GS_ID_1, FAKE_SEED_GS_ID_2]) {
+        const countResult = await db.execute(
+          sql`SELECT COUNT(*)::int AS cnt FROM fixtures WHERE api_football_fixture_id = ${afId}`,
+        ) as unknown as { rows: Array<{ cnt: number }> };
+
+        const count = countResult.rows[0]?.cnt ?? 0;
+        expect(
+          count,
+          `Group-stage fixture with api_football_fixture_id=${afId} was seeded before the sync ` +
+            `but has ${count} rows afterwards — expected exactly 1. ` +
+            `If 0, purgePhantomYouthNtFixtures removed it despite the API returning its id; ` +
+            `if >1, the upsert path inserted a duplicate instead of no-oping`,
+        ).toBe(1);
+      }
+
+      // Also confirm both appear on the route using their DB ids.
+      const gsRows = await db
+        .select({ id: fixturesTable.id })
+        .from(fixturesTable)
+        .where(inArray(fixturesTable.apiFootballFixtureId, [FAKE_SEED_GS_ID_1, FAKE_SEED_GS_ID_2]));
+
+      const res = await request(app).get("/api/fixtures").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `GET /api/fixtures response did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      for (const { id: dbId } of gsRows) {
+        const found = parsed.data!.find((f) => f.id === dbId);
+        expect(
+          found,
+          `Startup-seeded group-stage fixture with db id=${dbId} ` +
+            `is missing from GET /api/fixtures after the sync ran — ` +
+            `the phantom purge may have deleted it, or the route is filtering it out`,
+        ).toBeDefined();
+        expect(found!.isNationalTeam).toBe(true);
+      }
     },
     30_000,
   );
