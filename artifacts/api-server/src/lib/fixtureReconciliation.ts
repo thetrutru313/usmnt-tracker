@@ -287,6 +287,71 @@ export async function purgeOrphanedUpcomingFixtures(
   return { purged: orphans.length };
 }
 
+/**
+ * Deletes past fixtures that are still stuck at "scheduled" or "live" and
+ * have zero `fixture_players` links.
+ *
+ * These fixtures are invisible to `reconcileClubFixtures`, which inner-joins
+ * on `fixture_players` to find candidates. Without player links, the
+ * reconciliation loop never sees them, so they can never self-heal to
+ * "finished". Because they carry no tracked-player data they have no
+ * user-visible value and are safe to delete.
+ *
+ * Typical cause: a fixture was inserted near its kickoff time, the repair
+ * pass ran after kickoff (which skips past fixtures), and the player link
+ * was therefore never created.
+ */
+export async function purgeStaleOrphanedPastFixtures(
+  now: number = Date.now(),
+): Promise<{ purged: number }> {
+  const nowDate = new Date(now);
+
+  const orphans = await db
+    .select({
+      id:       fixturesTable.id,
+      homeTeam: fixturesTable.homeTeam,
+      awayTeam: fixturesTable.awayTeam,
+      kickoff:  fixturesTable.kickoff,
+      status:   fixturesTable.status,
+    })
+    .from(fixturesTable)
+    .where(
+      and(
+        inArray(fixturesTable.status, ["scheduled", "live"]),
+        lt(fixturesTable.kickoff, nowDate),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(fixturePlayersTable)
+            .where(eq(fixturePlayersTable.fixtureId, fixturesTable.id)),
+        ),
+      ),
+    );
+
+  if (orphans.length === 0) return { purged: 0 };
+
+  const orphanIds = orphans.map((f) => f.id);
+  // No fixture_players rows exist (guaranteed by the NOT EXISTS guard above),
+  // but delete defensively to satisfy the FK constraint.
+  await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, orphanIds));
+  await db.delete(fixturesTable).where(inArray(fixturesTable.id, orphanIds));
+
+  for (const f of orphans) {
+    logger.warn(
+      {
+        fixtureId: f.id,
+        homeTeam:  f.homeTeam,
+        awayTeam:  f.awayTeam,
+        kickoff:   f.kickoff,
+        status:    f.status,
+      },
+      "Purged past fixture stuck at scheduled/live with no tracked player links — invisible to reconciliation",
+    );
+  }
+
+  return { purged: orphans.length };
+}
+
 export async function purgeStalePostponedFixtures(
   now: number = Date.now(),
 ): Promise<{ purged: number }> {

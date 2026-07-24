@@ -255,7 +255,20 @@ export default function Fixtures() {
         fixture.featuredPlayers.some((p) => poolFilter.includes(p.poolTier)),
       );
 
-  const upcomingFixtures = filteredFixtures.filter((f) => f.status !== "finished");
+  // Safety net: a "scheduled" fixture whose kickoff is more than 2 hours in
+  // the past is stuck — the backend reconciliation loop can only update
+  // fixtures that have fixture_players links, so orphaned fixtures (no player
+  // tags) can never self-heal. Always show "live" matches regardless of wall
+  // time; give "scheduled" a 2-hour grace window to cover kickoff delays and
+  // slow API updates before hiding them from the upcoming list.
+  const nowMs = Date.now();
+  const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+  const upcomingFixtures = filteredFixtures.filter(
+    (f) =>
+      f.status === "live" ||
+      (f.status !== "finished" &&
+        new Date(f.kickoff).getTime() > nowMs - TWO_HOURS_MS),
+  );
   const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
   const finishedFixtures = filteredFixtures.filter(
     (f) => f.status === "finished" && new Date(f.kickoff) >= sevenDaysAgo,

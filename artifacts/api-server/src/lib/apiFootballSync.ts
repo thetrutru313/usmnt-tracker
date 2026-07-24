@@ -8,6 +8,7 @@ import {
   reconcileClubFixtures,
   purgeStalePostponedFixtures,
   purgeOrphanedUpcomingFixtures,
+  purgeStaleOrphanedPastFixtures,
 } from "./fixtureReconciliation.js";
 
 // Re-export so existing callers (usmntSync, playerStatsSync, etc.) keep working.
@@ -1379,8 +1380,21 @@ export async function syncApiFootballFixtures(
     logger.warn({ err }, "Orphaned upcoming fixture purge failed — will retry on next sync cycle");
   }
 
+  // Purge past fixtures (kickoff already passed) that are still stuck at
+  // "scheduled" or "live" with zero fixture_players links. These are invisible
+  // to reconcileClubFixtures (which inner-joins on fixture_players) and will
+  // never self-heal. They have no user-visible value — no player tags, no
+  // scores — so deleting them is safe.
+  let purgedStaleOrphaned = 0;
+  try {
+    const purgeResult = await purgeStaleOrphanedPastFixtures();
+    purgedStaleOrphaned = purgeResult.purged;
+  } catch (err) {
+    logger.warn({ err }, "Stale orphaned past fixture purge failed — will retry on next sync cycle");
+  }
+
   logger.info(
-    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, purgedOrphaned, failures },
+    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, purgedOrphaned, purgedStaleOrphaned, failures },
     "API-Football fixtures sync complete",
   );
   return { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures };
