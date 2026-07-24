@@ -1678,9 +1678,155 @@ const YOUTH_NT_TEAMS: ReadonlyArray<{ teamId: number; label: string }> = [
   { teamId: 12522, label: "US U17" },
 ];
 
+/**
+ * Per-team result from the API-Football fetch phase of `syncYouthNtFixtures`.
+ * Passed to `purgePhantomYouthNtFixtures` so the purge can apply per-team
+ * safety gates rather than a single all-or-nothing flag.
+ */
+export interface YouthTeamFetchResult {
+  /** API-Football team id (e.g. 10306 for US U20, 12522 for US U17). */
+  teamId: number;
+  /** Human-readable label used in log messages (e.g. "US U20"). */
+  label: string;
+  /**
+   * All API-Football fixture ids returned for this team across all fetched
+   * seasons (after filtering to US-participant fixtures).
+   */
+  seenAfIds: Set<number>;
+  /**
+   * True only when *every* season fetch for this team succeeded.  A partial
+   * outage (e.g. the current-season call times out) leaves the seen-id set
+   * incomplete, so rows absent from it may simply have been missed rather than
+   * genuinely removed.  The purge skips this team entirely unless this flag
+   * is true.
+   */
+  fetchComplete: boolean;
+}
+
+/**
+ * Purges upcoming youth NT fixtures that API-Football no longer returns.
+ *
+ * Youth NT fixtures are always inserted with an `api_football_fixture_id`
+ * (unlike seeded senior USMNT rows which start unbound).  If a future youth NT
+ * fixture's id is absent from the API response for the team it belongs to, and
+ * that team's fetch was fully successful, the fixture is treated as
+ * postponed/cancelled and deleted from both `fixtures` and `fixture_players`.
+ *
+ * Safety contract:
+ *   - Past (finished) fixtures are never touched regardless of API result.
+ *   - Fixtures belonging to a team whose fetches were incomplete are skipped —
+ *     an outage must not cause false deletions.
+ *   - Only rows belonging to the known YOUTH_NT_TEAMS cohorts are candidates;
+ *     senior USMNT rows (home/away = "USA") are excluded.
+ *
+ * Extracted from `syncYouthNtFixtures` so tests can drive the purge directly
+ * with controlled DB rows and a known per-team result set.
+ *
+ * @param teamResults  Per-team fetch outcomes produced by `syncYouthNtFixtures`.
+ * @param nowMs        Current epoch milliseconds — injectable for deterministic
+ *                     testing without clock manipulation.
+ */
+export async function purgePhantomYouthNtFixtures(
+  teamResults: YouthTeamFetchResult[],
+  nowMs: number,
+): Promise<{ phantomsPurged: number; failures: number }> {
+  // Only consider teams whose fetches completed fully — partial data must not
+  // be used to infer that a fixture was cancelled.
+  const safeTeams = teamResults.filter((t) => t.fetchComplete);
+  if (safeTeams.length === 0) {
+    logger.warn("Youth NT fixture sync: no team had complete API fetches — skipping phantom purge");
+    return { phantomsPurged: 0, failures: 0 };
+  }
+
+  // Build a merged set of all ids that are safe to check, and a per-team
+  // lookup so we can determine whether a given fixture row is "owned" by a
+  // team with complete data.
+  //
+  // Ownership is determined by name: extract the age-group suffix from each
+  // team label ("US U20" → "U20") and match against home/away team names in
+  // the DB row (e.g. "USA U20", "United States U20").
+  const safeAgeGroups = new Map<string, Set<number>>(); // ageGroup → seenAfIds
+  for (const t of safeTeams) {
+    // Label format is "US U20" or "US U17" — extract the "U20"/"U17" suffix.
+    const match = t.label.match(/U\d+$/);
+    if (!match) continue;
+    const ageGroup = match[0]; // e.g. "U20"
+    safeAgeGroups.set(ageGroup, t.seenAfIds);
+  }
+
+  if (safeAgeGroups.size === 0) return { phantomsPurged: 0, failures: 0 };
+
+  // Load all bound (api_football_fixture_id IS NOT NULL), national-team
+  // fixture rows that are still in the future and not yet finished.
+  const candidates = await db
+    .select({
+      id: fixturesTable.id,
+      apiFootballFixtureId: fixturesTable.apiFootballFixtureId,
+      homeTeam: fixturesTable.homeTeam,
+      awayTeam: fixturesTable.awayTeam,
+      kickoff: fixturesTable.kickoff,
+      status: fixturesTable.status,
+    })
+    .from(fixturesTable)
+    .where(
+      and(
+        eq(fixturesTable.isNationalTeam, true),
+        isNotNull(fixturesTable.apiFootballFixtureId),
+      ),
+    );
+
+  let phantomsPurged = 0;
+  let failures = 0;
+
+  for (const row of candidates) {
+    if (row.apiFootballFixtureId === null) continue; // type guard (already filtered above)
+    if (row.status === "finished") continue; // leave historical rows alone
+    const kickoffMs = row.kickoff.getTime();
+    if (kickoffMs <= nowMs) continue; // kickoff already passed — leave it alone
+
+    // Determine which age group this row belongs to by scanning its team names.
+    // A row is in scope only when one of its participants matches an age group
+    // whose fetch was complete.  Senior "USA" rows have no U-suffix and are
+    // naturally excluded.
+    let ownerSeenIds: Set<number> | undefined;
+    for (const [ageGroup, seenIds] of safeAgeGroups) {
+      const ageGroupPattern = new RegExp(`\\b${ageGroup}\\b`);
+      if (ageGroupPattern.test(row.homeTeam) || ageGroupPattern.test(row.awayTeam)) {
+        ownerSeenIds = seenIds;
+        break;
+      }
+    }
+    if (!ownerSeenIds) continue; // not owned by any safely-fetched youth team — skip
+
+    if (ownerSeenIds.has(row.apiFootballFixtureId)) continue; // still returned by API — keep
+
+    logger.warn(
+      {
+        fixtureId: row.id,
+        afFixtureId: row.apiFootballFixtureId,
+        homeTeam: row.homeTeam,
+        awayTeam: row.awayTeam,
+        kickoff: row.kickoff,
+      },
+      "Youth NT fixture sync: upcoming fixture no longer returned by API-Football — purging as phantom",
+    );
+    try {
+      await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, row.id));
+      await db.delete(fixturesTable).where(eq(fixturesTable.id, row.id));
+      phantomsPurged++;
+    } catch (err) {
+      logger.warn({ err, fixtureId: row.id }, "Youth NT fixture sync: failed to purge phantom fixture");
+      failures++;
+    }
+  }
+
+  return { phantomsPurged, failures };
+}
+
 export async function syncYouthNtFixtures(): Promise<{
   fixturesInserted: number;
   fixturesUpdated: number;
+  phantomsPurged: number;
   failures: number;
 }> {
   let fixturesInserted = 0;
@@ -1689,8 +1835,15 @@ export async function syncYouthNtFixtures(): Promise<{
 
   const currentYear = new Date().getUTCFullYear();
 
+  // Per-team fetch results — collected across both teams so the phantom-purge
+  // step can apply per-team safety gates (a partial outage for one team must
+  // not cause that team's upcoming fixtures to be deleted).
+  const teamResults: YouthTeamFetchResult[] = [];
+
   for (const { teamId, label } of YOUTH_NT_TEAMS) {
     let afFixtures: AfFixture[] = [];
+    let fetchComplete = true; // flipped to false on any season fetch failure
+
     for (const season of [currentYear, currentYear - 1]) {
       try {
         const fetched = await afFetch<AfFixture[]>(`/fixtures?team=${teamId}&season=${season}`);
@@ -1698,12 +1851,8 @@ export async function syncYouthNtFixtures(): Promise<{
       } catch (err) {
         logger.warn({ err, teamId, label, season }, "Youth NT fixture sync: API-Football fetch failed for season");
         failures++;
+        fetchComplete = false;
       }
-    }
-
-    if (afFixtures.length === 0) {
-      logger.warn({ teamId, label }, "Youth NT fixture sync: no fixtures returned — skipping team");
-      continue;
     }
 
     // Only process fixtures where a US youth team is actually a participant.
@@ -1714,6 +1863,15 @@ export async function syncYouthNtFixtures(): Promise<{
         isUsMensNationalTeamName(f.teams.home.name) ||
         isUsMensNationalTeamName(f.teams.away.name),
     );
+
+    // Record this team's result for the phantom-purge step.
+    const seenAfIds = new Set<number>(usFixtures.map((f) => f.fixture.id));
+    teamResults.push({ teamId, label, seenAfIds, fetchComplete });
+
+    if (usFixtures.length === 0) {
+      logger.warn({ teamId, label, fetchComplete }, "Youth NT fixture sync: no US-participant fixtures found — skipping upserts for team");
+      continue;
+    }
 
     for (const f of usFixtures) {
       try {
@@ -1800,12 +1958,19 @@ export async function syncYouthNtFixtures(): Promise<{
     }
 
     logger.info(
-      { teamId, label, usFixturesFound: usFixtures.length },
+      { teamId, label, usFixturesFound: usFixtures.length, fetchComplete },
       "Youth NT fixture sync: finished processing team",
     );
   }
 
-  const result = { fixturesInserted, fixturesUpdated, failures };
+  // Purge upcoming youth NT fixtures that API-Football no longer returns.
+  // purgePhantomYouthNtFixtures applies per-team safety gates internally:
+  // fixtures belonging to a team that had any fetch failure are skipped.
+  const { phantomsPurged, failures: purgeFailures } =
+    await purgePhantomYouthNtFixtures(teamResults, Date.now());
+  failures += purgeFailures;
+
+  const result = { fixturesInserted, fixturesUpdated, phantomsPurged, failures };
   logger.info(result, "Youth NT fixture sync complete");
   return result;
 }
