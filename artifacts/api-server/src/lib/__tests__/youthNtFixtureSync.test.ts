@@ -521,3 +521,214 @@ describe("syncYouthNtFixtures — fresh-DB startup seed + first sync cycle produ
     30_000,
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Suite C: live-update path — scheduled → live → finished transitions
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Verifies that the UPDATE branch of syncYouthNtFixtures correctly transitions
+// a youth NT fixture from "scheduled" → "live" (with elapsedMinute and scores)
+// → "finished" (with final scores and null elapsedMinute), and that each change
+// is immediately visible on GET /api/fixtures without a server restart.
+//
+// The kickoff is set 1 hour in the past so the phantom-purge's "kickoff already
+// passed" guard skips this row — only future fixtures are eligible for phantom
+// deletion, and a match that is live/finished has necessarily already kicked off.
+
+/** Fake api_football_fixture_id used exclusively by Suite C. */
+const FAKE_LIVE_AF_ID = 9_996_001;
+
+/** Kickoff 1 hour in the past — simulates a match that has already started. */
+const FAKE_LIVE_KICKOFF = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+afterAll(async () => {
+  await db
+    .delete(fixturesTable)
+    .where(eq(fixturesTable.apiFootballFixtureId, FAKE_LIVE_AF_ID));
+});
+
+/**
+ * Builds a fetch mock that returns a single youth NT fixture with the given
+ * live state for every /fixtures?team=… call.  All other URLs receive an empty
+ * array so afFetch does not throw.
+ */
+function makeLiveSyncMock(
+  statusShort: string,
+  elapsed: number | null,
+  homeGoals: number | null,
+  awayGoals: number | null,
+) {
+  return function mockFetchC(url: string | URL | Request): Promise<Response> {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+    if (urlStr.includes("/fixtures?team=")) {
+      return Promise.resolve(
+        fakeResponse([
+          {
+            fixture: {
+              id: FAKE_LIVE_AF_ID,
+              date: FAKE_LIVE_KICKOFF,
+              status: { short: statusShort, elapsed },
+              venue: { name: "Estadio Live Test" },
+            },
+            league: { name: "CONCACAF U20" },
+            teams: {
+              home: {
+                id: 10306,
+                name: "United States U20",
+                logo: "https://media.api-sports.io/football/teams/10306.png",
+              },
+              away: {
+                id: 19_003,
+                name: "Mexico U20",
+                logo: "https://media.api-sports.io/football/teams/503.png",
+              },
+            },
+            goals: { home: homeGoals, away: awayGoals },
+          },
+        ]),
+      );
+    }
+    return Promise.resolve(fakeResponse([]));
+  };
+}
+
+describe("syncYouthNtFixtures — live-update path: scheduled → live → finished", () => {
+  /**
+   * Pre-seed the fixture with status="scheduled" before both tests run.
+   * Each test then drives a single sync pass and asserts the new state.
+   */
+  beforeAll(async () => {
+    // Clean up any leftover row from a previous run.
+    await db
+      .delete(fixturesTable)
+      .where(eq(fixturesTable.apiFootballFixtureId, FAKE_LIVE_AF_ID));
+
+    // Insert as "scheduled" — the state it would be in before the match starts.
+    await db.insert(fixturesTable).values({
+      apiFootballFixtureId: FAKE_LIVE_AF_ID,
+      isNationalTeam: true,
+      competition: "CONCACAF U20",
+      kickoff: new Date(FAKE_LIVE_KICKOFF),
+      venue: "Estadio Live Test",
+      homeTeam: "United States U20",
+      awayTeam: "Mexico U20",
+      homeLogoUrl: "https://media.api-sports.io/football/teams/10306.png",
+      awayLogoUrl: "https://media.api-sports.io/football/teams/503.png",
+      status: "scheduled",
+      tvNetwork: "FOX Sports",
+      streamingService: "Fox One",
+    });
+  }, 30_000);
+
+  it(
+    "5. sync returning status=1H updates the fixture to live with elapsedMinute=42 and scores in DB and GET /api/fixtures",
+    async () => {
+      // First live sync pass: API-Football returns the match as "1H" (first half),
+      // 42 minutes elapsed, score 1–0 to the US.
+      vi.stubGlobal("fetch", makeLiveSyncMock("1H", 42, 1, 0));
+      await syncYouthNtFixtures();
+      vi.unstubAllGlobals();
+
+      // ── DB assertions ────────────────────────────────────────────────────
+      const dbRows = await db
+        .select()
+        .from(fixturesTable)
+        .where(eq(fixturesTable.apiFootballFixtureId, FAKE_LIVE_AF_ID));
+
+      expect(
+        dbRows,
+        `Expected exactly 1 row with api_football_fixture_id=${FAKE_LIVE_AF_ID} after the live-sync pass`,
+      ).toHaveLength(1);
+
+      const dbRow = dbRows[0]!;
+      expect(
+        dbRow.status,
+        "DB status should be 'live' after API-Football returns short='1H'",
+      ).toBe("live");
+      expect(
+        dbRow.elapsedMinute,
+        "DB elapsedMinute should be 42 for an in-progress first-half fixture",
+      ).toBe(42);
+      expect(dbRow.homeScore, "DB homeScore should be 1").toBe(1);
+      expect(dbRow.awayScore, "DB awayScore should be 0").toBe(0);
+
+      // ── Route assertions ─────────────────────────────────────────────────
+      const res = await request(app).get("/api/fixtures").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `GET /api/fixtures did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === dbRow.id);
+      expect(
+        found,
+        `Live fixture id=${dbRow.id} (api_football_fixture_id=${FAKE_LIVE_AF_ID}) ` +
+          `is missing from GET /api/fixtures immediately after the live-sync pass — ` +
+          `the route may be filtering it out or caching stale data`,
+      ).toBeDefined();
+      expect(found!.status, "Route status should be 'live'").toBe("live");
+      expect(
+        found!.elapsedMinute,
+        "Route elapsedMinute should be 42",
+      ).toBe(42);
+      expect(found!.homeScore, "Route homeScore should be 1").toBe(1);
+      expect(found!.awayScore, "Route awayScore should be 0").toBe(0);
+    },
+    30_000,
+  );
+
+  it(
+    "6. sync returning status=FT updates the fixture to finished with final scores and null elapsedMinute in DB and GET /api/fixtures",
+    async () => {
+      // Second sync pass: match has finished — API-Football returns "FT",
+      // no elapsed time, final score 2–1 to the US.
+      vi.stubGlobal("fetch", makeLiveSyncMock("FT", null, 2, 1));
+      await syncYouthNtFixtures();
+      vi.unstubAllGlobals();
+
+      // ── DB assertions ────────────────────────────────────────────────────
+      const dbRows = await db
+        .select()
+        .from(fixturesTable)
+        .where(eq(fixturesTable.apiFootballFixtureId, FAKE_LIVE_AF_ID));
+
+      expect(
+        dbRows,
+        `Expected exactly 1 row with api_football_fixture_id=${FAKE_LIVE_AF_ID} after the FT-sync pass`,
+      ).toHaveLength(1);
+
+      const dbRow = dbRows[0]!;
+      expect(
+        dbRow.status,
+        "DB status should be 'finished' after API-Football returns short='FT'",
+      ).toBe("finished");
+      expect(
+        dbRow.elapsedMinute,
+        "DB elapsedMinute should be null for a finished fixture (no longer ticking)",
+      ).toBeNull();
+      expect(dbRow.homeScore, "DB homeScore should be 2 (final score)").toBe(2);
+      expect(dbRow.awayScore, "DB awayScore should be 1 (final score)").toBe(1);
+
+      // ── Route assertions ─────────────────────────────────────────────────
+      const res = await request(app).get("/api/fixtures").expect(200);
+      const parsed = ListFixturesResponse.safeParse(res.body);
+      expect(
+        parsed.success,
+        `GET /api/fixtures did not parse:\n${parsed.success ? "" : fmtIssues(parsed.error)}`,
+      ).toBe(true);
+
+      const found = parsed.data!.find((f) => f.id === dbRow.id);
+      expect(
+        found,
+        `Finished fixture id=${dbRow.id} (api_football_fixture_id=${FAKE_LIVE_AF_ID}) ` +
+          `is missing from GET /api/fixtures immediately after the FT-sync pass`,
+      ).toBeDefined();
+      expect(found!.status, "Route status should be 'finished'").toBe("finished");
+      expect(found!.elapsedMinute ?? null, "Route elapsedMinute should be null for a finished fixture").toBeNull();
+      expect(found!.homeScore, "Route homeScore should be 2").toBe(2);
+      expect(found!.awayScore, "Route awayScore should be 1").toBe(1);
+    },
+    30_000,
+  );
+});
