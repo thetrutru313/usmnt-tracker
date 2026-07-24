@@ -7,7 +7,7 @@ import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries, syncStatsForFinishedFixture } from "../lib/playerStatsSync";
 import { syncPlayerClubs } from "../lib/playerClubSync";
-import { syncApiFootballFixtures, syncNationalTeamFixtures } from "../lib/apiFootballSync";
+import { syncApiFootballFixtures, syncNationalTeamFixtures, syncYouthNtFixtures } from "../lib/apiFootballSync";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -329,6 +329,23 @@ router.post("/admin/trigger-nt-sync", async (_req, res): Promise<void> => {
   res.json({ ok: true });
   syncNationalTeamFixtures().catch((err) =>
     logger.error({ err }, "Admin trigger-nt-sync failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-youth-nt-sync
+ * Triggers syncYouthNtFixtures — discovers and upserts US U20 / US U17
+ * fixtures from API-Football. Returns immediately; sync runs in the background.
+ */
+router.post("/admin/trigger-youth-nt-sync", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  logger.info("Admin: trigger-youth-nt-sync started");
+  res.json({ ok: true });
+  syncYouthNtFixtures().catch((err) =>
+    logger.error({ err }, "Admin trigger-youth-nt-sync failed"),
   );
 });
 

@@ -1615,6 +1615,162 @@ export async function syncNationalTeamFixtures(): Promise<{
   return result;
 }
 
+// ── US Youth National Team fixture sync ─────────────────────────────────────
+//
+// The senior USMNT sync (syncNationalTeamFixtures above) only updates existing
+// seeded rows — it never discovers new fixtures. Youth tournaments add rounds
+// (knockout stages, third-place play-offs, etc.) dynamically; relying on a
+// hand-maintained startup seed means those new games are silently absent until
+// someone edits index.ts and redeploys.
+//
+// This function fetches the full fixture list for the US U20 and US U17 teams
+// directly from API-Football and upserts every fixture where a US youth team
+// is a participant:
+//   • Row not yet in DB → INSERT with is_national_team = true.
+//   • Row already exists → UPDATE status / scores if they changed.
+//
+// Both paths are idempotent, so this function and the startup seed coexist
+// safely. The startup seed is still useful for seeding fixtures into production
+// on the first deploy before the scheduler has run; this function keeps the
+// list current thereafter.
+
+const YOUTH_NT_TEAMS: ReadonlyArray<{ teamId: number; label: string }> = [
+  { teamId: 10306, label: "US U20" },
+  { teamId: 12522, label: "US U17" },
+];
+
+export async function syncYouthNtFixtures(): Promise<{
+  fixturesInserted: number;
+  fixturesUpdated: number;
+  failures: number;
+}> {
+  let fixturesInserted = 0;
+  let fixturesUpdated = 0;
+  let failures = 0;
+
+  const currentYear = new Date().getUTCFullYear();
+
+  for (const { teamId, label } of YOUTH_NT_TEAMS) {
+    let afFixtures: AfFixture[] = [];
+    for (const season of [currentYear, currentYear - 1]) {
+      try {
+        const fetched = await afFetch<AfFixture[]>(`/fixtures?team=${teamId}&season=${season}`);
+        afFixtures = afFixtures.concat(fetched);
+      } catch (err) {
+        logger.warn({ err, teamId, label, season }, "Youth NT fixture sync: API-Football fetch failed for season");
+        failures++;
+      }
+    }
+
+    if (afFixtures.length === 0) {
+      logger.warn({ teamId, label }, "Youth NT fixture sync: no fixtures returned — skipping team");
+      continue;
+    }
+
+    // Only process fixtures where a US youth team is actually a participant.
+    // (API-Football may return opponent fixtures if we fetched by team ID and
+    // the team happened to face the US youth team — filtering is cheap here.)
+    const usFixtures = afFixtures.filter(
+      (f) =>
+        isUsMensNationalTeamName(f.teams.home.name) ||
+        isUsMensNationalTeamName(f.teams.away.name),
+    );
+
+    for (const f of usFixtures) {
+      try {
+        const [existing] = await db
+          .select({
+            id: fixturesTable.id,
+            status: fixturesTable.status,
+            homeScore: fixturesTable.homeScore,
+            awayScore: fixturesTable.awayScore,
+          })
+          .from(fixturesTable)
+          .where(eq(fixturesTable.apiFootballFixtureId, f.fixture.id));
+
+        const newStatus = mapStatus(f.fixture.status.short);
+        const newHomeScore = f.goals.home ?? null;
+        const newAwayScore = f.goals.away ?? null;
+        const newElapsed = newStatus === "live" ? (f.fixture.status.elapsed ?? null) : null;
+        const broadcast = broadcastFor(f.league.name);
+
+        if (existing) {
+          const statusChanged = existing.status !== newStatus;
+          const scoresChanged =
+            existing.homeScore !== newHomeScore || existing.awayScore !== newAwayScore;
+          if (!statusChanged && !scoresChanged) continue;
+
+          await db
+            .update(fixturesTable)
+            .set({
+              status: newStatus,
+              homeScore: newHomeScore,
+              awayScore: newAwayScore,
+              elapsedMinute: newElapsed,
+            })
+            .where(eq(fixturesTable.id, existing.id));
+          fixturesUpdated++;
+          logger.info(
+            {
+              fixtureId: existing.id,
+              afFixtureId: f.fixture.id,
+              status: newStatus,
+              newHomeScore,
+              newAwayScore,
+            },
+            "Youth NT fixture sync: updated fixture",
+          );
+        } else {
+          // New fixture — insert it so it appears on the Fixtures page without
+          // requiring a code change or redeploy.
+          const values = {
+            apiFootballFixtureId: f.fixture.id,
+            isNationalTeam: true,
+            competition: f.league.name,
+            kickoff: new Date(f.fixture.date),
+            venue: f.fixture.venue.name ?? "TBD",
+            homeTeam: f.teams.home.name,
+            awayTeam: f.teams.away.name,
+            homeLogoUrl: f.teams.home.logo,
+            awayLogoUrl: f.teams.away.logo,
+            status: newStatus,
+            elapsedMinute: newElapsed,
+            tvNetwork: broadcast.tvNetwork,
+            streamingService: broadcast.streamingService,
+          };
+          await db.insert(fixturesTable).values(values);
+          fixturesInserted++;
+          logger.info(
+            {
+              afFixtureId: f.fixture.id,
+              homeTeam: f.teams.home.name,
+              awayTeam: f.teams.away.name,
+              kickoff: f.fixture.date,
+              competition: f.league.name,
+            },
+            "Youth NT fixture sync: inserted new fixture",
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          { err, afFixtureId: f.fixture.id },
+          "Youth NT fixture sync: failed to process fixture",
+        );
+        failures++;
+      }
+    }
+
+    logger.info(
+      { teamId, label, usFixturesFound: usFixtures.length },
+      "Youth NT fixture sync: finished processing team",
+    );
+  }
+
+  const result = { fixturesInserted, fixturesUpdated, failures };
+  logger.info(result, "Youth NT fixture sync complete");
+  return result;
+}
+
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /**
@@ -1707,10 +1863,11 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
   const COOLDOWN = 50 * 60 * 1000; // 50 min — skip startup re-run if already ran this hour
   const run = async () => {
     if (!(await claimSyncRun("fixtures", COOLDOWN))) return;
-    // Run club fixtures and NT fixtures in sequence — both share the same
+    // Run club fixtures and NT fixtures in sequence — all share the same
     // rate-limited afFetch queue so they naturally throttle each other.
     syncApiFootballFixtures().catch((err) => logger.error({ err }, "API-Football fixtures sync failed"));
     syncNationalTeamFixtures().catch((err) => logger.error({ err }, "NT fixture sync failed"));
+    syncYouthNtFixtures().catch((err) => logger.error({ err }, "Youth NT fixture sync failed"));
   };
   run();
   intervalHandle = setInterval(run, intervalMs);
