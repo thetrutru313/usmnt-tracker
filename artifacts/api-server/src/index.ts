@@ -209,6 +209,71 @@ app.listen(port, async (err) => {
     }
   })();
 
+  // Startup seed: insert the 6 US U20 / US U17 fixtures if they are not already
+  // present in this environment's database.  Dev and production use separate
+  // Postgres instances; fixtures added to dev after the last production publish
+  // won't exist in production until this block runs.  Idempotent — the
+  // ON CONFLICT DO NOTHING clause makes repeated startups a no-op.
+  (async () => {
+    try {
+      const result = await db.execute(sql`
+        INSERT INTO fixtures (
+          api_football_fixture_id,
+          home_team, away_team,
+          home_logo_url, away_logo_url,
+          competition, kickoff, venue,
+          tv_network, streaming_service,
+          is_national_team, status
+        ) VALUES
+          -- CONCACAF U20 group stage (United States U20)
+          (1544720, 'United States U20', 'Haiti U20',
+           'https://media.api-sports.io/football/teams/10306.png',
+           'https://media.api-sports.io/football/teams/11003.png',
+           'CONCACAF U20', '2026-07-26 02:00:00+00', 'Estadio Universitario BUAP',
+           'FOX Sports', 'Fox One', true, 'scheduled'),
+
+          (1544726, 'El Salvador U20', 'United States U20',
+           'https://media.api-sports.io/football/teams/10998.png',
+           'https://media.api-sports.io/football/teams/10306.png',
+           'CONCACAF U20', '2026-07-29 02:00:00+00', 'Estadio Universitario BUAP',
+           'FOX Sports', 'Fox One', true, 'scheduled'),
+
+          (1544732, 'United States U20', 'Cuba U20',
+           'https://media.api-sports.io/football/teams/10306.png',
+           'https://media.api-sports.io/football/teams/10994.png',
+           'CONCACAF U20', '2026-08-01 02:00:00+00', 'Estadio Universitario BUAP',
+           'FOX Sports', 'Fox One', true, 'scheduled'),
+
+          -- FIFA U-17 World Cup group stage (United States U17)
+          (1546162, 'United States U17', 'Montenegro U17',
+           'https://media.api-sports.io/football/teams/12522.png',
+           'https://media.api-sports.io/football/teams/17966.png',
+           'World Cup - U17', '2026-11-19 15:00:00+00', 'TBD',
+           null, 'FIFA+', true, 'scheduled'),
+
+          (1546181, 'United States U17', 'Chile U17',
+           'https://media.api-sports.io/football/teams/12522.png',
+           'https://media.api-sports.io/football/teams/12505.png',
+           'World Cup - U17', '2026-11-22 15:00:00+00', 'TBD',
+           null, 'FIFA+', true, 'scheduled'),
+
+          (1546185, 'Algeria U17', 'United States U17',
+           'https://media.api-sports.io/football/teams/21295.png',
+           'https://media.api-sports.io/football/teams/12522.png',
+           'World Cup - U17', '2026-11-25 15:00:00+00', 'TBD',
+           null, 'FIFA+', true, 'scheduled')
+
+        ON CONFLICT (api_football_fixture_id) DO NOTHING
+      `);
+      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+      if (rowCount > 0) {
+        logger.info({ rowCount }, "Startup: seeded US U20/U17 youth national team fixtures");
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup: US U20/U17 fixture seed failed (non-fatal)");
+    }
+  })();
+
   // Free/RSS half of the hybrid live-data pipeline: pulls real USMNT-relevant
   // headlines from public RSS feeds on a recurring schedule. Fixtures/stats
   // still rely on seeded data pending a paid provider decision (see replit.md).
