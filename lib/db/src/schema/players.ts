@@ -40,6 +40,11 @@ export const playersTable = pgTable("players", {
   trending: boolean("trending").notNull().default(false),
   bio: text("bio").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Cached timestamp of the last successful /players/squads API call for this
+  // player.  The hourly fixture sync skips the API call when this is within
+  // SQUAD_CACHE_TTL_MS (6 hours), dramatically cutting daily quota usage.
+  // Null means never checked; the sync will always call the API for those.
+  squadLastCheckedAt: timestamp("squad_last_checked_at", { withTimezone: true }),
 });
 
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true });

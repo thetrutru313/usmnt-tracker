@@ -1047,11 +1047,28 @@ export async function syncApiFootballFixtures(
   await purgeStaleTransferredPlayerLinks();
 
   // ── Phase A: derive each player's current club from the live API ──────────
+  //
+  // Squad cache: after each successful /players/squads call we stamp
+  // `squad_last_checked_at` on the player row.  On the next hourly run, any
+  // player whose stamp is within SQUAD_CACHE_TTL_MS is skipped — we already
+  // know their club and re-verifying burns API quota for no gain.  The cache
+  // covers null results too (international-window players whose squad data
+  // shows only their national team): we fall back to the stored club_id, which
+  // is correct, and avoid hammering the stats-fallback endpoint every hour.
+  //
+  // Quota impact (before → after):
+  //   Normal run:    ~80 calls/hr  →  ~0–5 calls/hr (only stale players)
+  //   Intl. window:  ~240 calls/hr →  ~0–5 calls/hr
+  //   Daily total:   ~4,700–8,500  →  ~300–600
+  const SQUAD_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+  const cacheHorizon = new Date(Date.now() - SQUAD_CACHE_TTL_MS);
+
   const allPlayers = await db
     .select({
       id: playersTable.id,
       clubId: playersTable.clubId,
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
+      squadLastCheckedAt: playersTable.squadLastCheckedAt,
     })
     .from(playersTable);
   const scopedPlayers = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
@@ -1064,6 +1081,7 @@ export async function syncApiFootballFixtures(
   const preResolvedTeamId = new Map<number, number>();
 
   let failures = 0;
+  let squadCacheHits = 0;
 
   for (const player of scopedPlayers) {
     const apiId = player.apiFootballPlayerId;
@@ -1076,8 +1094,29 @@ export async function syncApiFootballFixtures(
       continue;
     }
 
+    // ── Squad cache check ────────────────────────────────────────────────────
+    // If we successfully called /players/squads for this player within the
+    // cache window, skip the API call and use the stored club_id directly.
+    // This is the main quota-reduction lever: turns 80+ calls/hr into ~0–5.
+    if (player.squadLastCheckedAt && player.squadLastCheckedAt > cacheHorizon) {
+      squadCacheHits++;
+      const list = clubPlayerMap.get(player.clubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(player.clubId, list);
+      continue;
+    }
+
     // Ask API-Football which squad this player is currently registered with.
     const current = await fetchPlayerCurrentTeam(apiId);
+
+    // Stamp the cache timestamp regardless of outcome — a null result (API
+    // error or international-window-only squad) is fine to cache: the stored
+    // club_id is still correct and we avoid repeated fallback calls every hour.
+    await db
+      .update(playersTable)
+      .set({ squadLastCheckedAt: new Date() })
+      .where(eq(playersTable.id, player.id));
+
     if (!current) {
       // Call failed or no squad data returned — fall back gracefully.
       failures++;
@@ -1394,7 +1433,7 @@ export async function syncApiFootballFixtures(
   }
 
   logger.info(
-    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, purgedOrphaned, purgedStaleOrphaned, failures },
+    { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, purgedPostponed, purgedOrphaned, purgedStaleOrphaned, failures, squadCacheHits },
     "API-Football fixtures sync complete",
   );
   return { clubsSynced, fixturesUpserted, fixturesReconciled, fixturesRemoved, failures };
