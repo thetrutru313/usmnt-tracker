@@ -12,6 +12,7 @@ import adminRouter from "./admin";
 import scheduleRouter from "./schedule";
 import transparencyRouter from "./transparency";
 import storageRouter from "./storage";
+import followsRouter from "./follows";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(transparencyRouter);
 router.use(storageRouter);
 router.use(adminRouter);
 router.use(scheduleRouter);
+router.use(followsRouter);
 
 export default router;
