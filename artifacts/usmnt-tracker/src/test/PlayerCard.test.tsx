@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -713,5 +713,112 @@ describe("PlayerCard — localStorage star state restored after browser refresh 
     // None of the follows-API calls should have resolved by the time the first
     // render paints (they're all pending). The star comes from localStorage.
     expect(followsQueryCalls.length).toBeGreaterThanOrEqual(0); // call may fire; resolve is what matters
+  });
+});
+
+// ─── Background API sync overwrites optimistic localStorage state ─────────────
+
+describe("MyPlayersContext — background API sync overwrites optimistic state", () => {
+  /**
+   * MyPlayersProvider seeds optimisticIds from localStorage synchronously on
+   * mount. Once the remote follows query resolves, the sync effect overwrites
+   * optimisticIds with whatever the API returned. These tests verify that:
+   *   1. An empty API response clears a locally-starred player (star unfilled).
+   *   2. An API response that includes the player ID keeps the star filled.
+   */
+
+  const ANON_TOKEN_KEY_SYNC   = "usmnt_anon_token";
+  const LOCAL_FOLLOWS_KEY_SYNC = "usmnt_my_players";
+  const SESSION_TOKEN          = "sync-test-token-abc";
+
+  function renderCardWithRealProvider() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { hook } = memoryLocation({ path: "/players", record: true });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MyPlayersProvider>
+          <Router hook={hook}>
+            <PlayerCard player={PLAYER} />
+          </Router>
+        </MyPlayersProvider>
+      </QueryClientProvider>,
+    );
+
+    const starBtn = () => screen.getByRole("button", { name: /my players/i });
+    return { starBtn };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("star becomes unfilled when API resolves with empty playerIds (overwrite path)", async () => {
+    // localStorage has player 42 starred from a previous session.
+    localStorage.setItem(ANON_TOKEN_KEY_SYNC, SESSION_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_SYNC, JSON.stringify([PLAYER.id]));
+
+    // API resolves with an empty list (e.g. new session token before backend has synced).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ playerIds: [] }),
+      }),
+    );
+
+    renderCardWithRealProvider();
+
+    // On first render the star is filled from localStorage.
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+
+    // After the remote follows query resolves, the overwrite effect fires and
+    // clears optimisticIds → star must become unfilled.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Add to My Players" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("star stays filled when API resolves with the same player ID", async () => {
+    // localStorage has player 42 starred.
+    localStorage.setItem(ANON_TOKEN_KEY_SYNC, SESSION_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_SYNC, JSON.stringify([PLAYER.id]));
+
+    // API resolves with the same player ID — remote and local are in sync.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ playerIds: [PLAYER.id] }),
+      }),
+    );
+
+    renderCardWithRealProvider();
+
+    // Star is filled from localStorage immediately.
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+
+    // After the remote follows query resolves, optimisticIds is set to {42} —
+    // star must remain filled.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove from My Players" }),
+      ).toBeInTheDocument();
+    });
   });
 });
