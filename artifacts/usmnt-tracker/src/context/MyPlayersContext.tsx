@@ -12,6 +12,7 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 // ─── localStorage keys ────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   // Fetch followed IDs from the API when a token exists.
-  const { data: remoteFollows } = useQuery<number[]>({
+  const { data: remoteFollows, isError: followsSyncFailed, isFetched: followsFetched } = useQuery<number[]>({
     queryKey: ["follows", token],
     queryFn: async () => {
       if (!token) return [];
@@ -171,6 +172,15 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
     enabled: !!token,
     staleTime: 60_000,
   });
+
+  // Notify the user when the sync fails (but not before the first fetch runs).
+  React.useEffect(() => {
+    if (!followsFetched || !followsSyncFailed) return;
+    toast.error("Watchlist couldn't sync", {
+      description:
+        "Your watchlist is showing from local storage and may be out of date.",
+    });
+  }, [followsFetched, followsSyncFailed]);
 
   // Sync local state from API (API is source of truth when available).
   React.useEffect(() => {
