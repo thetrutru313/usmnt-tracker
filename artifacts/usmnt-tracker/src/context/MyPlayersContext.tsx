@@ -139,8 +139,17 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
     queryKey: ["follows", token],
     queryFn: async () => {
       if (!token) return [];
-      const data = (await callFollowsApi("", token)) as { playerIds: number[] };
-      return data.playerIds ?? [];
+      const data = (await callFollowsApi("", token)) as { playerIds?: unknown };
+      // Guard: if the API returns a 200 but the shape is unexpected (missing or
+      // non-array playerIds), throw so the query enters error state. The sync
+      // effect below skips on undefined remoteFollows, so optimisticIds — and
+      // the underlying localStorage values — are left untouched.
+      if (!Array.isArray(data?.playerIds)) {
+        throw new Error(
+          `follows API returned unexpected shape: playerIds is ${JSON.stringify(data?.playerIds)}`,
+        );
+      }
+      return data.playerIds as number[];
     },
     enabled: !!token,
     staleTime: 60_000,
