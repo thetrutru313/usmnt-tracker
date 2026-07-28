@@ -219,6 +219,41 @@ describe("Recovery token round-trip — follows survive across device recovery",
     expect((redeemRes.body as { error?: string }).error).toMatch(/already been used/i);
   });
 
+  it("only lets one of two simultaneous redemptions through (race-guard)", async () => {
+    // ── Seed user + recovery token ─────────────────────────────────────────
+    const { id: userId, token: originalToken } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    const recoveryRes = await request(app)
+      .post("/api/follows/recovery-token")
+      .set(bearer(originalToken));
+    expect(recoveryRes.status).toBe(200);
+
+    const recoveryUrl = (recoveryRes.body as { recoveryUrl?: string }).recoveryUrl!;
+    const recoveryToken = new URL(recoveryUrl, "http://localhost").searchParams.get("token")!;
+
+    // ── Fire two simultaneous redemption requests ──────────────────────────
+    const [res1, res2] = await Promise.all([
+      request(app).post("/api/follows/recover").send({ token: recoveryToken }),
+      request(app).post("/api/follows/recover").send({ token: recoveryToken }),
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+
+    // Exactly one must succeed and one must fail.
+    expect(statuses).toEqual([200, 400]);
+
+    // ── Verify only one used_at is recorded in the DB ─────────────────────
+    const [tokenRow] = await db
+      .select()
+      .from(recoveryTokensTable)
+      .where(eq(recoveryTokensTable.anonUserId, userId))
+      .limit(1);
+
+    expect(tokenRow).toBeDefined();
+    expect(tokenRow!.usedAt).not.toBeNull();
+  });
+
   it("returns 401 when the original auth token is used after token rotation", async () => {
     // ── Seed ───────────────────────────────────────────────────────────────
     const { id: userId, token: originalToken } = await seedAnonUser();
