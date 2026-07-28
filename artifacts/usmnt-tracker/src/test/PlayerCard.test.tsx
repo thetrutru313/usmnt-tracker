@@ -23,6 +23,7 @@ import {
   MyPlayersProvider,
   type MyPlayersContextValue,
 } from "@/context/MyPlayersContext";
+import { toast } from "sonner";
 
 vi.mock("sonner", () => ({ toast: vi.fn() }));
 
@@ -820,6 +821,39 @@ describe("MyPlayersContext — background API sync overwrites optimistic state",
         screen.getByRole("button", { name: "Remove from My Players" }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+// ─── Star toggle fires toast notifications ────────────────────────────────────
+
+describe("PlayerCard — star toggle fires toast notifications", () => {
+  beforeEach(() => {
+    vi.mocked(toast).mockClear();
+  });
+
+  it('fires toast("Added to My Players") when the player is not yet followed', async () => {
+    const ctx = makeCtx({ toggle: vi.fn(async () => "added" as const) });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await user.click(starBtn());
+
+    expect(toast).toHaveBeenCalledOnce();
+    expect(toast).toHaveBeenCalledWith("Added to My Players");
+  });
+
+  it('fires toast("Removed from My Players") when the player is already followed', async () => {
+    const ctx = makeCtx({
+      isFollowing: () => true,
+      toggle: vi.fn(async () => "removed" as const),
+    });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await user.click(starBtn());
+
+    expect(toast).toHaveBeenCalledOnce();
+    expect(toast).toHaveBeenCalledWith("Removed from My Players");
   });
 });
 
