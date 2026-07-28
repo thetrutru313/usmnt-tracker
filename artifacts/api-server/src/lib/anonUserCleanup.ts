@@ -2,14 +2,39 @@ import { db, anonUsersTable, userFollowsTable, recoveryTokensTable } from "@work
 import { and, lt, notExists, inArray, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
-/** How old an anon_user must be (in days) before it is eligible for cleanup. */
-const ORPHAN_AGE_DAYS = 90;
+/**
+ * How old an anon_user must be (in days) before it is eligible for cleanup.
+ * Override with the ANON_USER_CLEANUP_AGE_DAYS environment variable.
+ */
+function getOrphanAgeDays(): number {
+  const raw = process.env["ANON_USER_CLEANUP_AGE_DAYS"];
+  if (raw !== undefined) {
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    logger.warn({ raw }, "ANON_USER_CLEANUP_AGE_DAYS is set but invalid; using default of 90");
+  }
+  return 90;
+}
+
+/**
+ * How often to run the cleanup (in milliseconds).
+ * Override with the ANON_USER_CLEANUP_INTERVAL_MS environment variable.
+ */
+function getCleanupIntervalMs(): number {
+  const raw = process.env["ANON_USER_CLEANUP_INTERVAL_MS"];
+  if (raw !== undefined) {
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    logger.warn({ raw }, "ANON_USER_CLEANUP_INTERVAL_MS is set but invalid; using default of 24 h");
+  }
+  return 24 * 60 * 60 * 1000; // 24 hours
+}
 
 /**
  * Deletes `anon_users` rows that:
  *   - have no `user_follows` children (i.e. the user never followed anyone, or
  *     all their follows were removed), AND
- *   - were created more than {@link ORPHAN_AGE_DAYS} days ago.
+ *   - were created more than {@link getOrphanAgeDays} days ago.
  *
  * Associated `recovery_tokens` rows are deleted first (within the same
  * transaction) because the FK from `recovery_tokens → anon_users` has no
@@ -18,8 +43,9 @@ const ORPHAN_AGE_DAYS = 90;
  * @returns The number of `anon_users` rows deleted.
  */
 export async function cleanupOrphanedAnonUsers(): Promise<number> {
+  const orphanAgeDays = getOrphanAgeDays();
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - ORPHAN_AGE_DAYS);
+  cutoff.setDate(cutoff.getDate() - orphanAgeDays);
 
   // Collect the IDs of orphaned anon_users in one query so the subsequent
   // deletes are scoped to the same snapshot of rows.
@@ -39,7 +65,7 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
     );
 
   if (orphans.length === 0) {
-    logger.info({ orphanAgeDays: ORPHAN_AGE_DAYS }, "Anon-user cleanup: no orphaned rows found");
+    logger.info({ orphanAgeDays }, "Anon-user cleanup: no orphaned rows found");
     return 0;
   }
 
@@ -55,7 +81,7 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
   });
 
   logger.info(
-    { deleted: orphanIds.length, orphanAgeDays: ORPHAN_AGE_DAYS },
+    { deleted: orphanIds.length, orphanAgeDays },
     "Anon-user cleanup: deleted orphaned anon_users",
   );
 
@@ -65,11 +91,15 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
 let _cleanupIntervalHandle: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Runs {@link cleanupOrphanedAnonUsers} immediately on call, then once per day.
- * Subsequent calls are no-ops (the interval is started only once).
+ * Runs {@link cleanupOrphanedAnonUsers} immediately on call, then on the
+ * configured interval (default: 24 hours, overridable via
+ * ANON_USER_CLEANUP_INTERVAL_MS).  Subsequent calls are no-ops (the interval
+ * is started only once).
  */
-export function startAnonUserCleanupSchedule(intervalMs = 24 * 60 * 60 * 1000): void {
+export function startAnonUserCleanupSchedule(intervalMs?: number): void {
   if (_cleanupIntervalHandle !== null) return; // already running
+
+  const resolvedIntervalMs = intervalMs ?? getCleanupIntervalMs();
 
   async function run(): Promise<void> {
     try {
@@ -80,5 +110,13 @@ export function startAnonUserCleanupSchedule(intervalMs = 24 * 60 * 60 * 1000): 
   }
 
   void run();
-  _cleanupIntervalHandle = setInterval(() => void run(), intervalMs);
+  _cleanupIntervalHandle = setInterval(() => void run(), resolvedIntervalMs);
+}
+
+/** Exposed for tests that need to reset the singleton guard. */
+export function _resetCleanupScheduleForTests(): void {
+  if (_cleanupIntervalHandle !== null) {
+    clearInterval(_cleanupIntervalHandle);
+    _cleanupIntervalHandle = null;
+  }
 }
