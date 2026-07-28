@@ -42,10 +42,11 @@ function discoverVitePort(defaultPort = 5173): number {
 const port = discoverVitePort();
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}/`;
 
-// ─── Browser executable ──────────────────────────────────────────────────────
-// In the Replit / NixOS environment, Playwright's downloaded headless shell
-// cannot resolve shared libraries from the Nix store.  Use the system
-// Chromium binary instead.
+// ─── Browser executables ─────────────────────────────────────────────────────
+// In the Replit / NixOS environment, Playwright's downloaded headless shells
+// cannot resolve shared libraries from the Nix store.  Use system binaries
+// where available; let Playwright fall back to its own binaries otherwise.
+
 function resolveChromium(): string | undefined {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
     return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -57,7 +58,37 @@ function resolveChromium(): string | undefined {
   }
 }
 
-const executablePath = resolveChromium();
+/**
+ * Resolve a WebKit/Safari executable for the current environment.
+ *
+ * Resolution order:
+ *   1. PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH env var (explicit override)
+ *   2. `which webkit2gtk-4.1` / `which MiniBrowser` (system install)
+ *   3. Returns undefined → no webkit project is added to the config
+ *
+ * In environments where no WebKit binary is discoverable (e.g. the Replit
+ * container where Playwright's bundled webkit cannot resolve its shared-lib
+ * dependencies), the WebKit project is simply omitted.  To run the WebKit
+ * tests locally or in CI, set PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH to a suitable
+ * headless WebKit binary path before invoking `playwright test`.
+ */
+function resolveWebKit(): string | undefined {
+  if (process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH) {
+    return process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH;
+  }
+  for (const candidate of ["webkit2gtk-4.1", "MiniBrowser"]) {
+    try {
+      const p = execSync(`which ${candidate}`, { encoding: "utf8" }).trim();
+      if (p) return p;
+    } catch {
+      // not found
+    }
+  }
+  return undefined;
+}
+
+const executablePath    = resolveChromium();
+const webkitExecutable  = resolveWebKit();
 
 export default defineConfig({
   testDir: "./tests",
@@ -128,5 +159,24 @@ export default defineConfig({
         },
       },
     },
+
+    // WebKit / Safari — only included when a webkit binary is discoverable.
+    // Set PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH to activate in environments where
+    // Playwright's own webkit bundle cannot resolve its shared-lib deps (e.g.
+    // the Replit / NixOS container).  The star-toggle private-mode spec runs
+    // here to validate the SecurityError handling path under Safari's engine.
+    ...(webkitExecutable
+      ? [
+          {
+            name: "webkit",
+            use: {
+              ...devices["Desktop Safari"],
+              launchOptions: {
+                executablePath: webkitExecutable,
+              },
+            },
+          },
+        ]
+      : []),
   ],
 });
