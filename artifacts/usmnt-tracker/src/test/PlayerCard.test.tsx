@@ -418,6 +418,170 @@ describe("PlayerCard — star toggle survives mid-session token expiry (401)", (
   });
 });
 
+// ─── Recovered-token mid-session 401 scenario ─────────────────────────────────
+
+/**
+ * Distinct risk path from a provisioned-token 401:
+ *   The token was written to localStorage by the /recover page (URL-parameter
+ *   flow), not by ensureToken().  If that recovered token later expires and the
+ *   API returns 401, the toggle must still fall back to localStorage — the
+ *   optimistic update is already applied before the API call, so optimisticIds
+ *   is preserved rather than silently cleared or reset.
+ *
+ * These tests exercise the real MyPlayersProvider (not a mocked context) so the
+ * full token-read → fetch → catch path is covered.
+ */
+
+describe("MyPlayersContext — watchlist survives 401 when token came from recovery flow", () => {
+  const RECOVERED_TOKEN   = "recovered-token-from-url-xyz";
+  const ANON_TOKEN_KEY_   = "usmnt_anon_token";
+  const LOCAL_FOLLOWS_KEY_ = "usmnt_my_players";
+
+  /**
+   * Builds a fetch spy whose behaviour differs by HTTP method:
+   *  - GET  → succeeds with the given playerIds list (follows hydration)
+   *  - POST/DELETE → returns the given status (simulating an expired recovered token)
+   */
+  function makeFetchSpy({
+    getPlayerIds = [] as number[],
+    toggleStatus = 401,
+  } = {}) {
+    return vi.fn().mockImplementation((_url: unknown, init?: RequestInit) => {
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (method === "GET") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ playerIds: getPlayerIds }),
+        });
+      }
+      // POST or DELETE — simulate the recovered token expiring
+      return Promise.resolve({
+        ok: toggleStatus === 200,
+        status: toggleStatus,
+        json: () => Promise.resolve({ error: `HTTP ${toggleStatus}` }),
+      });
+    });
+  }
+
+  /** Renders PlayerCard backed by the real MyPlayersProvider. */
+  function renderWithRealProvider() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { hook } = memoryLocation({ path: "/players", record: true });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MyPlayersProvider>
+          <Router hook={hook}>
+            <LocationReader />
+            <PlayerCard player={PLAYER} />
+          </Router>
+        </MyPlayersProvider>
+      </QueryClientProvider>,
+    );
+
+    const getPath = () => screen.getByTestId("location").textContent ?? "";
+    const starBtn = () => screen.getByRole("button", { name: /my players/i });
+    return { getPath, starBtn };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("optimistic add is preserved in localStorage after 401 — watchlist not silently cleared", async () => {
+    // Simulate: recovery flow wrote token; player was NOT previously followed.
+    localStorage.setItem(ANON_TOKEN_KEY_, RECOVERED_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_, JSON.stringify([]));
+
+    vi.stubGlobal("fetch", makeFetchSpy({ getPlayerIds: [], toggleStatus: 401 }));
+
+    const user = userEvent.setup();
+    const { starBtn } = renderWithRealProvider();
+
+    // Click star → optimistic add fires immediately, then API returns 401.
+    await user.click(starBtn());
+
+    // The optimistic add must survive the 401: localStorage contains the player.
+    const stored = JSON.parse(
+      localStorage.getItem(LOCAL_FOLLOWS_KEY_) ?? "[]",
+    ) as number[];
+    expect(stored).toContain(PLAYER.id);
+  });
+
+  it("optimistic remove is preserved in localStorage after 401 — not silently reverted", async () => {
+    // Simulate: recovery flow wrote token; player WAS previously followed.
+    localStorage.setItem(ANON_TOKEN_KEY_, RECOVERED_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_, JSON.stringify([PLAYER.id]));
+
+    vi.stubGlobal(
+      "fetch",
+      makeFetchSpy({ getPlayerIds: [PLAYER.id], toggleStatus: 401 }),
+    );
+
+    const user = userEvent.setup();
+    const { starBtn } = renderWithRealProvider();
+
+    // Button should reflect "already followed" immediately from localStorage seed.
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+
+    // Click star → optimistic remove fires, then API returns 401.
+    await user.click(starBtn());
+
+    // The optimistic remove must survive: localStorage no longer contains player.
+    const stored = JSON.parse(
+      localStorage.getItem(LOCAL_FOLLOWS_KEY_) ?? "[]",
+    ) as number[];
+    expect(stored).not.toContain(PLAYER.id);
+  });
+
+  it("page stays on /players after toggle when recovered token returns 401", async () => {
+    localStorage.setItem(ANON_TOKEN_KEY_, RECOVERED_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_, JSON.stringify([]));
+
+    vi.stubGlobal("fetch", makeFetchSpy({ getPlayerIds: [], toggleStatus: 401 }));
+
+    const user = userEvent.setup();
+    const { starBtn, getPath } = renderWithRealProvider();
+
+    await user.click(starBtn());
+
+    expect(getPath()).toBe("/players");
+  });
+
+  it("multiple toggles all apply correctly after recovered-token 401 — no silent reset", async () => {
+    // Start with player not followed.
+    localStorage.setItem(ANON_TOKEN_KEY_, RECOVERED_TOKEN);
+    localStorage.setItem(LOCAL_FOLLOWS_KEY_, JSON.stringify([]));
+
+    vi.stubGlobal("fetch", makeFetchSpy({ getPlayerIds: [], toggleStatus: 401 }));
+
+    const user = userEvent.setup();
+    const { starBtn } = renderWithRealProvider();
+    const btn = starBtn();
+
+    // Click 1: add → Click 2: remove → Click 3: add (all 401 on API, optimistic held)
+    await user.click(btn); // optimistic add
+    await user.click(btn); // optimistic remove
+    await user.click(btn); // optimistic add again
+
+    // After an odd number of clicks starting from "not followed", player should be followed.
+    const stored = JSON.parse(
+      localStorage.getItem(LOCAL_FOLLOWS_KEY_) ?? "[]",
+    ) as number[];
+    expect(stored).toContain(PLAYER.id);
+  });
+});
+
 // ─── Star aria-label reflects follow state ────────────────────────────────────
 
 describe("PlayerCard — star aria-label reflects follow state", () => {
