@@ -219,6 +219,36 @@ describe("Recovery token round-trip — follows survive across device recovery",
     expect((redeemRes.body as { error?: string }).error).toMatch(/already been used/i);
   });
 
+  it("rejects a superseded recovery token with a distinct 400 message", async () => {
+    const { id: userId } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    // Insert a recovery token that was displaced by a newer one (superseded_at set,
+    // used_at still null — this is the state set by the 3-token-cap invalidation).
+    const supersededToken = generateToken();
+    const supersededHash = hashToken(supersededToken);
+    const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const supersededAt = new Date();
+
+    await db
+      .insert(recoveryTokensTable)
+      .values({
+        anonUserId: userId,
+        tokenHash: supersededHash,
+        expiresAt: futureDate,
+        supersededAt,
+      });
+
+    const redeemRes = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: supersededToken });
+
+    expect(redeemRes.status).toBe(400);
+    // Must say "replaced" / "newer", NOT "already been used"
+    expect((redeemRes.body as { error?: string }).error).toMatch(/replaced/i);
+    expect((redeemRes.body as { error?: string }).error).not.toMatch(/already been used/i);
+  });
+
   it("only lets one of two simultaneous redemptions through (race-guard)", async () => {
     // ── Seed user + recovery token ─────────────────────────────────────────
     const { id: userId, token: originalToken } = await seedAnonUser();
@@ -281,7 +311,8 @@ describe("Recovery token round-trip — follows survive across device recovery",
     const fourthUrl = (fourthRes.body as { recoveryUrl?: string }).recoveryUrl!;
     const fourthToken = new URL(fourthUrl, "http://localhost").searchParams.get("token")!;
 
-    // The oldest token (first one generated) must now be rejected.
+    // The oldest token (first one generated) must now be rejected with the
+    // "superseded" message — not the generic "already been used" message.
     const oldestRedeemRes = await request(app)
       .post("/api/follows/recover")
       .send({ token: recoveryTokens[0] });
@@ -289,6 +320,10 @@ describe("Recovery token round-trip — follows survive across device recovery",
       oldestRedeemRes.status,
       "Expected oldest token to be invalidated (400)",
     ).toBe(400);
+    expect(
+      (oldestRedeemRes.body as { error?: string }).error,
+      "Oldest displaced token should report 'replaced', not 'already been used'",
+    ).toMatch(/replaced/i);
 
     // The newest token must still be redeemable.
     const newestRedeemRes = await request(app)
@@ -315,24 +350,25 @@ describe("Recovery token round-trip — follows survive across device recovery",
       allTokens.push(tok);
     }
 
-    // The first two tokens should be invalidated; the last three should be active.
-    // Try redeeming each — but because redemption rotates the auth token we only
-    // probe the DB directly via the hash to avoid cascading state changes.
+    // The first two tokens should be invalidated (superseded_at set); the last
+    // three should still be active (both usedAt and supersededAt null).
+    // Probe the DB directly via the hash to avoid cascading state changes from
+    // redemption (which rotates the auth token).
     const { hashToken: hashFn } = await import("../tokenUtils.js");
     const { db: dbConn, recoveryTokensTable: rtTable } = await import("@workspace/db");
-    const { isNull: isNullFn, eq: eqFn } = await import("drizzle-orm");
+    const { eq: eqFn } = await import("drizzle-orm");
 
     let activeCount = 0;
     let invalidatedCount = 0;
     for (const tok of allTokens) {
       const hash = hashFn(tok);
       const [row] = await dbConn
-        .select({ usedAt: rtTable.usedAt })
+        .select({ usedAt: rtTable.usedAt, supersededAt: rtTable.supersededAt })
         .from(rtTable)
         .where(eqFn(rtTable.tokenHash, hash))
         .limit(1);
       if (row) {
-        if (row.usedAt === null) activeCount++;
+        if (row.usedAt === null && row.supersededAt === null) activeCount++;
         else invalidatedCount++;
       }
     }

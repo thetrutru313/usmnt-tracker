@@ -7,6 +7,9 @@ import { anonUsersTable } from "./anonUsers";
  * returned once; only its SHA-256 hash is stored here.
  *
  * Tokens expire after 30 days and are consumed on redemption (used_at set).
+ * Tokens that are displaced by newer ones (3-token cap) have superseded_at set
+ * instead, so callers can distinguish "already redeemed" from "replaced by a
+ * newer token".
  */
 export const recoveryTokensTable = pgTable("recovery_tokens", {
   id: serial("id").primaryKey(),
@@ -16,6 +19,7 @@ export const recoveryTokensTable = pgTable("recovery_tokens", {
   tokenHash: text("token_hash").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
+  supersededAt: timestamp("superseded_at", { withTimezone: true }),
 });
 
 export type RecoveryToken = typeof recoveryTokensTable.$inferSelect;

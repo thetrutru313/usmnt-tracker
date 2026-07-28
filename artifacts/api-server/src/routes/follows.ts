@@ -93,12 +93,14 @@ router.post("/follows/recovery-token", requireAnonUser, async (_req, res): Promi
     .orderBy(asc(recoveryTokensTable.id));
 
   // If already at the limit, invalidate the oldest token(s) to make room.
+  // We set supersededAt (not usedAt) so that a user who tries the old token
+  // gets a clear "replaced by a newer token" message rather than "already used".
   if (activeTokens.length >= MAX_ACTIVE_RECOVERY_TOKENS) {
     const overflow = activeTokens.length - MAX_ACTIVE_RECOVERY_TOKENS + 1;
     const toInvalidate = activeTokens.slice(0, overflow).map((t) => t.id);
     await db
       .update(recoveryTokensTable)
-      .set({ usedAt: now })
+      .set({ supersededAt: now })
       .where(inArray(recoveryTokensTable.id, toInvalidate));
   }
 
@@ -142,6 +144,13 @@ router.post("/follows/recover", async (req, res): Promise<void> => {
 
   if (!recovery) {
     res.status(400).json({ error: "Invalid recovery token" });
+    return;
+  }
+
+  if (recovery.supersededAt !== null) {
+    res
+      .status(400)
+      .json({ error: "This recovery token was replaced when a newer one was generated" });
     return;
   }
 
