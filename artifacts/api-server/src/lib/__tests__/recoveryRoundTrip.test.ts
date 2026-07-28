@@ -268,10 +268,31 @@ describe("Recovery token round-trip — follows survive across device recovery",
       request(app).post("/api/follows/recover").send({ token: recoveryToken }),
     ]);
 
+    // Neither request may return a 5xx error or hang.
+    expect(
+      [res1.status, res2.status].every((s) => s < 500),
+      `At least one request returned a 5xx: ${res1.status}, ${res2.status}`,
+    ).toBe(true);
+
     const statuses = [res1.status, res2.status].sort();
 
     // Exactly one must succeed and one must fail.
     expect(statuses).toEqual([200, 400]);
+
+    // The successful response must carry a fresh auth token.
+    const successRes = res1.status === 200 ? res1 : res2;
+    const { token: freshToken } = successRes.body as { token?: string };
+    expect(typeof freshToken).toBe("string");
+    expect(freshToken!.length).toBeGreaterThan(0);
+    expect(freshToken).not.toBe(originalToken);
+
+    // The failing response must report the canonical "already used" message
+    // (not a generic 400 or a 500).
+    const failRes = res1.status === 400 ? res1 : res2;
+    expect(
+      (failRes.body as { error?: string }).error,
+      "The losing concurrent redemption must report 'already been used'",
+    ).toMatch(/already been used/i);
 
     // ── Verify only one used_at is recorded in the DB ─────────────────────
     const [tokenRow] = await db
