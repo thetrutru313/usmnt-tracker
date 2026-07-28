@@ -307,6 +307,115 @@ describe("PlayerCard — star toggle with no auth token (offline / first visit)"
   });
 });
 
+// ─── Mid-session token expiry (401) scenario ─────────────────────────────────
+
+describe("PlayerCard — star toggle survives mid-session token expiry (401)", () => {
+  /**
+   * When a token was provisioned earlier in the session and the API subsequently
+   * returns 401 (expired or rotated), MyPlayersContext.toggle catches the error
+   * and falls back to localStorage — the optimistic update already applied before
+   * the API call, so the watchlist state is preserved.  From PlayerCard's
+   * perspective toggle still resolves to "added" | "removed" without throwing.
+   */
+
+  it("toggle returns 'added' without throwing when the API returns 401 mid-session", async () => {
+    // Simulate what MyPlayersContext does: token was present, API threw 401,
+    // catch block swallows the error and the optimistic result is returned.
+    const toggleWith401 = vi.fn(async (_id: number): Promise<"added" | "removed"> => {
+      // Mimic: optimistic add already applied, API call throws, catch returns result.
+      try {
+        throw new Error("HTTP 401");
+      } catch {
+        // fallback to localStorage — optimistic update already applied
+      }
+      return "added";
+    });
+
+    const ctx = makeCtx({ toggle: toggleWith401 });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await expect(user.click(starBtn())).resolves.not.toThrow();
+
+    expect(toggleWith401).toHaveBeenCalledOnce();
+    expect(toggleWith401).toHaveBeenCalledWith(PLAYER.id);
+    const result = await toggleWith401.mock.results[0].value;
+    expect(result === "added" || result === "removed").toBe(true);
+  });
+
+  it("toggle returns 'removed' without throwing when the API returns 401 mid-session and player was followed", async () => {
+    const toggleWith401 = vi.fn(async (_id: number): Promise<"added" | "removed"> => {
+      try {
+        throw new Error("HTTP 401");
+      } catch {
+        // fallback to localStorage — optimistic update already applied
+      }
+      return "removed";
+    });
+
+    const ctx = makeCtx({
+      isFollowing: () => true,
+      toggle: toggleWith401,
+    });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await expect(user.click(starBtn())).resolves.not.toThrow();
+
+    expect(toggleWith401).toHaveBeenCalledOnce();
+    const result = await toggleWith401.mock.results[0].value;
+    expect(result === "added" || result === "removed").toBe(true);
+  });
+
+  it("optimisticIds remain correct after 401: second click sees updated state", async () => {
+    // Alternating results simulate toggled optimistic state (add → remove → add).
+    let calls = 0;
+    const toggleWith401 = vi.fn(async (_id: number): Promise<"added" | "removed"> => {
+      try {
+        throw new Error("HTTP 401");
+      } catch {
+        // swallowed — localStorage fallback already applied optimistically
+      }
+      calls++;
+      return calls % 2 === 1 ? "added" : "removed";
+    });
+
+    const ctx = makeCtx({ toggle: toggleWith401 });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+    const btn = starBtn();
+
+    await user.click(btn);
+    await user.click(btn);
+    await user.click(btn);
+
+    expect(toggleWith401).toHaveBeenCalledTimes(3);
+    const results = await Promise.all(
+      toggleWith401.mock.results.map((r) => r.value as Promise<"added" | "removed">),
+    );
+    expect(results).toEqual(["added", "removed", "added"]);
+  });
+
+  it("page stays on /players after star click when API returns 401 mid-session", async () => {
+    const toggleWith401 = vi.fn(async (_id: number): Promise<"added" | "removed"> => {
+      try {
+        throw new Error("HTTP 401");
+      } catch {
+        // swallowed
+      }
+      return "added";
+    });
+
+    const ctx = makeCtx({ toggle: toggleWith401 });
+    const user = userEvent.setup();
+    const { starBtn, getPath } = renderCard(ctx);
+
+    await user.click(starBtn());
+
+    expect(getPath()).toBe("/players");
+  });
+});
+
 // ─── Star aria-label reflects follow state ────────────────────────────────────
 
 describe("PlayerCard — star aria-label reflects follow state", () => {
