@@ -3,8 +3,25 @@ import { db, anonUsersTable, userFollowsTable, recoveryTokensTable } from "@work
 import { eq, and, isNull } from "drizzle-orm";
 import { generateToken, hashToken } from "../lib/tokenUtils";
 import { requireAnonUser } from "../lib/anonAuth";
+import rateLimit from "express-rate-limit";
 
 const router: IRouter = Router();
+
+/**
+ * Dedicated rate limiter for anonymous user provisioning.
+ * Tighter than the global limiter (300 req/min) because each request creates
+ * a persistent row in anon_users — a bot behind a rotating proxy could
+ * otherwise inflate the table with thousands of throwaway accounts per hour.
+ * 5 requests per 15 minutes per IP keeps the UX instant for real users while
+ * making mass enumeration impractical.
+ */
+const anonUserProvisionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many account creation requests, please try again later." },
+});
 
 /**
  * POST /follows/users
@@ -12,7 +29,7 @@ const router: IRouter = Router();
  * once — the server never reveals it again. The client must persist it in
  * localStorage (or equivalent).
  */
-router.post("/follows/users", async (_req, res): Promise<void> => {
+router.post("/follows/users", anonUserProvisionLimiter, async (_req, res): Promise<void> => {
   const token = generateToken();
   const tokenHash = hashToken(token);
 

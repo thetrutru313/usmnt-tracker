@@ -8,6 +8,20 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// ── Proxy trust ───────────────────────────────────────────────────────────────
+//
+// Replit (and most cloud/PaaS platforms) terminate TLS at an edge proxy and
+// forward plain HTTP to the Express process. Without `trust proxy`, Express
+// reads `req.ip` from the socket's remote address — the proxy hop — so every
+// client appears to come from the same IP. That would cause `express-rate-limit`
+// to bucket all clients into one shared counter, making per-IP limits useless.
+//
+// `trust proxy: 1` tells Express to pop exactly one entry from `X-Forwarded-For`
+// and use it as `req.ip`. This is correct when there is exactly one trusted
+// proxy hop (the Replit/cloud edge). If the deployment topology changes (e.g.
+// multiple load-balancer hops) this value should be updated accordingly.
+app.set("trust proxy", 1);
+
 // ── Security headers (helmet) ──────────────────────────────────────────────────
 //
 // Applied before every other middleware so security headers are present even
