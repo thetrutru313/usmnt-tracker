@@ -38,56 +38,6 @@ router.get("/follows", requireAnonUser, async (_req, res): Promise<void> => {
 });
 
 /**
- * POST /follows/:playerId
- * Follow a player. Idempotent — re-following an already-followed player
- * returns 200 rather than an error.
- * Requires `Authorization: Bearer <token>`.
- */
-router.post("/follows/:playerId", requireAnonUser, async (req, res): Promise<void> => {
-  const playerId = parseInt(String(req.params["playerId"] ?? ""), 10);
-  if (Number.isNaN(playerId)) {
-    res.status(400).json({ error: "Invalid playerId" });
-    return;
-  }
-
-  const user = res.locals.anonUser;
-
-  await db
-    .insert(userFollowsTable)
-    .values({ anonUserId: user.id, playerId })
-    .onConflictDoNothing();
-
-  res.json({ ok: true });
-});
-
-/**
- * DELETE /follows/:playerId
- * Unfollow a player. Idempotent — unfollowing a player that isn't followed
- * returns 200.
- * Requires `Authorization: Bearer <token>`.
- */
-router.delete("/follows/:playerId", requireAnonUser, async (req, res): Promise<void> => {
-  const playerId = parseInt(String(req.params["playerId"] ?? ""), 10);
-  if (Number.isNaN(playerId)) {
-    res.status(400).json({ error: "Invalid playerId" });
-    return;
-  }
-
-  const user = res.locals.anonUser;
-
-  await db
-    .delete(userFollowsTable)
-    .where(
-      and(
-        eq(userFollowsTable.anonUserId, user.id),
-        eq(userFollowsTable.playerId, playerId),
-      ),
-    );
-
-  res.json({ ok: true });
-});
-
-/**
  * POST /follows/recovery-token
  * Generate a single-use recovery token valid for 30 days. Returns a recovery
  * URL containing the plaintext token — safe to bookmark or share with the
@@ -185,6 +135,60 @@ router.post("/follows/recover", async (req, res): Promise<void> => {
   }
 
   res.json({ token: newToken });
+});
+
+/**
+ * POST /follows/:playerId
+ * Follow a player. Idempotent — re-following an already-followed player
+ * returns 200 rather than an error.
+ * Requires `Authorization: Bearer <token>`.
+ *
+ * NOTE: this parameterized route is registered AFTER the literal routes
+ * (/follows/recovery-token, /follows/recover) so Express never misroutes
+ * those static paths through the `:playerId` wildcard.
+ */
+router.post("/follows/:playerId", requireAnonUser, async (req, res): Promise<void> => {
+  const playerId = parseInt(String(req.params["playerId"] ?? ""), 10);
+  if (Number.isNaN(playerId)) {
+    res.status(400).json({ error: "Invalid playerId" });
+    return;
+  }
+
+  const user = res.locals.anonUser;
+
+  await db
+    .insert(userFollowsTable)
+    .values({ anonUserId: user.id, playerId })
+    .onConflictDoNothing();
+
+  res.json({ ok: true });
+});
+
+/**
+ * DELETE /follows/:playerId
+ * Unfollow a player. Idempotent — unfollowing a player that isn't followed
+ * returns 200.
+ * Requires `Authorization: Bearer <token>`.
+ */
+router.delete("/follows/:playerId", requireAnonUser, async (req, res): Promise<void> => {
+  const playerId = parseInt(String(req.params["playerId"] ?? ""), 10);
+  if (Number.isNaN(playerId)) {
+    res.status(400).json({ error: "Invalid playerId" });
+    return;
+  }
+
+  const user = res.locals.anonUser;
+
+  await db
+    .delete(userFollowsTable)
+    .where(
+      and(
+        eq(userFollowsTable.anonUserId, user.id),
+        eq(userFollowsTable.playerId, playerId),
+      ),
+    );
+
+  res.json({ ok: true });
 });
 
 export default router;
