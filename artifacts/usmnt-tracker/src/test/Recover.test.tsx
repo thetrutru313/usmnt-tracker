@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import Recover from "@/pages/Recover";
+import React from "react";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -283,5 +284,134 @@ describe("Recover page — valid token (happy path)", () => {
     });
 
     expect(localStorage.getItem("usmnt_anon_token")).toBe("brand-new-token-999");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BASE_URL prefix — confirm the fetch target is built correctly
+// ---------------------------------------------------------------------------
+
+/**
+ * API_BASE is a module-level constant derived from import.meta.env.BASE_URL, so
+ * we must reset the module registry and re-import after stubbing the env var in
+ * order to exercise a different prefix value within the same test run.
+ */
+describe("Recover page — non-root BASE_URL prefix", () => {
+  it("sends the POST to /usmnt-tracker/api/follows/recover when BASE_URL is /usmnt-tracker/", async () => {
+    vi.stubEnv("BASE_URL", "/usmnt-tracker/");
+    vi.resetModules();
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token: "new-tok" }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: {
+        ...window.location,
+        search: "?token=test-token",
+        href: "http://localhost/usmnt-tracker/recover?token=test-token",
+        origin: "http://localhost",
+      },
+    });
+
+    const { default: RecoverPage } = await import("@/pages/Recover");
+    render(React.createElement(RecoverPage));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/usmnt-tracker/api/follows/recover",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    // Confirm it did NOT call the root-relative path
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      "/api/follows/recover",
+      expect.anything(),
+    );
+  });
+
+  it("sends the POST to /api/follows/recover when BASE_URL is the root /", async () => {
+    vi.stubEnv("BASE_URL", "/");
+    vi.resetModules();
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token: "new-tok" }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: {
+        ...window.location,
+        search: "?token=test-token",
+        href: "http://localhost/recover?token=test-token",
+        origin: "http://localhost",
+      },
+    });
+
+    const { default: RecoverPage } = await import("@/pages/Recover");
+    render(React.createElement(RecoverPage));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/follows/recover",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  it("shows a clear error (not a silent spinner) when the server returns 404 due to a path mismatch", async () => {
+    vi.stubEnv("BASE_URL", "/usmnt-tracker/");
+    vi.resetModules();
+
+    // Simulate the 404 a mismatched BASE_URL would produce
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      }),
+    );
+
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: {
+        ...window.location,
+        search: "?token=test-token",
+        href: "http://localhost/usmnt-tracker/recover?token=test-token",
+        origin: "http://localhost",
+      },
+    });
+
+    const { default: RecoverPage } = await import("@/pages/Recover");
+    render(React.createElement(RecoverPage));
+
+    // The error heading must appear — no silent spinner
+    await waitFor(() => {
+      expect(
+        screen.getByText("Couldn't restore your watchlist"),
+      ).toBeInTheDocument();
+    });
+
+    // The specific HTTP status should be surfaced so the problem is diagnosable
+    expect(screen.getByText("HTTP 404")).toBeInTheDocument();
+
+    // The loading spinner must be gone
+    expect(
+      screen.queryByText(/restoring your watchlist/i),
+    ).not.toBeInTheDocument();
+
+    // The "Go to home" button must be present
+    expect(
+      screen.getByRole("button", { name: /go to home/i }),
+    ).toBeInTheDocument();
   });
 });
