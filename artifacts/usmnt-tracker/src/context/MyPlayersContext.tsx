@@ -41,6 +41,12 @@ async function ensureToken(): Promise<string> {
         return res.json() as Promise<{ token: string }>;
       })
       .then(({ token }) => {
+        // Re-check localStorage: a concurrent recovery flow may have written a
+        // token while the provisioning request was in flight. If so, honour
+        // that token and discard the freshly-provisioned one (it will be
+        // cleaned up later as an orphan — no follows attached to it).
+        const current = localStorage.getItem(ANON_TOKEN_KEY);
+        if (current) return current;
         localStorage.setItem(ANON_TOKEN_KEY, token);
         return token;
       })
@@ -115,8 +121,12 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
   const [optimisticIds, setOptimisticIds] = React.useState<Set<number>>(getLocalFollows);
 
   // Provision anon token once on first mount.
+  // Skip on the /recover page: the recovery flow is about to write its own
+  // token to localStorage, and starting provisioning concurrently risks
+  // clobbering it.
   React.useEffect(() => {
     if (token) return;
+    if (window.location.pathname.endsWith("/recover")) return;
     ensureToken()
       .then(setToken)
       .catch(() => {
@@ -181,10 +191,11 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
   const generateTransferLink = React.useCallback(async (): Promise<string> => {
     if (!token) throw new Error("No auth token — sign in to generate a link");
     const data = (await callFollowsApi("/recovery-token", token, "POST")) as {
-      recoveryToken: string;
+      recoveryUrl: string;
     };
-    const base = `${window.location.origin}${API_BASE}/`;
-    return `${base}?restore=${data.recoveryToken}`;
+    // data.recoveryUrl is a server-relative path like "/recover?token=<uuid>".
+    // Prepend the app origin and base so the link works on any deployment.
+    return `${window.location.origin}${API_BASE}${data.recoveryUrl}`;
   }, [token]);
 
   const value = React.useMemo(

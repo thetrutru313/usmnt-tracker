@@ -76,9 +76,9 @@ export function SyncMyPlayersModal({ open, onOpenChange }: SyncMyPlayersModalPro
             <p>
               <span className="font-semibold text-foreground">How it works:</span> Click
               "Generate Transfer Link" to get a private URL. Open that URL on another
-              device within 24 hours to restore your list there.
+              device within 30 days to restore your list there.
             </p>
-            <p>Each link can only be used once and expires after 24 hours.</p>
+            <p>Each link can only be used once and expires after 30 days.</p>
           </div>
 
           {error && (

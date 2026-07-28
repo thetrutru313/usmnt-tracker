@@ -27,6 +27,7 @@ const Rankings     = React.lazy(() => import('@/pages/Rankings'));
 const Schedule     = React.lazy(() => import('@/pages/Schedule'));
 const About        = React.lazy(() => import('@/pages/About'));
 const Transparency = React.lazy(() => import('@/pages/Transparency'));
+const Recover      = React.lazy(() => import('@/pages/Recover'));
 const NotFound     = React.lazy(() => import('@/pages/not-found'));
 
 const queryClient = new QueryClient({
@@ -73,6 +74,7 @@ function Router() {
               <Route path="/schedule" component={Schedule} />
               <Route path="/about" component={About} />
               <Route path="/transparency" component={Transparency} />
+              <Route path="/recover" component={Recover} />
               <Route component={NotFound} />
             </Switch>
           </Suspense>
