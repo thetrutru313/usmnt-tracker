@@ -8,6 +8,7 @@ import { ageFromBirthDate } from "../lib/playerClubSync";
 import { syncPlayerStatsAndInjuries, syncStatsForFinishedFixture } from "../lib/playerStatsSync";
 import { syncPlayerClubs } from "../lib/playerClubSync";
 import { syncApiFootballFixtures, syncNationalTeamFixtures, syncYouthNtFixtures } from "../lib/apiFootballSync";
+import { cleanupOrphanedAnonUsers } from "../lib/anonUserCleanup";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -377,6 +378,25 @@ router.post("/admin/sync-player-stats", async (req, res): Promise<void> => {
   syncStatsForFinishedFixture(playerIds as number[]).catch((err) =>
     logger.error({ err }, "Admin sync-player-stats failed"),
   );
+});
+
+/**
+ * POST /admin/cleanup-anon-users
+ * Deletes orphaned `anon_users` rows — those with no `user_follows` children
+ * that were created more than 90 days ago. Associated `recovery_tokens` rows
+ * are removed first within the same transaction.
+ *
+ * The operation is synchronous (runs inline, not in background) because it is
+ * expected to be fast — a bounded DELETE on an indexed FK column.
+ */
+router.post("/admin/cleanup-anon-users", async (_req, res): Promise<void> => {
+  try {
+    const deleted = await cleanupOrphanedAnonUsers();
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    logger.error({ err }, "Admin cleanup-anon-users failed");
+    res.status(500).json({ error: "Cleanup failed" });
+  }
 });
 
 export default router;
