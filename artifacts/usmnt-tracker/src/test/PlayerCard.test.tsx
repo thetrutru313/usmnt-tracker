@@ -231,6 +231,82 @@ describe("PlayerCard — star button tap-target size", () => {
   });
 });
 
+// ─── Token-absent (offline / first-visit) scenario ───────────────────────────
+
+describe("PlayerCard — star toggle with no auth token (offline / first visit)", () => {
+  /**
+   * MyPlayersContext.toggle skips the API call when the internal anon token is
+   * null (network unavailable or first load) and falls back to localStorage
+   * only.  From PlayerCard's perspective the context value is the same — toggle
+   * is still a function that returns "added" | "removed" — so these tests
+   * verify that no error is thrown and no navigation side-effect occurs.
+   */
+
+  it("toggle returns 'added' without throwing when token is absent", async () => {
+    // Simulate the token-absent toggle: resolves to "added", no API call.
+    const toggleWithNoToken = vi.fn(async (_id: number): Promise<"added" | "removed"> => "added");
+    const ctx = makeCtx({ toggle: toggleWithNoToken });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await expect(user.click(starBtn())).resolves.not.toThrow();
+
+    expect(toggleWithNoToken).toHaveBeenCalledOnce();
+    expect(toggleWithNoToken).toHaveBeenCalledWith(PLAYER.id);
+    const result = await toggleWithNoToken.mock.results[0].value;
+    expect(result === "added" || result === "removed").toBe(true);
+  });
+
+  it("toggle returns 'removed' without throwing when token is absent and player was already followed", async () => {
+    const toggleWithNoToken = vi.fn(async (_id: number): Promise<"added" | "removed"> => "removed");
+    const ctx = makeCtx({
+      isFollowing: () => true,
+      toggle: toggleWithNoToken,
+    });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+
+    await expect(user.click(starBtn())).resolves.not.toThrow();
+
+    expect(toggleWithNoToken).toHaveBeenCalledOnce();
+    const result = await toggleWithNoToken.mock.results[0].value;
+    expect(result === "added" || result === "removed").toBe(true);
+  });
+
+  it("page stays on /players after star click when token is absent", async () => {
+    const ctx = makeCtx({
+      toggle: vi.fn(async (_id: number): Promise<"added" | "removed"> => "added"),
+    });
+    const user = userEvent.setup();
+    const { starBtn, getPath } = renderCard(ctx);
+
+    await user.click(starBtn());
+
+    expect(getPath()).toBe("/players");
+  });
+
+  it("multiple star clicks all resolve without error when token is absent", async () => {
+    let calls = 0;
+    const toggleWithNoToken = vi.fn(async (_id: number): Promise<"added" | "removed"> => {
+      calls++;
+      return calls % 2 === 1 ? "added" : "removed";
+    });
+    const ctx = makeCtx({ toggle: toggleWithNoToken });
+    const user = userEvent.setup();
+    const { starBtn } = renderCard(ctx);
+    const btn = starBtn();
+
+    await user.click(btn);
+    await user.click(btn);
+    await user.click(btn);
+
+    expect(toggleWithNoToken).toHaveBeenCalledTimes(3);
+    expect(toggleWithNoToken).toHaveBeenNthCalledWith(1, PLAYER.id);
+    expect(toggleWithNoToken).toHaveBeenNthCalledWith(2, PLAYER.id);
+    expect(toggleWithNoToken).toHaveBeenNthCalledWith(3, PLAYER.id);
+  });
+});
+
 // ─── Star aria-label reflects follow state ────────────────────────────────────
 
 describe("PlayerCard — star aria-label reflects follow state", () => {
