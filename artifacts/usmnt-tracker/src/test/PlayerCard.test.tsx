@@ -204,6 +204,33 @@ describe("PlayerCard — card body navigation", () => {
   });
 });
 
+// ─── Star tap-target size (WCAG 2.5.5 / Apple HIG) ───────────────────────────
+
+describe("PlayerCard — star button tap-target size", () => {
+  /**
+   * WCAG 2.5.5 and Apple HIG both mandate a minimum 44×44 px interactive area.
+   * The button enforces this via Tailwind's min-h-[44px] and min-w-[44px]
+   * utility classes. This test guards those classes so padding regressions are
+   * caught before they reach users on small phone screens.
+   */
+  it("star button className includes min-h-[44px] (WCAG 2.5.5 tap-target floor)", () => {
+    const { starBtn } = renderCard(makeCtx());
+    expect(starBtn().className).toMatch(/min-h-\[44px\]/);
+  });
+
+  it("star button className includes min-w-[44px] (WCAG 2.5.5 tap-target floor)", () => {
+    const { starBtn } = renderCard(makeCtx());
+    expect(starBtn().className).toMatch(/min-w-\[44px\]/);
+  });
+
+  it("star button tap target stays ≥44px when the player is already followed (star filled)", () => {
+    const { starBtn } = renderCard(makeCtx({ isFollowing: () => true }));
+    const cls = starBtn().className;
+    expect(cls).toMatch(/min-h-\[44px\]/);
+    expect(cls).toMatch(/min-w-\[44px\]/);
+  });
+});
+
 // ─── Star aria-label reflects follow state ────────────────────────────────────
 
 describe("PlayerCard — star aria-label reflects follow state", () => {

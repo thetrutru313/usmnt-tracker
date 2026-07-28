@@ -80,11 +80,16 @@ export function PlayerCard({ player }: { player: PlayerCardPlayer }) {
               </div>
             </div>
 
-            {/* Star / follow button */}
+            {/* Star / follow button
+                ── Tap-target constraint ────────────────────────────────────
+                WCAG 2.5.5 and Apple HIG require a minimum 44×44 px tap target.
+                The min-h-[44px] min-w-[44px] classes enforce this floor.
+                Do NOT reduce these values — a Vitest test guards this threshold.
+                ──────────────────────────────────────────────────────────── */}
             <button
               onClick={handleStarClick}
               aria-label={following ? "Remove from My Players" : "Add to My Players"}
-              className={`relative z-20 p-1 rounded-md transition-colors text-muted-foreground hover:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              className={`relative z-20 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md transition-colors text-muted-foreground hover:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 following ? "text-amber-400" : ""
               } ${animating ? "scale-125" : "scale-100"} transition-transform`}
             >
