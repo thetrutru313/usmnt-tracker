@@ -46,6 +46,7 @@ function FixturesHeader({
   myPlayersOnly: boolean;
   onMyPlayersOnlyChange: (next: boolean) => void;
 }) {
+  const { followedIds } = useMyPlayers();
   return (
     <div className="space-y-4">
       <div>
@@ -83,7 +84,7 @@ function FixturesHeader({
             }`}
           >
             <Star size={11} className={myPlayersOnly ? "fill-amber-400 stroke-amber-400" : ""} />
-            My Players
+            My Players{followedIds.size > 0 && ` · ${followedIds.size}`}
           </button>
         </div>
       </div>
