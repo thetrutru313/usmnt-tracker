@@ -1,0 +1,256 @@
+Here's a prompt you can give Replit that frames this as a data architecture problem rather than a one-off feature.
+
+---
+
+## Replit Prompt: Build a USMNT Prospect Identification & Eligibility Pipeline
+
+I want to improve how the app identifies and manages USMNT prospects. Right now, prospects are manually added using a combination of API-Football data and scraped scouting articles. This isn't scalable, especially for dual nationals.
+
+I **do not** expect a single API to solve this. Instead, I want to build a system that aggregates signals from multiple sources and assigns an eligibility/tracking status to each player.
+
+### Goal
+
+Create a flexible data model and backend pipeline that helps identify players who should be tracked by USMNT fans, while making it easy to review uncertain cases and update players as their international status changes.
+
+---
+
+## 1. Expand the Player Model
+
+Add fields to support international eligibility and tracking.
+
+Suggested fields:
+
+```text
+usmnt_status
+eligibility_confidence
+tracking_confidence
+primary_nationality
+secondary_nationalities[]
+birth_country
+birthplace
+last_eligibility_check
+status_last_updated
+data_sources[]
+needs_review (boolean)
+```
+
+Do not assume nationality alone determines eligibility.
+
+---
+
+## 2. USMNT Status
+
+Instead of a simple "Prospect" flag, introduce a richer status model.
+
+Suggested enum:
+
+```text
+US_SENIOR
+US_YOUTH
+US_ELIGIBLE_PROSPECT
+DUAL_NATIONAL
+DECLARED_OTHER
+CAP_TIED_OTHER
+UNKNOWN
+```
+
+This allows the app to evolve without constantly adding/removing players from the database.
+
+---
+
+## 3. Candidate Discovery Pipeline
+
+Design a service that can periodically evaluate players from multiple data sources.
+
+Potential inputs include:
+
+* API-Football
+* Transfermarkt
+* FBref
+* Youth national team rosters
+* Public scouting articles
+* Existing player database
+
+The goal is to discover potential USMNT prospects—not automatically approve them.
+
+---
+
+## 4. Eligibility Scoring
+
+Create a scoring system based on multiple signals.
+
+Example scoring:
+
+* USA nationality
+* USA listed as secondary nationality
+* Born in the United States
+* Played for US Youth National Teams
+* Mentioned in trusted scouting articles as US-eligible
+* Appears on US Soccer youth rosters
+* American academy background
+
+Each signal should contribute to an overall:
+
+```text
+eligibility_confidence
+```
+
+Store both the score and the reasons that produced it.
+
+Example:
+
+```json
+{
+  "eligibility_confidence": 92,
+  "signals": [
+    "USA nationality",
+    "US U17 appearances",
+    "Born in California"
+  ]
+}
+```
+
+Make the scoring system configurable rather than hardcoded.
+
+---
+
+## 5. Dual National Support
+
+Support multiple nationalities.
+
+Do not assume every player has only one nationality.
+
+Allow storage of:
+
+* primary nationality
+* secondary nationalities
+* eligibility notes
+* supporting data sources
+
+Players with multiple eligible federations should generally receive the status:
+
+```text
+DUAL_NATIONAL
+```
+
+unless a later rule overrides it.
+
+---
+
+## 6. Commitment Tracking
+
+Create logic that periodically checks whether a tracked player has committed to another federation.
+
+Possible indicators include:
+
+* Senior international debut
+* FIFA one-time switch
+* Official federation announcement
+* Reliable reporting of permanent commitment
+
+Do not automatically remove players.
+
+Instead:
+
+* update their status
+* preserve historical data
+* flag significant changes
+
+---
+
+## 7. Human Review Queue
+
+Not every decision should be automatic.
+
+Create a review system for:
+
+### Possible additions
+
+Example:
+
+```text
+Player:
+Julian Hall
+
+Reason:
+USA nationality
+MLS player
+High eligibility confidence
+
+Recommendation:
+Add to Prospect Pool
+```
+
+### Possible removals/status changes
+
+Example:
+
+```text
+Player:
+Player X
+
+Reason:
+Senior debut for Mexico
+
+Recommendation:
+Change status to CAP_TIED_OTHER
+```
+
+The admin should be able to:
+
+* Approve
+* Reject
+* Edit status
+
+---
+
+## 8. Review Thresholds
+
+Automatically flag players when:
+
+* eligibility_confidence < configurable threshold
+* conflicting nationality information exists
+* new international appearances are detected
+* data sources disagree
+
+These should populate the review queue instead of changing production data automatically.
+
+---
+
+## 9. Preserve History
+
+Never permanently delete prospects because they chose another federation.
+
+Instead:
+
+* retain their player record
+* retain historical tracking information
+* update their status
+
+This allows future analytics and historical reference.
+
+---
+
+## 10. Make the System Extensible
+
+Design the architecture so additional data sources can easily be added later without rewriting the pipeline.
+
+Each source should contribute evidence rather than overwrite existing data.
+
+Store provenance so we know where each piece of information came from.
+
+---
+
+## Deliverables
+
+Please propose:
+
+1. Updated database schema
+2. Data ingestion architecture
+3. Eligibility scoring system
+4. Review workflow
+5. Background jobs for periodic updates
+6. API endpoints needed to support the frontend
+7. Recommendations for which external data sources should be integrated first based on reliability and ease of implementation
+
+The solution should prioritize maintainability, extensibility, and data quality over full automation. The goal is to build a robust prospect tracking system that surfaces likely USMNT-eligible players, supports dual nationals, and minimizes manual effort while still allowing editorial review of ambiguous cases.

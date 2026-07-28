@@ -1,0 +1,107 @@
+Here's a prompt that's focused entirely on the UI/UX, leaving the backend implementation for a separate prompt.
+
+---
+
+**Replit Frontend Prompt**
+
+I want to add a lightweight "My Players" feature to the app. The goal is to let users quickly build a personalized list of USMNT players without changing the simplicity of the current experience.
+
+## Objectives
+
+The feature should feel native to the existing UI, be unobtrusive, and require as few clicks as possible.
+
+### 1. Player Card Action
+
+Add a control to every player card that allows users to add or remove that player from their personal list.
+
+Requirements:
+
+* Use an icon that clearly communicates "favorite" or "save" (star, bookmark, or heart—choose whichever best matches the app's design language).
+* The icon should appear in a consistent location on every player card.
+* Clicking the icon should immediately toggle the player's saved state.
+* The icon should visually indicate whether the player is already saved.
+* The interaction should feel instant with subtle visual feedback (no page refresh).
+
+### 2. "My Players" Filter
+
+Add a new filter option on both:
+
+* Player Pool page
+* Fixtures page
+
+The filter should be labeled **My Players**.
+
+Behavior:
+
+* When enabled, only display players that the current user has saved.
+* When disabled, display all players as normal.
+* The filter should work alongside any existing filters where appropriate.
+* If the user hasn't saved any players yet, show an empty state rather than a blank page.
+
+Suggested empty state:
+
+> You haven't added any players yet.
+> Tap the ⭐ on any player card to build your personal watchlist.
+
+### 3. Transfer Between Devices
+
+Because users aren't creating traditional accounts, provide a lightweight way to communicate that their list can be transferred to another device.
+
+Add a small entry point somewhere appropriate (Settings, Profile, or an overflow menu) labeled something like:
+
+* Sync My Players
+* Transfer My Players
+* Backup My Players
+
+Do not make this a primary navigation item.
+
+Selecting it should open a simple modal that explains:
+
+> Your My Players list is stored on this device.
+>
+> You can generate a secure transfer link to move your list to another device or save it as a backup.
+
+The modal should include:
+
+* Generate Transfer Link button
+* Copy Link button (after one has been generated)
+* Brief explanatory text
+* Clean, minimal styling
+
+(The backend functionality will be implemented separately, so use placeholder actions where necessary.)
+
+### 4. Consistency
+
+Maintain the current design system:
+
+* Existing spacing
+* Typography
+* Colors
+* Card styling
+* Hover states
+* Mobile responsiveness
+
+Avoid introducing a new visual style.
+
+### 5. Nice Touches
+
+If possible, add small polish such as:
+
+* Smooth animation when saving/removing a player.
+* Filled vs. outlined icon states.
+* Toast message:
+
+  * "Added to My Players"
+  * "Removed from My Players"
+
+Keep these subtle.
+
+### 6. Naming
+
+Use **My Players** throughout the UI unless another label fits significantly better.
+
+The feature should feel like a personalized watchlist rather than a social "follow" feature.
+
+---
+
+One thing I'd encourage you to reconsider is the name. Since your app is about tracking players over the club season, **My Players** is clearer than **Favorites** (which can imply "best players") and more accurate than **Following** (which often implies notifications or a social feed). It also gives you room to grow into future features like "My Players" fixtures, news, stats, and alerts without changing the terminology later.
