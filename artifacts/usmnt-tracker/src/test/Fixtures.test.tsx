@@ -21,6 +21,17 @@ import { Router } from "wouter";
 import Fixtures from "@/pages/Fixtures";
 import type { FixtureCardFixture } from "@/components/FixtureCard";
 
+// ─── Mock My Players hook (no context/localStorage needed in these tests) ─────
+
+vi.mock("@/hooks/useMyPlayers", () => ({
+  useMyPlayers: () => ({
+    followedIds: new Set<number>(),
+    isFollowing: () => false,
+    toggle: async () => "added" as const,
+    generateTransferLink: async () => "",
+  }),
+}));
+
 // ─── Mock the API hook ────────────────────────────────────────────────────────
 
 const mockUseListFixtures = vi.fn();

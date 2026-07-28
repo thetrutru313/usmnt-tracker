@@ -1,9 +1,11 @@
 import React, { Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { Layout } from '@/components/Layout';
+import { MyPlayersProvider } from '@/context/MyPlayersContext';
 
 // Admin stays eagerly loaded — it lives outside the Layout wrapper and is used
 // infrequently, so the lazy-load flash would be more disruptive than the tiny
@@ -83,12 +85,15 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <MyPlayersProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+          <SonnerToaster />
+        </TooltipProvider>
+      </MyPlayersProvider>
     </QueryClientProvider>
   );
 }

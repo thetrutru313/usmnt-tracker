@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign } from "lucide-react"
+import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign, Star } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-client-react"
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
+import { SyncMyPlayersModal } from "./SyncMyPlayersModal"
 
 // ── Pull-to-refresh ───────────────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ function useOnlineStatus() {
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const [syncModalOpen, setSyncModalOpen] = React.useState(false)
   const isOnline = useOnlineStatus()
 
   const queryClient = useQueryClient()
@@ -167,41 +169,56 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         
-        <div className="p-4">
-          <div className="relative mb-6">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search players, clubs..." 
-              className="pl-9 bg-sidebar-accent/50 border-sidebar-border focus-visible:ring-primary"
-            />
+        <div className="flex flex-col h-[calc(100%-4rem)]">
+          <div className="p-4 flex-1 overflow-y-auto">
+            <div className="relative mb-6">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search players, clubs..." 
+                className="pl-9 bg-sidebar-accent/50 border-sidebar-border focus-visible:ring-primary"
+              />
+            </div>
+
+            <nav className="space-y-1">
+              {navItems.map((item) => {
+                const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path))
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    onMouseEnter={item.onHover}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <Icon size={18} className={cn(isActive ? "text-primary" : "text-sidebar-foreground/50")} />
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </nav>
           </div>
 
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path))
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  onMouseEnter={item.onHover}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  )}
-                >
-                  <Icon size={18} className={cn(isActive ? "text-primary" : "text-sidebar-foreground/50")} />
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
+          {/* Sync My Players — secondary, below main nav */}
+          <div className="px-4 pb-4 border-t border-sidebar-border pt-3">
+            <button
+              onClick={() => { setSyncModalOpen(true); setMobileMenuOpen(false); }}
+              className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs font-medium text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            >
+              <Star size={14} className="shrink-0" />
+              Sync My Players
+            </button>
+          </div>
         </div>
-        
       </aside>
+
+      {/* Sync My Players Modal */}
+      <SyncMyPlayersModal open={syncModalOpen} onOpenChange={setSyncModalOpen} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">

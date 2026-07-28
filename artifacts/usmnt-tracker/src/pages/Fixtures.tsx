@@ -4,11 +4,12 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { subDays, startOfDay } from "date-fns";
-import { Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { FixtureCard, PoolTierIcon, type FixtureCardFixture } from "@/components/FixtureCard";
 import { type PoolTier } from "@/lib/poolTiers";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
 import { localDateLabel, toLocalDateStr } from "@/lib/dateLabels";
+import { useMyPlayers } from "@/hooks/useMyPlayers";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -37,9 +38,13 @@ const CARD_HEIGHT           = 142;     // card body (~130px) + mb-3 (12px)
 function FixturesHeader({
   poolFilter,
   onPoolFilterChange,
+  myPlayersOnly,
+  onMyPlayersOnlyChange,
 }: {
   poolFilter: string[];
   onPoolFilterChange: (next: string[]) => void;
+  myPlayersOnly: boolean;
+  onMyPlayersOnlyChange: (next: boolean) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -49,23 +54,38 @@ function FixturesHeader({
       </div>
       <div className="space-y-1.5">
         <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Filter by player pool</p>
-        <ToggleGroup
-          type="multiple"
-          value={poolFilter}
-          onValueChange={onPoolFilterChange}
-          className="justify-start flex-nowrap gap-1"
-        >
-          {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem
-              key={f.value}
-              value={f.value}
-              className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1"
-            >
-              {f.value !== "all" && <PoolTierIcon tier={f.value} />}
-              {f.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-2">
+          <ToggleGroup
+            type="multiple"
+            value={poolFilter}
+            onValueChange={onPoolFilterChange}
+            className="justify-start flex-nowrap gap-1"
+          >
+            {POOL_FILTERS.map((f) => (
+              <ToggleGroupItem
+                key={f.value}
+                value={f.value}
+                className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1"
+              >
+                {f.value !== "all" && <PoolTierIcon tier={f.value} />}
+                {f.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+
+          {/* My Players filter chip */}
+          <button
+            onClick={() => onMyPlayersOnlyChange(!myPlayersOnly)}
+            className={`flex items-center gap-1 text-xs px-2.5 h-7 rounded-md border whitespace-nowrap transition-colors ${
+              myPlayersOnly
+                ? "border-amber-400 bg-amber-400/10 text-amber-400"
+                : "border-border text-muted-foreground hover:border-amber-400/60 hover:text-amber-400/80"
+            }`}
+          >
+            <Star size={11} className={myPlayersOnly ? "fill-amber-400 stroke-amber-400" : ""} />
+            My Players
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -218,6 +238,8 @@ export default function Fixtures() {
     },
   );
   const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
+  const [myPlayersOnly, setMyPlayersOnly] = useState(false);
+  const { followedIds } = useMyPlayers();
 
   const handlePoolFilterChange = (next: string[]) => {
     setPoolFilter((prev) => {
@@ -249,11 +271,19 @@ export default function Fixtures() {
     );
   }
 
-  const filteredFixtures = poolFilter.includes("all")
+  // Apply pool tier filter
+  let filteredFixtures = poolFilter.includes("all")
     ? fixtures
     : fixtures.filter((fixture) =>
         fixture.featuredPlayers.some((p) => poolFilter.includes(p.poolTier)),
       );
+
+  // Apply My Players filter
+  if (myPlayersOnly) {
+    filteredFixtures = filteredFixtures.filter((fixture) =>
+      fixture.featuredPlayers.some((p) => followedIds.has(p.id)),
+    );
+  }
 
   // Safety net: a "scheduled" fixture whose kickoff is more than 2 hours in
   // the past is stuck — the backend reconciliation loop can only update
@@ -277,10 +307,25 @@ export default function Fixtures() {
   if (filteredFixtures.length === 0) {
     return (
       <div className="space-y-8 max-w-4xl mx-auto">
-        <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
-        <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
-          <p className="text-muted-foreground font-mono">NO FIXTURES MATCH THIS FILTER</p>
-        </div>
+        <FixturesHeader
+          poolFilter={poolFilter}
+          onPoolFilterChange={handlePoolFilterChange}
+          myPlayersOnly={myPlayersOnly}
+          onMyPlayersOnlyChange={setMyPlayersOnly}
+        />
+        {myPlayersOnly && followedIds.size === 0 ? (
+          <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+            <Star size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+            <p className="text-muted-foreground font-mono">YOU HAVEN'T SAVED ANY PLAYERS YET</p>
+            <p className="text-muted-foreground/60 text-sm mt-2">
+              Tap the ☆ on any player card to add them to My Players.
+            </p>
+          </div>
+        ) : (
+          <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+            <p className="text-muted-foreground font-mono">NO FIXTURES MATCH THIS FILTER</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -293,7 +338,12 @@ export default function Fixtures() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
-      <FixturesHeader poolFilter={poolFilter} onPoolFilterChange={handlePoolFilterChange} />
+      <FixturesHeader
+        poolFilter={poolFilter}
+        onPoolFilterChange={handlePoolFilterChange}
+        myPlayersOnly={myPlayersOnly}
+        onMyPlayersOnlyChange={setMyPlayersOnly}
+      />
 
       {finishedFixtures.length > 0 && (
         <RecentResults

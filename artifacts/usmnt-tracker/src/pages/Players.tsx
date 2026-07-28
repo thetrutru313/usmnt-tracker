@@ -1,13 +1,12 @@
 import { useListPlayers } from "@workspace/api-client-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { FormBadge } from "@/components/FormBadge";
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
-import { Search, SlidersHorizontal, Shield, Swords, Goal } from "lucide-react";
+import { Search, Star } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PoolTierIcon } from "@/components/FixtureCard";
 import { type PoolTier } from "@/lib/poolTiers";
+import { PlayerCard } from "@/components/PlayerCard";
+import { useMyPlayers } from "@/hooks/useMyPlayers";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -19,6 +18,8 @@ const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
 export default function Players() {
   const [search, setSearch] = useState("");
   const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
+  const [myPlayersOnly, setMyPlayersOnly] = useState(false);
+  const { followedIds } = useMyPlayers();
 
   const { data: players, isLoading } = useListPlayers({
     search: search.length > 2 ? search : undefined,
@@ -39,9 +40,15 @@ export default function Players() {
 
   const filteredPlayers = useMemo(() => {
     if (!players) return players;
-    if (poolFilter.includes("all")) return players;
-    return players.filter((p) => poolFilter.includes(p.poolTier));
-  }, [players, poolFilter]);
+    let list = players;
+    if (!poolFilter.includes("all")) {
+      list = list.filter((p) => poolFilter.includes(p.poolTier));
+    }
+    if (myPlayersOnly) {
+      list = list.filter((p) => followedIds.has(p.id));
+    }
+    return list;
+  }, [players, poolFilter, myPlayersOnly, followedIds]);
 
   return (
     <div className="space-y-6">
@@ -66,26 +73,47 @@ export default function Players() {
 
       <div className="space-y-1.5">
         <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Filter by player pool</p>
-        <ToggleGroup
-          type="multiple"
-          value={poolFilter}
-          onValueChange={handlePoolFilterChange}
-          className="justify-start flex-nowrap gap-1"
-        >
-          {POOL_FILTERS.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1">
-              {f.value !== "all" && <PoolTierIcon tier={f.value} />}
-              {f.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-2">
+          <ToggleGroup
+            type="multiple"
+            value={poolFilter}
+            onValueChange={handlePoolFilterChange}
+            className="justify-start flex-nowrap gap-1"
+          >
+            {POOL_FILTERS.map((f) => (
+              <ToggleGroupItem key={f.value} value={f.value} className="text-xs px-2.5 h-7 rounded-md border border-border data-[state=on]:border-primary whitespace-nowrap flex items-center gap-1">
+                {f.value !== "all" && <PoolTierIcon tier={f.value} />}
+                {f.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+
+          {/* My Players filter chip */}
+          <button
+            onClick={() => setMyPlayersOnly((v) => !v)}
+            className={`flex items-center gap-1 text-xs px-2.5 h-7 rounded-md border whitespace-nowrap transition-colors ${
+              myPlayersOnly
+                ? "border-amber-400 bg-amber-400/10 text-amber-400"
+                : "border-border text-muted-foreground hover:border-amber-400/60 hover:text-amber-400/80"
+            }`}
+          >
+            <Star size={11} className={myPlayersOnly ? "fill-amber-400 stroke-amber-400" : ""} />
+            My Players
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[1,2,3,4,5,6,7,8].map(i => (
-            <Card key={i} className="animate-pulse h-40" />
+            <div key={i} className="animate-pulse h-40 rounded-lg border border-border bg-card" />
           ))}
+        </div>
+      ) : myPlayersOnly && followedIds.size === 0 ? (
+        <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
+          <Star size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+          <p className="text-muted-foreground font-mono">YOU HAVEN'T SAVED ANY PLAYERS YET</p>
+          <p className="text-muted-foreground/60 text-sm mt-2">Tap the ☆ on any player card to add them to My Players.</p>
         </div>
       ) : filteredPlayers?.length === 0 ? (
         <div className="py-20 text-center border border-dashed rounded-lg bg-card/50">
@@ -94,54 +122,7 @@ export default function Players() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredPlayers?.map((player) => (
-            <Link key={player.id} href={`/players/${player.id}`}>
-              <Card className="group hover:border-secondary hover:shadow-lg transition-all cursor-pointer overflow-hidden relative">
-                <div className={`absolute top-0 right-0 w-16 h-16 rounded-bl-full -mr-8 -mt-8 transition-colors ${
-                  player.poolTier === 'core' ? 'bg-primary/20 group-hover:bg-primary/40' :
-                  player.poolTier === 'inMix' ? 'bg-secondary/20 group-hover:bg-secondary/40' :
-                  'bg-muted-foreground/20 group-hover:bg-muted-foreground/40'
-                }`} />
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-4 relative z-10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded bg-muted flex items-center justify-center overflow-hidden border border-border">
-                        {player.photoUrl ? (
-                          <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="font-mono text-muted-foreground font-bold">{player.name.substring(0,2).toUpperCase()}</span>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg leading-tight group-hover:text-secondary transition-colors">{player.name}</h3>
-                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                          <span className="font-medium uppercase tracking-wider">{player.position}</span>
-                          <span>•</span>
-                          <span className="truncate max-w-[100px]">{player.clubName}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50 items-end">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide">Age</span>
-                      <span className="font-bold data-value text-sm">{player.age}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide leading-tight text-center">
-                        <span className="sm:hidden">NT Caps</span>
-                        <span className="hidden sm:inline">National Team Caps</span>
-                      </span>
-                      <span className="font-bold data-value text-sm">{player.nationalTeamCaps}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide leading-tight text-center">Club Form</span>
-                      <FormBadge trend={player.performanceTrend} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <PlayerCard key={player.id} player={player} />
           ))}
         </div>
       )}
