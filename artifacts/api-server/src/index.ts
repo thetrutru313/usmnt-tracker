@@ -5,6 +5,7 @@ import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
 import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
+import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
@@ -309,4 +310,9 @@ app.listen(port, async (err) => {
   // career totals — see nationalTeamSync.ts for why Wikidata was chosen over
   // ESPN's site API. No API key needed.
   startNationalTeamSyncSchedule();
+
+  // Removes orphaned anon_user rows (no follows, older than 90 days) once per
+  // day. Runs immediately on server boot, then every 24 hours — mirrors what
+  // POST /admin/cleanup-anon-users does but without requiring a manual trigger.
+  startAnonUserCleanupSchedule();
 });

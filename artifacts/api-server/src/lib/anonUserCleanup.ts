@@ -61,3 +61,24 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
 
   return orphanIds.length;
 }
+
+let _cleanupIntervalHandle: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Runs {@link cleanupOrphanedAnonUsers} immediately on call, then once per day.
+ * Subsequent calls are no-ops (the interval is started only once).
+ */
+export function startAnonUserCleanupSchedule(intervalMs = 24 * 60 * 60 * 1000): void {
+  if (_cleanupIntervalHandle !== null) return; // already running
+
+  async function run(): Promise<void> {
+    try {
+      await cleanupOrphanedAnonUsers();
+    } catch (err) {
+      logger.error({ err }, "Anon-user cleanup: scheduled run failed");
+    }
+  }
+
+  void run();
+  _cleanupIntervalHandle = setInterval(() => void run(), intervalMs);
+}
