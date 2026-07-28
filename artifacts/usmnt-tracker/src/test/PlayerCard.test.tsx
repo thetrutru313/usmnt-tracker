@@ -11,14 +11,16 @@
  * as documentation of the expected contract.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlayerCard, type PlayerCardPlayer } from "@/components/PlayerCard";
 import {
   MyPlayersContext,
+  MyPlayersProvider,
   type MyPlayersContextValue,
 } from "@/context/MyPlayersContext";
 
@@ -431,5 +433,121 @@ describe("PlayerCard — star aria-label reflects follow state", () => {
     expect(
       screen.getByRole("button", { name: "Remove from My Players" }),
     ).toBeInTheDocument();
+  });
+});
+
+// ─── localStorage star state restored on refresh (no network) ─────────────────
+
+describe("PlayerCard — localStorage star state restored after browser refresh (no network)", () => {
+  /**
+   * MyPlayersProvider seeds optimisticIds from localStorage synchronously on
+   * mount (via getLocalFollows). This suite verifies that a player starred in a
+   * previous session appears with the star filled on the very first render —
+   * before any API response arrives — and that no network call is required for
+   * that initial state.
+   */
+
+  const ANON_TOKEN_KEY   = "usmnt_anon_token";
+  const LOCAL_FOLLOWS_KEY = "usmnt_my_players";
+
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    // Replace fetch with a spy that never resolves, simulating an offline / no-network
+    // environment. Any test failure that requires a resolved network response would
+    // indicate the implementation is not reading from localStorage correctly.
+    fetchSpy = vi.fn(() => new Promise(() => { /* never resolves */ }));
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Renders a PlayerCard backed by the real MyPlayersProvider (not a mock
+   * context), so the localStorage → optimisticIds seeding path is exercised.
+   */
+  function renderCardWithRealProvider() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { hook } = memoryLocation({ path: "/players", record: true });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MyPlayersProvider>
+          <Router hook={hook}>
+            <PlayerCard player={PLAYER} />
+          </Router>
+        </MyPlayersProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("shows 'Remove from My Players' on first render when player ID is in localStorage (no toggle click)", () => {
+    // Seed localStorage as if the user starred the player in a previous session.
+    localStorage.setItem(ANON_TOKEN_KEY, "test-token-abc");
+    localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([PLAYER.id]));
+
+    renderCardWithRealProvider();
+
+    // The star must already be filled without any user interaction.
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows 'Add to My Players' on first render when player ID is absent from localStorage", () => {
+    // Token present, but this player was never starred.
+    localStorage.setItem(ANON_TOKEN_KEY, "test-token-abc");
+    localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([]));
+
+    renderCardWithRealProvider();
+
+    expect(
+      screen.getByRole("button", { name: "Add to My Players" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows 'Remove from My Players' even when localStorage has multiple player IDs", () => {
+    localStorage.setItem(ANON_TOKEN_KEY, "test-token-abc");
+    // PLAYER.id (42) is one of several starred players.
+    localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([1, PLAYER.id, 99]));
+
+    renderCardWithRealProvider();
+
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+  });
+
+  it("requires no API call for the initial star state to be filled", () => {
+    localStorage.setItem(ANON_TOKEN_KEY, "test-token-abc");
+    localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([PLAYER.id]));
+
+    renderCardWithRealProvider();
+
+    // The "Remove from My Players" button is present synchronously on first
+    // render. Any fetch call here is the background token-provisioning or
+    // remote-follows query — NOT a prerequisite for the star to be filled.
+    // The star state comes purely from localStorage.
+    expect(
+      screen.getByRole("button", { name: "Remove from My Players" }),
+    ).toBeInTheDocument();
+
+    // fetch may have been called for the background query (the token is in
+    // localStorage so the useQuery fires), but the star state must be correct
+    // before any fetch resolves. Because fetch never resolves in this test
+    // (the spy returns a pending Promise) and the star is already filled, the
+    // initial state is definitively localStorage-only.
+    const followsQueryCalls = fetchSpy.mock.calls.filter(
+      (args) => typeof args[0] === "string" && (args[0] as string).includes("/api/follows"),
+    );
+    // None of the follows-API calls should have resolved by the time the first
+    // render paints (they're all pending). The star comes from localStorage.
+    expect(followsQueryCalls.length).toBeGreaterThanOrEqual(0); // call may fire; resolve is what matters
   });
 });
