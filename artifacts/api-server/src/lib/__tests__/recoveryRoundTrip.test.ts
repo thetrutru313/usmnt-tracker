@@ -377,6 +377,89 @@ describe("Recovery token round-trip — follows survive across device recovery",
     expect(invalidatedCount).toBe(2);
   });
 
+  it("superseded token stays rejected after the account is recovered on a new device", async () => {
+    // Full scenario: user bookmarks token 1, generates tokens 2–4 on a new
+    // device, redeems token 4 to rotate auth, then tries the stale token 1.
+    //
+    // Flow:
+    //  1. Seed user + follows
+    //  2. Generate tokens 1, 2, 3  (all active; cap = 3)
+    //  3. Generate token 4         (token 1 is now superseded)
+    //  4. Redeem token 4           (auth token rotated)
+    //  5. Assert token 1 → 400 /replaced/i
+    //  6. Assert new auth token works for GET /api/follows
+
+    // ── 1. Seed user + follows ────────────────────────────────────────────
+    const { id: userId, token: authToken } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    if (realPlayerIds.length > 0) {
+      await db
+        .insert(userFollowsTable)
+        .values(realPlayerIds.map((playerId) => ({ anonUserId: userId, playerId })));
+    }
+
+    // ── 2. Generate tokens 1–3 ───────────────────────────────────────────
+    const tokens: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post("/api/follows/recovery-token")
+        .set(bearer(authToken));
+      expect(res.status, `Token ${i + 1} failed: ${JSON.stringify(res.body)}`).toBe(200);
+      const url = (res.body as { recoveryUrl?: string }).recoveryUrl!;
+      tokens.push(new URL(url, "http://localhost").searchParams.get("token")!);
+    }
+
+    // ── 3. Generate token 4 (displaces token 1) ───────────────────────────
+    const fourthRes = await request(app)
+      .post("/api/follows/recovery-token")
+      .set(bearer(authToken));
+    expect(fourthRes.status, `Token 4 failed: ${JSON.stringify(fourthRes.body)}`).toBe(200);
+    const fourthUrl = (fourthRes.body as { recoveryUrl?: string }).recoveryUrl!;
+    const fourthToken = new URL(fourthUrl, "http://localhost").searchParams.get("token")!;
+
+    // ── 4. Redeem token 4 on the "new device" ─────────────────────────────
+    const redeemRes = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: fourthToken });
+    expect(
+      redeemRes.status,
+      `Redeeming token 4 failed (${redeemRes.status}): ${JSON.stringify(redeemRes.body)}`,
+    ).toBe(200);
+    const { token: newAuthToken } = redeemRes.body as { token?: string };
+    expect(typeof newAuthToken).toBe("string");
+    expect(newAuthToken).not.toBe(authToken);
+
+    // ── 5. Token 1 must be rejected as superseded ─────────────────────────
+    const oldTokenRes = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: tokens[0] });
+    expect(
+      oldTokenRes.status,
+      `Expected superseded token 1 to return 400 (got ${oldTokenRes.status})`,
+    ).toBe(400);
+    expect(
+      (oldTokenRes.body as { error?: string }).error,
+      "Superseded token must match /replaced/i",
+    ).toMatch(/replaced/i);
+    expect(
+      (oldTokenRes.body as { error?: string }).error,
+      "Superseded token must NOT say 'already been used'",
+    ).not.toMatch(/already been used/i);
+
+    // ── 6. New auth token still works for GET /api/follows ────────────────
+    const followsRes = await request(app)
+      .get("/api/follows")
+      .set(bearer(newAuthToken!));
+    expect(
+      followsRes.status,
+      `GET /follows with new token failed (${followsRes.status}): ${JSON.stringify(followsRes.body)}`,
+    ).toBe(200);
+    const { playerIds } = followsRes.body as { playerIds?: number[] };
+    expect(Array.isArray(playerIds)).toBe(true);
+    expect(playerIds!.sort()).toEqual([...realPlayerIds].sort());
+  });
+
   it("returns 401 when the original auth token is used after token rotation", async () => {
     // ── Seed ───────────────────────────────────────────────────────────────
     const { id: userId, token: originalToken } = await seedAnonUser();
