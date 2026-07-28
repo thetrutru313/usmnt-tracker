@@ -460,6 +460,54 @@ describe("Recovery token round-trip — follows survive across device recovery",
     expect(playerIds!.sort()).toEqual([...realPlayerIds].sort());
   });
 
+  it("sibling recovery token stays redeemable after another token is redeemed", async () => {
+    // ── 1. Seed user ───────────────────────────────────────────────────────
+    const { id: userId, token: authToken } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    // ── 2. Generate two recovery tokens (A and B) ─────────────────────────
+    const genA = await request(app)
+      .post("/api/follows/recovery-token")
+      .set(bearer(authToken));
+    expect(genA.status, `Token A generation failed: ${JSON.stringify(genA.body)}`).toBe(200);
+    const tokenA = new URL(
+      (genA.body as { recoveryUrl: string }).recoveryUrl,
+      "http://localhost",
+    ).searchParams.get("token")!;
+
+    const genB = await request(app)
+      .post("/api/follows/recovery-token")
+      .set(bearer(authToken));
+    expect(genB.status, `Token B generation failed: ${JSON.stringify(genB.body)}`).toBe(200);
+    const tokenB = new URL(
+      (genB.body as { recoveryUrl: string }).recoveryUrl,
+      "http://localhost",
+    ).searchParams.get("token")!;
+
+    // ── 3. Redeem token A ─────────────────────────────────────────────────
+    const redeemA = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: tokenA });
+    expect(
+      redeemA.status,
+      `Redeeming token A failed (${redeemA.status}): ${JSON.stringify(redeemA.body)}`,
+    ).toBe(200);
+    const { token: authAfterA } = redeemA.body as { token?: string };
+    expect(typeof authAfterA).toBe("string");
+
+    // ── 4. Token B must still be redeemable ───────────────────────────────
+    const redeemB = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: tokenB });
+    expect(
+      redeemB.status,
+      `Token B should still be valid after token A was redeemed (got ${redeemB.status}): ${JSON.stringify(redeemB.body)}`,
+    ).toBe(200);
+    const { token: authAfterB } = redeemB.body as { token?: string };
+    expect(typeof authAfterB).toBe("string");
+    expect(authAfterB).not.toBe(authAfterA);
+  });
+
   it("returns 401 when the original auth token is used after token rotation", async () => {
     // ── Seed ───────────────────────────────────────────────────────────────
     const { id: userId, token: originalToken } = await seedAnonUser();
