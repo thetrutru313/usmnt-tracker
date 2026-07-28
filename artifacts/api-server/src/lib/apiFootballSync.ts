@@ -209,6 +209,41 @@ export function isReserveOrYouthTeam(name: string): boolean {
 }
 
 /**
+ * Returns true when two club names look like a known parent/reserve pair
+ * (e.g. "Orlando City SC" and "Orlando City II", or "Bayern Munich" and
+ * "Bayern Munich II").  Used by the duplicate-club guard to emit a more
+ * actionable warning instead of the generic "needs manual merge" message.
+ *
+ * The heuristic: one name matches `RESERVE_TEAM_PATTERN` and the other
+ * doesn't, AND the non-reserve name is a case-insensitive prefix of the
+ * reserve name after stripping any trailing suffix tokens (SC, FC, CF, …).
+ * This is intentionally conservative — it only flags obvious cases so it
+ * never suppresses a genuine duplicate.
+ *
+ * Exported for unit testing.
+ */
+export function looksLikeParentReservePair(nameA: string, nameB: string): boolean {
+  const a = nameA.trim();
+  const b = nameB.trim();
+  // Exactly one of the two should match the reserve pattern.
+  const aIsReserve = isReserveOrYouthTeam(a);
+  const bIsReserve = isReserveOrYouthTeam(b);
+  if (aIsReserve === bIsReserve) return false; // both first-team OR both reserve — not a parent/reserve pair
+
+  const [parentName, reserveName] = aIsReserve ? [b, a] : [a, b];
+
+  // Strip common club-type suffixes from the parent name so "Orlando City SC"
+  // and "Orlando City II" still match on the shared root "Orlando City".
+  const normalizedParent = parentName
+    .replace(/\s+(SC|FC|CF|AC|AS|FSV|TSV|SV|VfB|VfL|1\.?\s*FC)\s*$/i, "")
+    .trim()
+    .toLowerCase();
+
+  // The reserve name should start with the same root (after lowercasing).
+  return reserveName.toLowerCase().startsWith(normalizedParent);
+}
+
+/**
  * Returns true when a team name refers to a US men's national team — either
  * the senior side ("USA") or a men's youth age-group side ("USA U17",
  * "USA U20", "United States U17", etc.).
@@ -322,10 +357,22 @@ export async function resolveTeamId(club: { id: number; name: string; apiFootbal
       .from(clubsTable)
       .where(and(eq(clubsTable.apiFootballTeamId, match.team.id), sql`${clubsTable.id} != ${club.id}`));
     if (existing) {
-      logger.warn(
-        { club: club.name, clubId: club.id, existingClub: existing.name, existingClubId: existing.id, teamId: match.team.id },
-        "API-Football team search resolved to a team id already tracked under a different club row — likely a duplicate club; not assigning, needs manual merge",
-      );
+      if (looksLikeParentReservePair(club.name, existing.name)) {
+        // A parent/reserve pair (e.g. "Orlando City SC" / "Orlando City II")
+        // should each resolve to their own distinct API-Football team ids.
+        // Landing on the same id means the name search returned the wrong
+        // result — the reserve side's apiFootballTeamId is left unset so the
+        // next sync can retry with a corrected search term or SEARCH_TERM_OVERRIDES entry.
+        logger.warn(
+          { club: club.name, clubId: club.id, existingClub: existing.name, existingClubId: existing.id, teamId: match.team.id },
+          "API-Football team search returned the same team id for what looks like a parent/reserve pair — search may have matched the wrong side; not assigning. Add a SEARCH_TERM_OVERRIDES entry for the reserve club to point to its own team id.",
+        );
+      } else {
+        logger.warn(
+          { club: club.name, clubId: club.id, existingClub: existing.name, existingClubId: existing.id, teamId: match.team.id },
+          "API-Football team search resolved to a team id already tracked under a different club row — likely a duplicate club; not assigning, needs manual merge",
+        );
+      }
       return null;
     }
 
