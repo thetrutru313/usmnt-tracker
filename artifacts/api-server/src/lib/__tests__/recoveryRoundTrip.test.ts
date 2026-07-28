@@ -254,6 +254,93 @@ describe("Recovery token round-trip — follows survive across device recovery",
     expect(tokenRow!.usedAt).not.toBeNull();
   });
 
+  it("caps active tokens at 3 — the oldest is invalidated when a 4th is requested", async () => {
+    const { id: userId, token: authToken } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    // Generate MAX (3) tokens — all should succeed.
+    const recoveryTokens: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post("/api/follows/recovery-token")
+        .set(bearer(authToken));
+      expect(res.status, `Token ${i + 1} generation failed: ${JSON.stringify(res.body)}`).toBe(200);
+      const url = (res.body as { recoveryUrl?: string }).recoveryUrl!;
+      const tok = new URL(url, "http://localhost").searchParams.get("token")!;
+      recoveryTokens.push(tok);
+    }
+
+    // Request a 4th token — should succeed and invalidate the oldest.
+    const fourthRes = await request(app)
+      .post("/api/follows/recovery-token")
+      .set(bearer(authToken));
+    expect(
+      fourthRes.status,
+      `4th token generation failed: ${JSON.stringify(fourthRes.body)}`,
+    ).toBe(200);
+    const fourthUrl = (fourthRes.body as { recoveryUrl?: string }).recoveryUrl!;
+    const fourthToken = new URL(fourthUrl, "http://localhost").searchParams.get("token")!;
+
+    // The oldest token (first one generated) must now be rejected.
+    const oldestRedeemRes = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: recoveryTokens[0] });
+    expect(
+      oldestRedeemRes.status,
+      "Expected oldest token to be invalidated (400)",
+    ).toBe(400);
+
+    // The newest token must still be redeemable.
+    const newestRedeemRes = await request(app)
+      .post("/api/follows/recover")
+      .send({ token: fourthToken });
+    expect(
+      newestRedeemRes.status,
+      `Expected newest token to be valid (got ${newestRedeemRes.status}): ${JSON.stringify(newestRedeemRes.body)}`,
+    ).toBe(200);
+  });
+
+  it("exactly MAX_ACTIVE_RECOVERY_TOKENS=3 tokens remain active after 5 consecutive requests", async () => {
+    const { id: userId, token: authToken } = await seedAnonUser();
+    insertedAnonUserIds.push(userId);
+
+    const allTokens: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post("/api/follows/recovery-token")
+        .set(bearer(authToken));
+      expect(res.status).toBe(200);
+      const url = (res.body as { recoveryUrl?: string }).recoveryUrl!;
+      const tok = new URL(url, "http://localhost").searchParams.get("token")!;
+      allTokens.push(tok);
+    }
+
+    // The first two tokens should be invalidated; the last three should be active.
+    // Try redeeming each — but because redemption rotates the auth token we only
+    // probe the DB directly via the hash to avoid cascading state changes.
+    const { hashToken: hashFn } = await import("../tokenUtils.js");
+    const { db: dbConn, recoveryTokensTable: rtTable } = await import("@workspace/db");
+    const { isNull: isNullFn, eq: eqFn } = await import("drizzle-orm");
+
+    let activeCount = 0;
+    let invalidatedCount = 0;
+    for (const tok of allTokens) {
+      const hash = hashFn(tok);
+      const [row] = await dbConn
+        .select({ usedAt: rtTable.usedAt })
+        .from(rtTable)
+        .where(eqFn(rtTable.tokenHash, hash))
+        .limit(1);
+      if (row) {
+        if (row.usedAt === null) activeCount++;
+        else invalidatedCount++;
+      }
+    }
+
+    expect(activeCount).toBe(3);
+    expect(invalidatedCount).toBe(2);
+  });
+
   it("returns 401 when the original auth token is used after token rotation", async () => {
     // ── Seed ───────────────────────────────────────────────────────────────
     const { id: userId, token: originalToken } = await seedAnonUser();

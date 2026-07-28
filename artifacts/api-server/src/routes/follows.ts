@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, anonUsersTable, userFollowsTable, recoveryTokensTable } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, gt, inArray, asc } from "drizzle-orm";
 import { generateToken, hashToken } from "../lib/tokenUtils";
 import { requireAnonUser } from "../lib/anonAuth";
 import rateLimit from "express-rate-limit";
@@ -55,14 +55,52 @@ router.get("/follows", requireAnonUser, async (_req, res): Promise<void> => {
 });
 
 /**
+ * Maximum number of active (unused, unexpired) recovery tokens a single user
+ * may hold at one time. Generating a new token when the user is already at
+ * this limit invalidates the oldest active token first so the user always ends
+ * up with exactly MAX_ACTIVE_RECOVERY_TOKENS active tokens.
+ */
+const MAX_ACTIVE_RECOVERY_TOKENS = 3;
+
+/**
  * POST /follows/recovery-token
  * Generate a single-use recovery token valid for 30 days. Returns a recovery
  * URL containing the plaintext token — safe to bookmark or share with the
  * owner's other devices. The token is stored hashed and never revealed again.
+ *
+ * At most MAX_ACTIVE_RECOVERY_TOKENS active tokens are kept per user. If the
+ * user is already at the limit, the oldest active token is invalidated (its
+ * used_at is set to now) before the new token is inserted.
+ *
  * Requires `Authorization: Bearer <token>`.
  */
 router.post("/follows/recovery-token", requireAnonUser, async (_req, res): Promise<void> => {
   const user = res.locals.anonUser;
+  const now = new Date();
+
+  // Fetch all currently active (unused, unexpired) tokens for this user,
+  // oldest first (serial id is a reliable insertion-order proxy).
+  const activeTokens = await db
+    .select({ id: recoveryTokensTable.id })
+    .from(recoveryTokensTable)
+    .where(
+      and(
+        eq(recoveryTokensTable.anonUserId, user.id),
+        isNull(recoveryTokensTable.usedAt),
+        gt(recoveryTokensTable.expiresAt, now),
+      ),
+    )
+    .orderBy(asc(recoveryTokensTable.id));
+
+  // If already at the limit, invalidate the oldest token(s) to make room.
+  if (activeTokens.length >= MAX_ACTIVE_RECOVERY_TOKENS) {
+    const overflow = activeTokens.length - MAX_ACTIVE_RECOVERY_TOKENS + 1;
+    const toInvalidate = activeTokens.slice(0, overflow).map((t) => t.id);
+    await db
+      .update(recoveryTokensTable)
+      .set({ usedAt: now })
+      .where(inArray(recoveryTokensTable.id, toInvalidate));
+  }
 
   const recoveryToken = generateToken();
   const tokenHash = hashToken(recoveryToken);
