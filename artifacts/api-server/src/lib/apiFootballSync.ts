@@ -266,6 +266,7 @@ export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Lyngby Boldklub": "Lyngby",
   "Los Angeles FC": "Los Angeles FC",
   "LA Galaxy": "Galaxy",
+  "Orlando City SC": "Orlando City",
 };
 
 let usmntTeamId: number | null = null;

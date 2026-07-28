@@ -1,14 +1,14 @@
 /**
- * Regression guard: confirms GET /api/players/46 (Damion Downs) correctly
+ * Regression guard: confirms GET /api/players/:id (Damion Downs) correctly
  * surfaces stats and match logs once the stats sync writes data for his
- * corrected api_football_player_id (291521 / Hamburger SV).
+ * corrected api_football_player_id (334362 / Hamburger SV).
  *
  * ## Why this test exists
- * Damion Downs' player ID was corrected from a mis-resolved ID to 291521.
+ * Damion Downs' player ID was corrected from a mis-resolved ID to 334362.
  * The daily stats sync will write real Bundesliga data using that ID.
  * This test proves the full profile pipeline works end-to-end: once the
- * sync writes player_stats and match_logs rows for player 46, the
- * GET /api/players/46 endpoint surfaces them correctly — not the N/A
+ * sync writes player_stats and match_logs rows for Damion Downs, the
+ * GET /api/players/:id endpoint surfaces them correctly — not the N/A
  * fallback, and not stale data from any previous wrong ID.
  *
  * ## Strategy
@@ -17,14 +17,17 @@
  * and verifies the profile endpoint returns them correctly. This is
  * equivalent to "after the next sync" without the timing dependency.
  *
+ * The player ID is resolved dynamically at test startup (by name lookup)
+ * rather than hardcoded, so re-seeds that renumber rows don't break the test.
+ *
  * ## What is asserted
- * 1. GET /api/players/46 returns HTTP 200 and parses against the Zod schema.
+ * 1. GET /api/players/:id returns HTTP 200 and parses against the Zod schema.
  * 2. `availableClubSeasons` contains the synced season (not empty/N/A).
  * 3. `clubSeasonStats.season` is a real year string ("2025").
  * 4. `clubSeasonStats.avgRating` is a positive number (not null / fabricated).
  * 5. `clubSeasonStats.minutes` is > 0 (player appeared in matches).
  * 6. `matchLog` is non-empty — match history rows are returned.
- * 7. The fixture links (9 HSV games, club_id=40) remain correct throughout.
+ * 7. The fixture links (HSV games) remain correct throughout.
  *
  * ## Cleanup
  * All inserted rows are removed in afterAll in reverse-FK order.
@@ -33,11 +36,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
-import { db, matchLogsTable, playerStatsTable } from "@workspace/db";
+import { db, matchLogsTable, playerStatsTable, playersTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { GetPlayerResponse } from "@workspace/api-zod";
 
-const DAMION_DOWNS_ID = 46;
+// Resolved dynamically in beforeAll so re-seeds that renumber rows don't break the test.
+let DAMION_DOWNS_ID: number;
 const TEST_SEASON = "2025";
 
 // ── Cleanup state ──────────────────────────────────────────────────────────────
@@ -62,6 +66,16 @@ afterAll(async () => {
 // ── Setup: insert realistic stats rows mirroring what the sync would write ────
 
 beforeAll(async () => {
+  // Resolve Damion Downs' current DB id by name — guards against re-seeds
+  // that renumber rows (the name is stable; the serial id is not).
+  const [row] = await db
+    .select({ id: playersTable.id })
+    .from(playersTable)
+    .where(eq(playersTable.name, "Damion Downs"))
+    .limit(1);
+  if (!row) throw new Error("Damion Downs not found in players table — was the seed run?");
+  DAMION_DOWNS_ID = row.id;
+
   // Simulate a season_all stats row — same shape syncPlayerStatsAndInjuries writes
   await db.insert(playerStatsTable).values({
     playerId: DAMION_DOWNS_ID,
@@ -94,7 +108,7 @@ beforeAll(async () => {
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("GET /api/players/46 (Damion Downs) — stats surfaced after corrected player ID syncs", () => {
+describe("GET /api/players/:id (Damion Downs) — stats surfaced after corrected player ID syncs", () => {
   it(
     "returns HTTP 200 and a schema-valid body",
     async () => {

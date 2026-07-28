@@ -84,6 +84,7 @@ async function main() {
     "Lyngby Boldklub": "https://media.api-sports.io/football/teams/625.png",
     "Real Monarchs": "https://media.api-sports.io/football/teams/4012.png",
     "Benfica B": "https://media.api-sports.io/football/teams/229.png",
+    "Orlando City SC": "https://media.api-sports.io/football/teams/1610.png",
     // Not found in API-Football's DB (too new / too small a league) — logoUrl
     // will fall back to null for clubs whose name isn't a key here. This
     // includes "Bayern Munich II" (Regionalliga Bayern reserve side) — API-
@@ -144,6 +145,8 @@ async function main() {
     { name: "Lyngby Boldklub", league: "Danish Superliga", country: "Denmark" },
     { name: "Real Monarchs", league: "MLS Next Pro", country: "USA" },
     { name: "Benfica B", league: "Liga Portugal 2", country: "Portugal" },
+    // Added 2026-07-28: Justin Ellis's club.
+    { name: "Orlando City SC", league: "MLS", country: "USA" },
   ].map((c) => ({ ...c, logoUrl: TEAM_LOGOS[c.name] ?? null }));
 
   // Guard against accidentally seeding the same real-world club twice under
@@ -255,6 +258,8 @@ async function main() {
     { name: "Luca Bombino", slug: "luca-bombino", position: "DF", category: "prospect", club: "San Diego FC", age: 20, contractUntil: "2028-12-31", marketValueUsd: 2000000, youthNationalTeam: "U-20", debutDate: null, callUpScore: 30, trend: "steady", trending: false, bio: "A progressive-passing left-back and member of the U-20 World Cup squad, Bombino ranked in the 93rd percentile among MLS fullbacks for progressive passes last season." },
     { name: "Peyton Miller", slug: "peyton-miller", position: "DF", category: "prospect", club: "New England Revolution", age: 19, contractUntil: "2028-12-31", marketValueUsd: 1800000, youthNationalTeam: "U-21", debutDate: null, callUpScore: 29, trend: "rising", trending: true, bio: "A Revolution homegrown fullback who has moved through the U-20 and U-21 national teams, Miller's athleticism and minutes have him ahead of older peers in the pipeline." },
     { name: "Joshua Wynder", slug: "joshua-wynder", position: "DF", category: "prospect", club: "Benfica", age: 20, contractUntil: "2028-06-30", marketValueUsd: 4500000, youthNationalTeam: "U-20", debutDate: null, callUpScore: 26, trend: "steady", trending: false, bio: "A U-20 World Cup center-back who racked up nearly 3,000 USL minutes before turning 19, Wynder is now waiting for a Champions League breakthrough at Benfica." },
+    // Added 2026-07-28: Justin Ellis (Orlando City SC MF).
+    { name: "Justin Ellis", slug: "justin-ellis", position: "MF", category: "prospect", club: "Orlando City SC", age: 21, contractUntil: "2027-12-31", marketValueUsd: 1500000, youthNationalTeam: "U-20", debutDate: null, callUpScore: null, trend: "steady", trending: false, bio: "A combative, box-to-box midfielder who has forced his way into Orlando City's first-team picture, Ellis is firmly on U.S. Soccer's radar for the next youth cycle." },
   ];
 
   // The 2026 World Cup 26-man roster is a subset of "current" category

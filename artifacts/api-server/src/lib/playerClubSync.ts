@@ -117,6 +117,13 @@ export const KNOWN_PLAYER_IDS: Record<string, number | null> = {
   // nationality gate at the time the row was written. The wrong id was causing
   // a white English player's photo to appear on Damion Downs' profile page.
   "Damion Downs": 334362,
+  // Justin Ellis (Orlando City II MF): verified 2026-07-28 — the club sync
+  // resolved him via /players/squads?team=4026 (Orlando City II, MLS Next Pro)
+  // after seeding him at Orlando City SC. API-Football tracks him at the
+  // reserve side (Orlando City II, team 4026) rather than the first team
+  // (Orlando City SC, team 1610). Pin the confirmed id to prevent future
+  // re-resolution to a false positive on common surname "Ellis".
+  "Justin Ellis": 461514,
 };
 
 /**
