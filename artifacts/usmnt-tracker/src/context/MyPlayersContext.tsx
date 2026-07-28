@@ -93,11 +93,23 @@ function getLocalFollows(): Set<number> {
   }
 }
 
+/** Set to true once per session after the first localStorage write failure. */
+let storageWarningShown = false;
+
 function saveLocalFollows(ids: Set<number>): void {
   try {
     localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([...ids]));
   } catch {
-    // Private/incognito mode — silently skip persistence.
+    // Quota exceeded, permission revoked, or private/incognito mode —
+    // in-memory state stays correct for this session but won't survive a
+    // page reload. Warn the user once so they aren't surprised.
+    if (!storageWarningShown) {
+      storageWarningShown = true;
+      toast.warning("Watchlist won't be saved", {
+        description:
+          "Your browser is blocking storage in this mode. Your watchlist is active now but will reset on next visit.",
+      });
+    }
   }
 }
 
