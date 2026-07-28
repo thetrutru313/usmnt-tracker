@@ -9,8 +9,10 @@
  * so the same padding regression cannot silently reappear on this surface.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import PlayerProfile from "@/pages/PlayerProfile";
 
 // ─── Mock wouter ──────────────────────────────────────────────────────────────
@@ -155,5 +157,33 @@ describe("PlayerProfile — follow button aria-label reflects follow state", () 
     expect(
       screen.getByRole("button", { name: "Remove from My Players" }),
     ).toBeInTheDocument();
+  });
+});
+
+// ─── Toast notifications ───────────────────────────────────────────────────────
+
+describe("PlayerProfile — follow button fires toast notifications", () => {
+  beforeEach(() => {
+    vi.mocked(toast).mockClear();
+    mockToggle.mockClear();
+    mockIsFollowing.mockReset();
+  });
+
+  it('shows "Added to My Players" toast when the player is not yet followed', async () => {
+    mockIsFollowing.mockReturnValue(false);
+    mockToggle.mockResolvedValue("added");
+    const user = userEvent.setup();
+    renderProfile();
+    await user.click(screen.getByRole("button", { name: "Add to My Players" }));
+    expect(toast).toHaveBeenCalledWith("Added to My Players");
+  });
+
+  it('shows "Removed from My Players" toast when the player is already followed', async () => {
+    mockIsFollowing.mockReturnValue(true);
+    mockToggle.mockResolvedValue("removed");
+    const user = userEvent.setup();
+    renderProfile();
+    await user.click(screen.getByRole("button", { name: "Remove from My Players" }));
+    expect(toast).toHaveBeenCalledWith("Removed from My Players");
   });
 });
