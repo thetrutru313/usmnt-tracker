@@ -77,6 +77,11 @@ function stubFetch200(body: unknown) {
   );
 }
 
+/** Build a fetch mock that rejects with the given error (network error / timeout). */
+function stubFetchReject(error: Error) {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -195,6 +200,45 @@ describe("MyPlayersContext — malformed follows response (playerIds: string)", 
 
     const stored = JSON.parse(localStorage.getItem(LOCAL_FOLLOWS_KEY) ?? "[]");
     expect(stored).toContain(99);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Network rejection — fetch rejects entirely (timeout / network error)
+// ---------------------------------------------------------------------------
+
+describe("MyPlayersContext — fetch rejection (network timeout / AbortError)", () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedLocalStorage([11, 22, 33]);
+    stubFetchReject(new Error("Network timeout"));
+  });
+
+  it("preserves optimisticIds when the follows fetch rejects", async () => {
+    renderWithProviders(qc);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("player-11")).toBeInTheDocument();
+      expect(screen.getByTestId("player-22")).toBeInTheDocument();
+      expect(screen.getByTestId("player-33")).toBeInTheDocument();
+    });
+  });
+
+  it("preserves localStorage when the follows fetch rejects", async () => {
+    renderWithProviders(qc);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("player-11")).toBeInTheDocument();
+    });
+
+    const stored = JSON.parse(localStorage.getItem(LOCAL_FOLLOWS_KEY) ?? "[]");
+    expect(stored).toContain(11);
+    expect(stored).toContain(22);
+    expect(stored).toContain(33);
   });
 });
 
