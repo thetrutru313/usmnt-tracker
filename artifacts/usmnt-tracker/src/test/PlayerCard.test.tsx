@@ -822,3 +822,87 @@ describe("MyPlayersContext — background API sync overwrites optimistic state",
     });
   });
 });
+
+// ─── localStorage SecurityError (private/incognito mode) ──────────────────────
+
+describe("MyPlayersContext — degrades gracefully when localStorage throws SecurityError", () => {
+  /**
+   * Safari in Private Browsing and Firefox in strict mode can throw a
+   * SecurityError (or equivalent DOMException) on localStorage.getItem /
+   * localStorage.setItem rather than returning null. The getLocalFollows helper
+   * in MyPlayersContext has a try/catch for exactly this case. These tests verify
+   * that:
+   *   1. Rendering MyPlayersProvider + PlayerCard does not throw.
+   *   2. The star button shows "Add to My Players" (empty watchlist fallback).
+   */
+
+  beforeEach(() => {
+    // Do NOT call localStorage.clear() here — we stub getItem to throw, so
+    // accessing the real localStorage is intentionally bypassed.
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  function renderCardWithRealProvider() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { hook } = memoryLocation({ path: "/players", record: true });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MyPlayersProvider>
+          <Router hook={hook}>
+            <PlayerCard player={PLAYER} />
+          </Router>
+        </MyPlayersProvider>
+      </QueryClientProvider>,
+    );
+
+    const starBtn = () => screen.getByRole("button", { name: /my players/i });
+    return { starBtn };
+  }
+
+  it("does not throw when localStorage.getItem throws a SecurityError", () => {
+    const securityError = Object.assign(new DOMException("Access denied", "SecurityError"), {});
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw securityError;
+    });
+    // fetch never resolves — simulates incognito with no network token either
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => { /* never resolves */ })));
+
+    expect(() => renderCardWithRealProvider()).not.toThrow();
+  });
+
+  it("shows 'Add to My Players' (empty watchlist) when localStorage.getItem throws a SecurityError", () => {
+    const securityError = Object.assign(new DOMException("Access denied", "SecurityError"), {});
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw securityError;
+    });
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => { /* never resolves */ })));
+
+    renderCardWithRealProvider();
+
+    expect(
+      screen.getByRole("button", { name: "Add to My Players" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show 'Remove from My Players' when localStorage.getItem throws a SecurityError", () => {
+    const securityError = Object.assign(new DOMException("Access denied", "SecurityError"), {});
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw securityError;
+    });
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => { /* never resolves */ })));
+
+    renderCardWithRealProvider();
+
+    expect(
+      screen.queryByRole("button", { name: "Remove from My Players" }),
+    ).not.toBeInTheDocument();
+  });
+});

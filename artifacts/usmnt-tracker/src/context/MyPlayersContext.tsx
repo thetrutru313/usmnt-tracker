@@ -28,7 +28,7 @@ const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 let provisioningPromise: Promise<string> | null = null;
 
 async function ensureToken(): Promise<string> {
-  const existing = localStorage.getItem(ANON_TOKEN_KEY);
+  const existing = safeGetItem(ANON_TOKEN_KEY);
   if (existing) return existing;
 
   if (!provisioningPromise) {
@@ -45,9 +45,13 @@ async function ensureToken(): Promise<string> {
         // token while the provisioning request was in flight. If so, honour
         // that token and discard the freshly-provisioned one (it will be
         // cleaned up later as an orphan — no follows attached to it).
-        const current = localStorage.getItem(ANON_TOKEN_KEY);
+        const current = safeGetItem(ANON_TOKEN_KEY);
         if (current) return current;
-        localStorage.setItem(ANON_TOKEN_KEY, token);
+        try {
+          localStorage.setItem(ANON_TOKEN_KEY, token);
+        } catch {
+          // Private/incognito mode — operate without persisting the token.
+        }
         return token;
       })
       .finally(() => {
@@ -89,7 +93,11 @@ function getLocalFollows(): Set<number> {
 }
 
 function saveLocalFollows(ids: Set<number>): void {
-  localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([...ids]));
+  try {
+    localStorage.setItem(LOCAL_FOLLOWS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Private/incognito mode — silently skip persistence.
+  }
 }
 
 // ─── Context shape ────────────────────────────────────────────────────────────
@@ -110,9 +118,18 @@ export const MyPlayersContext = React.createContext<MyPlayersContextValue>({
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
+/** Safe localStorage.getItem — returns null instead of throwing in private/incognito mode. */
+function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = React.useState<string | null>(
-    () => localStorage.getItem(ANON_TOKEN_KEY),
+    () => safeGetItem(ANON_TOKEN_KEY),
   );
   const queryClient = useQueryClient();
 
