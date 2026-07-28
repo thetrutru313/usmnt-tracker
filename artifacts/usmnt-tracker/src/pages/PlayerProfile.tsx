@@ -3,13 +3,15 @@ import { useParams } from "wouter";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper, Star } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
 import { PoolTierIcon } from "@/components/FixtureCard";
 import { type PoolTier, POOL_TIER_STYLES } from "@/lib/poolTiers";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { formatKickoff } from "@/lib/formatTime";
+import { useMyPlayers } from "@/hooks/useMyPlayers";
+import { toast } from "sonner";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
 
@@ -26,7 +28,22 @@ export default function PlayerProfile() {
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const [matchFilter, setMatchFilter] = useState<"all" | "club" | "usmnt">("all");
+  const [starAnimating, setStarAnimating] = useState(false);
   const [, navigate] = useLocation();
+  const { isFollowing, toggle } = useMyPlayers();
+
+  async function handleFollowClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setStarAnimating(true);
+    setTimeout(() => setStarAnimating(false), 300);
+    const result = await toggle(playerId);
+    if (result === "added") {
+      toast("Added to My Players");
+    } else {
+      toast("Removed from My Players");
+    }
+  }
 
   const { data: transferNews } = useListNews(
     { playerId, category: "Transfer Rumors", limit: 3 },
@@ -105,9 +122,29 @@ export default function PlayerProfile() {
                 )}
               </div>
               
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground leading-none">
-                {player.name}
-              </h1>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight uppercase text-foreground leading-none">
+                  {player.name}
+                </h1>
+                {/* Follow / unfollow star button
+                    ── Tap-target constraint ───────────────────────────────────
+                    WCAG 2.5.5 and Apple HIG require a minimum 44×44 px tap target.
+                    The min-h-[44px] min-w-[44px] classes enforce this floor.
+                    Do NOT reduce these values — a Vitest test guards this threshold.
+                    ─────────────────────────────────────────────────────────── */}
+                <button
+                  onClick={handleFollowClick}
+                  aria-label={isFollowing(playerId) ? "Remove from My Players" : "Add to My Players"}
+                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md transition-colors text-muted-foreground hover:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    isFollowing(playerId) ? "text-amber-400" : ""
+                  } ${starAnimating ? "scale-125" : "scale-100"} transition-transform`}
+                >
+                  <Star
+                    size={20}
+                    className={isFollowing(playerId) ? "fill-amber-400 stroke-amber-400" : ""}
+                  />
+                </button>
+              </div>
               
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
                 <span className="font-medium flex items-center gap-1.5 text-foreground">
