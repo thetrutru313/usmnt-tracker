@@ -29,6 +29,8 @@ export const usmntCandidateStatus = pgEnum("usmnt_candidate_status", [
 export const playerCandidatesTable = pgTable("player_candidates", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  /** Full first name from API-Football's `firstname` field (e.g. "Christian" for "C. Pulisic"). */
+  firstName: text("first_name"),
   position: text("position"),
   age: integer("age"),
   clubId: integer("club_id")

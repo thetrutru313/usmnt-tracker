@@ -70,6 +70,7 @@ router.get("/admin/player-candidates", async (_req, res): Promise<void> => {
     .select({
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
+      firstName: playerCandidatesTable.firstName,
       position: playerCandidatesTable.position,
       age: playerCandidatesTable.age,
       clubName: clubsTable.name,
@@ -271,6 +272,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     .select({
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
+      firstName: playerCandidatesTable.firstName,
       position: playerCandidatesTable.position,
       age: playerCandidatesTable.age,
       clubName: clubsTable.name,

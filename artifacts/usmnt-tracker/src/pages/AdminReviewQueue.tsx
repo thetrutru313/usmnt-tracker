@@ -16,6 +16,8 @@ interface EligibilitySignal {
 interface ReviewCandidate {
   id: number;
   name: string;
+  /** Full first name from API-Football (e.g. "Christian"). Null for candidates discovered before this field was added. */
+  firstName: string | null;
   position: string | null;
   age: number | null;
   clubName: string | null;
@@ -25,6 +27,19 @@ interface ReviewCandidate {
   status: string;
   needsReview: boolean | null;
   signals: EligibilitySignal[];
+}
+
+/** Returns the best display name for a candidate.
+ *  When firstName is available, combines it with the surname portion of `name`
+ *  (e.g. firstName="Christian", name="C. Pulisic" → "Christian Pulisic").
+ *  Falls back to `name` as-is for older rows that have no firstName. */
+function getDisplayName(candidate: ReviewCandidate): string {
+  if (candidate.firstName) {
+    const parts = candidate.name.split(" ");
+    const surname = parts.length > 1 ? parts[parts.length - 1] : candidate.name;
+    return `${candidate.firstName} ${surname}`;
+  }
+  return candidate.name;
 }
 
 interface RescoreStatus {
@@ -291,7 +306,7 @@ function CandidateReviewCard({
         ? `/admin/review-queue/${candidate.id}/approve`
         : `/admin/review-queue/${candidate.id}/reject`;
       await apiFetch(path, token, { method: "POST" });
-      toast.success(action === "approve" ? `${candidate.name} approved and added to player pool.` : `${candidate.name} rejected.`);
+      toast.success(action === "approve" ? `${getDisplayName(candidate)} approved and added to player pool.` : `${getDisplayName(candidate)} rejected.`);
       onRemove(candidate.id);
     } catch (err) {
       if (err instanceof SessionExpiredError) { onSessionExpired(); return; }
@@ -308,7 +323,7 @@ function CandidateReviewCard({
         method: "POST",
         body: JSON.stringify({ usmnt_status: usmntStatus, reason }),
       });
-      toast.success(`Status overridden for ${candidate.name}.`);
+      toast.success(`Status overridden for ${getDisplayName(candidate)}.`);
       setOverrideOpen(false);
       // Refresh by removing (the queue re-fetch will re-add if still pending)
       // We keep it visible since override leaves status=pending
@@ -329,7 +344,7 @@ function CandidateReviewCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-sm truncate">{candidate.name}</h3>
+            <h3 className="font-semibold text-sm truncate">{getDisplayName(candidate)}</h3>
             {candidate.needsReview && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                 <AlertCircle size={10} />

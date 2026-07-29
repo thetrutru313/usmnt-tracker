@@ -45,6 +45,7 @@ interface AfDiscoveryResponse {
   player: {
     id: number;
     name: string;
+    firstname: string | null;
     age: number | null;
     nationality: string | null;
     birth: { country: string | null; date: string | null; place?: string | null };
@@ -282,6 +283,7 @@ export async function discoverUSProspects(): Promise<{
           .insert(playerCandidatesTable)
           .values({
             name: player.name,
+            firstName: player.firstname ?? null,
             position: inferPosition(statistics),
             age: player.age ?? null,
             clubId: club.id,
