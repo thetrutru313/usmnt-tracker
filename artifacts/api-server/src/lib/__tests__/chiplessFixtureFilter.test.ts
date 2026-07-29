@@ -32,7 +32,7 @@
  * players → clubs).
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
 import {
@@ -55,6 +55,49 @@ import type { AfFixture } from "../fixtureReconciliation.js";
 const insertedClubIds: number[] = [];
 const insertedPlayerIds: number[] = [];
 const insertedFixtureIds: number[] = [];
+
+/**
+ * Purge any stale CFF rows left by a prior run whose afterAll cleanup failed.
+ * This prevents unique-constraint errors when test setup re-inserts the same slugs/IDs.
+ */
+beforeAll(async () => {
+  // 1. Remove stale fixtures by known API IDs used in this suite (cascade their players links).
+  const staleFixtures = await db
+    .select({ id: fixturesTable.id })
+    .from(fixturesTable)
+    .where(inArray(fixturesTable.apiFootballFixtureId, [9_740_001]));
+  if (staleFixtures.length > 0) {
+    const staleFixtureIds = staleFixtures.map((r) => r.id);
+    await db
+      .delete(fixturePlayersTable)
+      .where(inArray(fixturePlayersTable.fixtureId, staleFixtureIds));
+    await db
+      .delete(fixturesTable)
+      .where(inArray(fixturesTable.id, staleFixtureIds));
+  }
+
+  // 2. Remove stale players by slug, then cascade their fixture_players links.
+  const stalePlayers = await db
+    .select({ id: playersTable.id })
+    .from(playersTable)
+    .where(
+      inArray(playersTable.slug, [
+        "__cff-linked-player__",
+        "__cff-late-link-player__",
+        "__cff-return-player__",
+        "__cff-nt-player__",
+        "__cff-past-player__",
+        "__cff-scope-all-player__",
+      ]),
+    );
+  if (stalePlayers.length > 0) {
+    const stalePlayerIds = stalePlayers.map((r) => r.id);
+    await db
+      .delete(fixturePlayersTable)
+      .where(inArray(fixturePlayersTable.playerId, stalePlayerIds));
+    await db.delete(playersTable).where(inArray(playersTable.id, stalePlayerIds));
+  }
+});
 
 afterAll(async () => {
   if (insertedFixtureIds.length > 0) {

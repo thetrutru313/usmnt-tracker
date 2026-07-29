@@ -612,8 +612,9 @@ router.post("/admin/review-queue/bulk-approve", async (req, res): Promise<void> 
     return;
   }
 
+  const skippedDetails = errors.map(({ id, name }) => ({ id, name, reason: "slug_collision" }));
   logger.info({ promoted, skipped: errors.length, minConfidence }, "Admin: bulk-approve complete");
-  res.json({ promoted, skipped: errors.length });
+  res.json({ promoted, skipped: errors.length, skippedDetails });
 });
 
 /**

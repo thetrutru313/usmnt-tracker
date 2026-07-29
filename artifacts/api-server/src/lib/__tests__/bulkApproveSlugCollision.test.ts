@@ -271,6 +271,24 @@ describe("POST /admin/review-queue/bulk-approve — slug collision", () => {
     expect(res.body).toMatchObject({ promoted: 1, skipped: 1 });
   });
 
+  it("includes skippedDetails with the colliding candidate's id, name, and reason", async () => {
+    const app = makeApp();
+    const res = await request(app)
+      .post("/admin/review-queue/bulk-approve")
+      .set("Authorization", "Bearer test-secret")
+      .send({ minConfidence: 80 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.skippedDetails).toBeDefined();
+    expect(Array.isArray(res.body.skippedDetails)).toBe(true);
+    expect(res.body.skippedDetails).toHaveLength(1);
+    expect(res.body.skippedDetails[0]).toMatchObject({
+      id: CANDIDATE_2.id,
+      name: CANDIDATE_2.name,
+      reason: "slug_collision",
+    });
+  });
+
   it("marks only the first candidate as promoted (status update called once with promoted)", async () => {
     const app = makeApp();
     await request(app)

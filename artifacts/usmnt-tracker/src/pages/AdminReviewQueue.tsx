@@ -499,8 +499,20 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
   async function handleBulkApprove() {
     setBulkLoading(true);
     try {
-      const data = await apiFetch("/admin/review-queue/bulk-approve", token, { method: "POST" }) as { promoted: number };
-      toast.success(`Bulk approved ${data.promoted} high-confidence candidate${data.promoted !== 1 ? "s" : ""}.`);
+      const data = await apiFetch("/admin/review-queue/bulk-approve", token, { method: "POST" }) as {
+        promoted: number;
+        skipped: number;
+        skippedDetails?: Array<{ id: number; name: string; reason: string }>;
+      };
+      const successMsg = `Bulk approved ${data.promoted} high-confidence candidate${data.promoted !== 1 ? "s" : ""}.`;
+      toast.success(successMsg);
+      if (data.skipped > 0 && data.skippedDetails && data.skippedDetails.length > 0) {
+        const names = data.skippedDetails.map((s) => s.name).join(", ");
+        toast.warning(
+          `${data.skipped} candidate${data.skipped !== 1 ? "s" : ""} skipped (slug collision): ${names}. Rename one before re-promoting.`,
+          { duration: 8000 },
+        );
+      }
       await fetchQueue();
     } catch (err) {
       if (err instanceof SessionExpiredError) { handleSessionExpired(); return; }
