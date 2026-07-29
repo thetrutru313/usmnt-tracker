@@ -62,6 +62,13 @@ export const playerCandidatesTable = pgTable("player_candidates", {
   needsReview: boolean("needs_review").default(false),
   isManualOverride: boolean("is_manual_override").default(false),
   statusNotes: text("status_notes"),
+  /**
+   * When non-null this candidate's slugified name collides with an existing
+   * pending or promoted candidate.  Points to the earlier candidate's `id`.
+   * Populated by the discovery pass; visible in the review queue as
+   * "duplicate of candidate #<duplicateOfId>".
+   */
+  duplicateOfId: integer("duplicate_of_id"),
 });
 
 export type PlayerCandidate = typeof playerCandidatesTable.$inferSelect;

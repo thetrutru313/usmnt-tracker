@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, asc, sql, isNull, isNotNull, and } from "drizzle-orm";
+import { eq, asc, sql, isNull, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
@@ -55,6 +55,20 @@ interface AfDiscoveryResponse {
 
 const MIN_STARTS = 5;
 const MIN_MINUTES = 450;
+
+// ---------------------------------------------------------------------------
+// Slug utilities
+// ---------------------------------------------------------------------------
+
+/** Converts a display name into the URL-safe slug used by the players table. */
+export function slugify(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 // National team competitions — presence of these league names in a stat block
 // means the player appeared for a national team, not a club.
@@ -172,7 +186,14 @@ export async function discoverUSProspects(): Promise<{
   // previously evaluated (candidates table) — both skip further processing.
   const [trackedPlayers, existingCandidates] = await Promise.all([
     db.select({ apiFootballPlayerId: playersTable.apiFootballPlayerId }).from(playersTable),
-    db.select({ apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId }).from(playerCandidatesTable),
+    db
+      .select({
+        id: playerCandidatesTable.id,
+        apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
+        name: playerCandidatesTable.name,
+        status: playerCandidatesTable.status,
+      })
+      .from(playerCandidatesTable),
   ]);
 
   const knownApiIds = new Set<number>([
@@ -180,6 +201,17 @@ export async function discoverUSProspects(): Promise<{
     ...trackedPlayers.flatMap((p) => (p.apiFootballPlayerId != null ? [p.apiFootballPlayerId] : [])),
     ...existingCandidates.map((c) => c.apiFootballPlayerId),
   ]);
+
+  // Slug collision map: slug → existing candidate id.
+  // Used to detect two candidates with the same name entering the queue.
+  // Only pending and promoted rows are considered — dismissed candidates are
+  // ignored so a name can be reconsidered if the first attempt was rejected.
+  const existingSlugMap = new Map<string, number>();
+  for (const c of existingCandidates) {
+    if (c.status === "pending" || c.status === "promoted") {
+      existingSlugMap.set(slugify(c.name), c.id);
+    }
+  }
 
   const minScore = getMinEligibilityScore();
   const currentYear = new Date().getUTCFullYear();
@@ -278,6 +310,20 @@ export async function discoverUSProspects(): Promise<{
 
       const dataSources = ["api_football"];
 
+      // Slug-based duplicate detection: if an existing pending or promoted
+      // candidate shares this player's slugified name, mark the new row as a
+      // duplicate so operators can review the collision instead of silently
+      // blocking promotion downstream.
+      const nameSlug = slugify(player.name);
+      const duplicateOfId = existingSlugMap.get(nameSlug) ?? null;
+
+      if (duplicateOfId != null) {
+        logger.info(
+          { name: player.name, duplicateOfId, club: club.name },
+          "Discovery: candidate name collision — marking as duplicate",
+        );
+      }
+
       try {
         const rows = await db
           .insert(playerCandidatesTable)
@@ -300,6 +346,7 @@ export async function discoverUSProspects(): Promise<{
             usmntStatus: status,
             dataSources,
             status: "pending",
+            ...(duplicateOfId != null ? { duplicateOfId, needsReview: true } : {}),
           })
           .onConflictDoUpdate({
             target: playerCandidatesTable.apiFootballPlayerId,
@@ -311,6 +358,9 @@ export async function discoverUSProspects(): Promise<{
               currentSeasonStarts: starts,
               currentSeasonMinutes: minutes,
               currentSeasonRating: computeAvgRating(statistics),
+              // Re-flag duplicates on rescore in case a previously dismissed
+              // candidate with the same name was re-inserted.
+              ...(duplicateOfId != null ? { duplicateOfId, needsReview: true } : {}),
             },
           })
           .returning({ id: playerCandidatesTable.id, isNew: playerCandidatesTable.discoveredAt });
@@ -329,9 +379,12 @@ export async function discoverUSProspects(): Promise<{
         if (isNewRow) {
           inserted++;
           logger.info(
-            { name: player.name, club: club.name, eligibilityBasis, score, status, starts, minutes },
+            { name: player.name, club: club.name, eligibilityBasis, score, status, starts, minutes, duplicateOfId },
             "Discovery: new US-eligible prospect inserted as candidate",
           );
+          // Register this new candidate's slug so a third candidate with the
+          // same name within the same run also gets flagged.
+          existingSlugMap.set(nameSlug, candidateId);
         } else {
           logger.debug(
             { name: player.name, score, status },

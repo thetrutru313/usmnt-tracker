@@ -283,6 +283,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
       needsReview: playerCandidatesTable.needsReview,
       isManualOverride: playerCandidatesTable.isManualOverride,
       statusNotes: playerCandidatesTable.statusNotes,
+      duplicateOfId: playerCandidatesTable.duplicateOfId,
     })
     .from(playerCandidatesTable)
     .leftJoin(clubsTable, eq(playerCandidatesTable.clubId, clubsTable.id))
