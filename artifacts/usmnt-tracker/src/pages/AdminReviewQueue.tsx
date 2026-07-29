@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertCircle, Lock, Loader2, ThumbsUp } from "lucide-react";
+import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertCircle, Lock, Loader2, ThumbsUp, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +25,14 @@ interface ReviewCandidate {
   status: string;
   needsReview: boolean | null;
   signals: EligibilitySignal[];
+}
+
+interface RescoreStatus {
+  pendingTotal: number;
+  withinCap: number;
+  backlog: number;
+  cap: number;
+  pendingRescore: number;
 }
 
 // ─── Session helpers (mirror of Admin.tsx) ────────────────────────────────────
@@ -442,6 +450,7 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [rescoreStatus, setRescoreStatus] = React.useState<RescoreStatus | null>(null);
 
   function handleSessionExpired() {
     clearSession();
@@ -453,8 +462,12 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch("/admin/review-queue", token) as { candidates: ReviewCandidate[] };
-      setCandidates(data.candidates);
+      const [queueData, statusData] = await Promise.all([
+        apiFetch("/admin/review-queue", token) as Promise<{ candidates: ReviewCandidate[]; pendingRescore: number }>,
+        apiFetch("/admin/rescore-status", token) as Promise<RescoreStatus>,
+      ]);
+      setCandidates(queueData.candidates);
+      setRescoreStatus(statusData);
     } catch (err) {
       if (err instanceof SessionExpiredError) { handleSessionExpired(); return; }
       setError(err instanceof Error ? err.message : "Failed to load queue");
@@ -517,6 +530,38 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
           </button>
         </div>
       </header>
+
+      {/* Rescore backlog banner */}
+      {!loading && rescoreStatus && (rescoreStatus.backlog > 0 || rescoreStatus.pendingRescore > 0) && (
+        <div className={`border-b px-4 py-2.5 flex items-start gap-2.5 text-sm ${
+          rescoreStatus.backlog > 0
+            ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
+            : "bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400"
+        }`}>
+          {rescoreStatus.backlog > 0 ? (
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          ) : (
+            <Clock size={15} className="mt-0.5 shrink-0" />
+          )}
+          <div className="space-y-0.5">
+            {rescoreStatus.backlog > 0 && (
+              <p className="font-medium">
+                Rescore backlog: {rescoreStatus.backlog.toLocaleString()} candidate{rescoreStatus.backlog !== 1 ? "s" : ""} deferred beyond the {rescoreStatus.cap}-candidate cap
+              </p>
+            )}
+            {rescoreStatus.pendingRescore > 0 && (
+              <p className={rescoreStatus.backlog > 0 ? "text-xs opacity-80" : "font-medium"}>
+                {rescoreStatus.pendingRescore.toLocaleString()} candidate{rescoreStatus.pendingRescore !== 1 ? "s" : ""} {rescoreStatus.pendingRescore !== 1 ? "have" : "has"} not been scored in the last 7 days
+              </p>
+            )}
+            {rescoreStatus.backlog > 0 && (
+              <p className="text-xs opacity-80">
+                Next run will score {rescoreStatus.withinCap} of {rescoreStatus.pendingTotal} pending. Raise <code className="font-mono bg-black/10 rounded px-1">RESCORE_MAX_CANDIDATES</code> or trigger a manual rescore with a higher cap to clear the backlog.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">

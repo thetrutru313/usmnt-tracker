@@ -95,6 +95,12 @@ vi.mock("drizzle-orm", () => ({
   gte: (_col: unknown, _val: unknown) => ({ _gte: [_col, _val] }),
   inArray: (_col: unknown, _vals: unknown) => ({ _inArray: [_col, _vals] }),
   isNotNull: (_col: unknown) => ({ _isNotNull: _col }),
+  lt: (_col: unknown, _val: unknown) => ({ _lt: [_col, _val] }),
+  count: () => ({ _count: true }),
+  sql: Object.assign(
+    (_strings: TemplateStringsArray, ..._values: unknown[]) => ({ _sql: true }),
+    { raw: (_val: string) => ({ _sqlRaw: _val }) },
+  ),
 }));
 
 vi.mock("../logger.js", () => ({

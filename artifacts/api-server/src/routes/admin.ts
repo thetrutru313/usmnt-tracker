@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, or, gte, inArray, and } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt } from "drizzle-orm";
 import { rescoreAllCandidates } from "../lib/playerDiscovery";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
@@ -200,11 +200,71 @@ router.post("/admin/player-candidates/:id/promote", async (req, res): Promise<vo
 });
 
 /**
+ * GET /admin/rescore-status
+ * Lightweight endpoint that returns the current rescore backlog so operators
+ * can see how many candidates are waiting to be scored and whether the cap
+ * needs adjusting.
+ *
+ * Response shape:
+ *   {
+ *     pendingTotal:   number  — non-override pending candidates
+ *     cap:            number  — current per-run cap (RESCORE_MAX_CANDIDATES or 50)
+ *     withinCap:      number  — candidates scored on the next run  (min(total, cap))
+ *     backlog:        number  — candidates deferred beyond the cap (max(0, total − cap))
+ *     pendingRescore: number  — pending candidates with last_scored_at null or > 7 days old
+ *   }
+ */
+router.get("/admin/rescore-status", async (_req, res): Promise<void> => {
+  const DEFAULT_CAP = 50;
+  const envCap = parseInt(process.env["RESCORE_MAX_CANDIDATES"] ?? "", 10);
+  const cap = Number.isFinite(envCap) && envCap > 0 ? envCap : DEFAULT_CAP;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [[totalRow], [pendingRescoreRow]] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(playerCandidatesTable)
+      .where(
+        and(
+          eq(playerCandidatesTable.status, "pending"),
+          or(
+            isNull(playerCandidatesTable.isManualOverride),
+            eq(playerCandidatesTable.isManualOverride, false),
+          ),
+        ),
+      ),
+    db
+      .select({ total: count() })
+      .from(playerCandidatesTable)
+      .where(
+        and(
+          eq(playerCandidatesTable.status, "pending"),
+          or(
+            isNull(playerCandidatesTable.lastScoredAt),
+            lt(playerCandidatesTable.lastScoredAt, sevenDaysAgo),
+          ),
+        ),
+      ),
+  ]);
+
+  const pendingTotal = totalRow?.total ?? 0;
+  const pendingRescore = pendingRescoreRow?.total ?? 0;
+  const withinCap = Math.min(pendingTotal, cap);
+  const backlog = Math.max(0, pendingTotal - cap);
+
+  res.json({ pendingTotal, withinCap, backlog, cap, pendingRescore });
+});
+
+/**
  * GET /admin/review-queue
  * Returns all player_candidates rows where status = "pending" or
  * needs_review = true, ordered by eligibility_confidence descending.
  * Each record includes the candidate's core fields, club name, and the
  * full list of fired eligibility_signals.
+ *
+ * Also includes a top-level `pendingRescore` count: the number of pending
+ * candidates whose last_scored_at is null or older than 7 days.
  */
 router.get("/admin/review-queue", async (_req, res): Promise<void> => {
   const candidates = await db
@@ -232,24 +292,56 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     )
     .orderBy(desc(playerCandidatesTable.eligibilityConfidence));
 
+  // Compute pendingRescore in parallel with the signal fetch so the UI can
+  // show a backlog warning without a separate request.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
   if (candidates.length === 0) {
-    res.json({ candidates: [] });
+    const [[pendingRescoreRow]] = await Promise.all([
+      db
+        .select({ total: count() })
+        .from(playerCandidatesTable)
+        .where(
+          and(
+            eq(playerCandidatesTable.status, "pending"),
+            or(
+              isNull(playerCandidatesTable.lastScoredAt),
+              lt(playerCandidatesTable.lastScoredAt, sevenDaysAgo),
+            ),
+          ),
+        ),
+    ]);
+    res.json({ candidates: [], pendingRescore: pendingRescoreRow?.total ?? 0 });
     return;
   }
 
   const candidateIds = candidates.map((c) => c.id);
-  const signals = await db
-    .select({
-      id: eligibilitySignalsTable.id,
-      candidateId: eligibilitySignalsTable.candidateId,
-      signalType: eligibilitySignalsTable.signalType,
-      signalValue: eligibilitySignalsTable.signalValue,
-      weight: eligibilitySignalsTable.weight,
-      source: eligibilitySignalsTable.source,
-      detectedAt: eligibilitySignalsTable.detectedAt,
-    })
-    .from(eligibilitySignalsTable)
-    .where(inArray(eligibilitySignalsTable.candidateId, candidateIds));
+  const [signals, [pendingRescoreRow]] = await Promise.all([
+    db
+      .select({
+        id: eligibilitySignalsTable.id,
+        candidateId: eligibilitySignalsTable.candidateId,
+        signalType: eligibilitySignalsTable.signalType,
+        signalValue: eligibilitySignalsTable.signalValue,
+        weight: eligibilitySignalsTable.weight,
+        source: eligibilitySignalsTable.source,
+        detectedAt: eligibilitySignalsTable.detectedAt,
+      })
+      .from(eligibilitySignalsTable)
+      .where(inArray(eligibilitySignalsTable.candidateId, candidateIds)),
+    db
+      .select({ total: count() })
+      .from(playerCandidatesTable)
+      .where(
+        and(
+          eq(playerCandidatesTable.status, "pending"),
+          or(
+            isNull(playerCandidatesTable.lastScoredAt),
+            lt(playerCandidatesTable.lastScoredAt, sevenDaysAgo),
+          ),
+        ),
+      ),
+  ]);
 
   const signalsByCandidate = new Map<number, typeof signals>();
   for (const sig of signals) {
@@ -263,7 +355,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     signals: signalsByCandidate.get(c.id) ?? [],
   }));
 
-  res.json({ candidates: enriched });
+  res.json({ candidates: enriched, pendingRescore: pendingRescoreRow?.total ?? 0 });
 });
 
 /**
