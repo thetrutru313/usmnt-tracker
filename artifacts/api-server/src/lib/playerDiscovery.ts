@@ -351,8 +351,12 @@ export async function discoverUSProspects(): Promise<{
           .onConflictDoUpdate({
             target: playerCandidatesTable.apiFootballPlayerId,
             set: {
-              eligibilityConfidence: score,
-              usmntStatus: status,
+              // Guard: never overwrite fields that were manually set by an
+              // operator (is_manual_override = true). For those rows the
+              // existing DB values are preserved via a CASE expression so the
+              // daily scan cannot silently undo an operator decision.
+              eligibilityConfidence: sql`CASE WHEN ${playerCandidatesTable.isManualOverride} = true THEN ${playerCandidatesTable.eligibilityConfidence} ELSE ${score} END`,
+              usmntStatus: sql`CASE WHEN ${playerCandidatesTable.isManualOverride} = true THEN ${playerCandidatesTable.usmntStatus} ELSE ${status}::usmnt_candidate_status END`,
               dataSources,
               birthplace: player.birth.place ?? null,
               currentSeasonStarts: starts,
