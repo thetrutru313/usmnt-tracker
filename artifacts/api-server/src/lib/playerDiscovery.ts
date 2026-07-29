@@ -437,9 +437,13 @@ const DEFAULT_RESCORE_MAX_CANDIDATES = 50;
  *   single run.  Defaults to the `RESCORE_MAX_CANDIDATES` env var or 50.
  *   When the pending pool exceeds the cap the oldest-discovered candidates are
  *   processed first and the remainder are deferred to the next run.
+ * @param options._db  Optional DB instance override — used by integration
+ *   tests to inject a transaction-scoped connection so all reads and writes
+ *   stay within a single rolled-back transaction.  Never set this in
+ *   production code.
  */
 export async function rescoreAllCandidates(
-  options: { maxCandidates?: number } = {},
+  options: { maxCandidates?: number; _db?: typeof db } = {},
 ): Promise<{
   processed: number;
   updated: number;
@@ -453,7 +457,11 @@ export async function rescoreAllCandidates(
 
   const maxAge = getMaxCandidateAge();
 
-  const allCandidates = await db
+  // Use the injected DB instance when provided (integration-test isolation);
+  // fall back to the module-level pool in production.
+  const dbInstance = options._db ?? db;
+
+  const allCandidates = await dbInstance
     .select({
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
@@ -533,7 +541,7 @@ export async function rescoreAllCandidates(
         );
       }
 
-      await db
+      await dbInstance
         .update(playerCandidatesTable)
         .set({
           eligibilityConfidence: score,
