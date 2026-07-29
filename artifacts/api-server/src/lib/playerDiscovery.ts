@@ -446,7 +446,12 @@ export async function rescoreAllCandidates(
       isManualOverride: playerCandidatesTable.isManualOverride,
     })
     .from(playerCandidatesTable)
-    .where(eq(playerCandidatesTable.status, "pending"))
+    .where(
+      or(
+        eq(playerCandidatesTable.status, "pending"),
+        isNull(playerCandidatesTable.eligibilityConfidence),
+      ),
+    )
     .orderBy(sql`${playerCandidatesTable.lastScoredAt} ASC NULLS FIRST`);
 
   // Exclude manually-overridden candidates BEFORE applying the cap so they

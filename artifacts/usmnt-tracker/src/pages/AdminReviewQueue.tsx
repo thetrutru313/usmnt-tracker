@@ -178,19 +178,31 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
 // ─── Confidence bar ───────────────────────────────────────────────────────────
 
 function ConfidenceBar({ value }: { value: number | null }) {
-  const pct = value ?? 0;
-  const color = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-yellow-400" : "bg-red-500";
-  const label = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-yellow-600" : "text-red-500";
+  if (value === null) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Confidence</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+            Unscored
+          </span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted overflow-hidden" />
+      </div>
+    );
+  }
+  const color = value >= 80 ? "bg-emerald-500" : value >= 50 ? "bg-yellow-400" : "bg-red-500";
+  const label = value >= 80 ? "text-emerald-600" : value >= 50 ? "text-yellow-600" : "text-red-500";
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Confidence</span>
-        <span className={`text-xs font-bold tabular-nums ${label}`}>{pct}%</span>
+        <span className={`text-xs font-bold tabular-nums ${label}`}>{value}%</span>
       </div>
       <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${color}`}
-          style={{ width: `${pct}%` }}
+          style={{ width: `${value}%` }}
         />
       </div>
     </div>
@@ -465,6 +477,7 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [rescoreLoading, setRescoreLoading] = React.useState(false);
   const [rescoreStatus, setRescoreStatus] = React.useState<RescoreStatus | null>(null);
 
   function handleSessionExpired() {
@@ -495,6 +508,21 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
     void fetchQueue();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleRescore() {
+    setRescoreLoading(true);
+    try {
+      await apiFetch("/admin/trigger-eligibility-rescore", token, { method: "POST" });
+      toast.success("Rescore started — refreshing queue in a moment…");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await fetchQueue();
+    } catch (err) {
+      if (err instanceof SessionExpiredError) { handleSessionExpired(); return; }
+      toast.error(err instanceof Error ? err.message : "Rescore failed");
+    } finally {
+      setRescoreLoading(false);
+    }
+  }
 
   async function handleBulkApprove() {
     setBulkLoading(true);
@@ -538,6 +566,18 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleRescore}
+            disabled={rescoreLoading || loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-sidebar-accent disabled:opacity-50 transition-colors"
+          >
+            {rescoreLoading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Clock size={13} />
+            )}
+            Rescore All
+          </button>
           <button
             onClick={handleBulkApprove}
             disabled={bulkLoading || loading || candidates.length === 0}

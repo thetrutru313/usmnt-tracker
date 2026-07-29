@@ -179,10 +179,12 @@ export function evaluateEligibility(profile: EligibilityProfile): EligibilityRes
     let fires = false;
 
     switch (def.signalType) {
-      case "us_nationality":
-        fires = profile.nationality === "USA";
+      case "us_nationality": {
+        const nat = (profile.nationality ?? "").toLowerCase();
+        fires = nat === "usa" || nat === "american" || nat === "united states";
         value = fires ? profile.nationality : null;
         break;
+      }
 
       case "us_birth_country":
         fires =
