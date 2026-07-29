@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt, lte } from "drizzle-orm";
 import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
+import { getMaxCandidateAge } from "../lib/eligibilitySignalsConfig";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
@@ -268,6 +269,8 @@ router.get("/admin/rescore-status", async (_req, res): Promise<void> => {
  * candidates whose last_scored_at is null or older than 7 days.
  */
 router.get("/admin/review-queue", async (_req, res): Promise<void> => {
+  const maxAge = getMaxCandidateAge();
+
   const candidates = await db
     .select({
       id: playerCandidatesTable.id,
@@ -288,9 +291,18 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     .from(playerCandidatesTable)
     .leftJoin(clubsTable, eq(playerCandidatesTable.clubId, clubsTable.id))
     .where(
-      or(
-        eq(playerCandidatesTable.status, "pending"),
-        eq(playerCandidatesTable.needsReview, true),
+      and(
+        or(
+          eq(playerCandidatesTable.status, "pending"),
+          eq(playerCandidatesTable.needsReview, true),
+        ),
+        // Exclude over-age candidates so rows inserted before a rescore cleans
+        // them up never surface in the UI. Candidates with no recorded age are
+        // kept — missing age is not a reason to hide them.
+        or(
+          isNull(playerCandidatesTable.age),
+          lte(playerCandidatesTable.age, maxAge),
+        ),
       ),
     )
     .orderBy(desc(playerCandidatesTable.eligibilityConfidence));

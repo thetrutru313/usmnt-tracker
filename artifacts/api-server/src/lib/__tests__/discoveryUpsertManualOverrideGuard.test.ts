@@ -148,6 +148,7 @@ vi.mock("../evaluateEligibility.js", () => ({
 
 vi.mock("../eligibilitySignalsConfig.js", () => ({
   getMinEligibilityScore: vi.fn().mockReturnValue(30),
+  getMaxCandidateAge: vi.fn().mockReturnValue(23),
 }));
 
 // ---------------------------------------------------------------------------
@@ -181,7 +182,7 @@ function makeProfileResponse() {
         id: SQUAD_PLAYER.id,
         name: SQUAD_PLAYER.name,
         firstname: "Alex",
-        age: 24,
+        age: 21,
         nationality: "USA",
         birth: { country: "USA", date: "2001-04-20", place: "Portland, OR" },
       },

@@ -4,7 +4,7 @@ import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
 import { evaluateEligibility, type EligibilityProfile } from "./evaluateEligibility";
-import { getMinEligibilityScore } from "./eligibilitySignalsConfig";
+import { getMinEligibilityScore, getMaxCandidateAge } from "./eligibilitySignalsConfig";
 
 // ---------------------------------------------------------------------------
 // Scans squad rosters at every tracked club for US-eligible players not yet
@@ -171,6 +171,7 @@ export async function discoverUSProspects(): Promise<{
   checked: number;
   inserted: number;
   skippedQuality: number;
+  skippedAge: number;
   skippedEligibility: number;
   skippedScore: number;
 }> {
@@ -214,12 +215,14 @@ export async function discoverUSProspects(): Promise<{
   }
 
   const minScore = getMinEligibilityScore();
+  const maxAge = getMaxCandidateAge();
   const currentYear = new Date().getUTCFullYear();
   const seasonCandidates = [currentYear, currentYear - 1];
 
   let checked = 0;
   let inserted = 0;
   let skippedQuality = 0;
+  let skippedAge = 0;
   let skippedEligibility = 0;
   let skippedScore = 0;
 
@@ -265,6 +268,16 @@ export async function discoverUSProspects(): Promise<{
       const { passes, starts, minutes } = applyQualityGate(statistics);
       if (!passes) {
         skippedQuality++;
+        continue;
+      }
+
+      // Age gate — reject players older than the configured maximum age
+      if (player.age != null && player.age > maxAge) {
+        skippedAge++;
+        logger.debug(
+          { name: player.name, age: player.age, maxAge },
+          "Discovery: candidate exceeds maximum age, skipping",
+        );
         continue;
       }
 
@@ -402,10 +415,10 @@ export async function discoverUSProspects(): Promise<{
   }
 
   logger.info(
-    { checked, inserted, skippedQuality, skippedEligibility, skippedScore },
+    { checked, inserted, skippedQuality, skippedAge, skippedEligibility, skippedScore },
     "Discovery: US prospect scan complete",
   );
-  return { checked, inserted, skippedQuality, skippedEligibility, skippedScore };
+  return { checked, inserted, skippedQuality, skippedAge, skippedEligibility, skippedScore };
 }
 
 // ---------------------------------------------------------------------------
@@ -438,10 +451,13 @@ export async function rescoreAllCandidates(
     options.maxCandidates ??
     (Number.isFinite(envCap) && envCap > 0 ? envCap : DEFAULT_RESCORE_MAX_CANDIDATES);
 
+  const maxAge = getMaxCandidateAge();
+
   const allCandidates = await db
     .select({
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
+      age: playerCandidatesTable.age,
       apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
       isManualOverride: playerCandidatesTable.isManualOverride,
     })
@@ -508,6 +524,15 @@ export async function rescoreAllCandidates(
 
       const { score, status, signals } = evaluateEligibility(eligibilityProfile);
 
+      // Dismiss candidates that exceed the age cap, regardless of their score.
+      const isOverAge = candidate.age != null && candidate.age > maxAge;
+      if (isOverAge) {
+        logger.info(
+          { candidateId: candidate.id, name: candidate.name, age: candidate.age, maxAge },
+          "Rescore: candidate exceeds maximum age — dismissing",
+        );
+      }
+
       await db
         .update(playerCandidatesTable)
         .set({
@@ -515,8 +540,8 @@ export async function rescoreAllCandidates(
           usmntStatus: status,
           dataSources: ["api_football"],
           lastScoredAt: new Date(),
-          // Demote below-threshold candidates to avoid surfacing low-quality noise
-          ...(score < minScore ? { status: "dismissed" as const } : {}),
+          // Demote below-threshold or over-age candidates to avoid surfacing low-quality noise
+          ...(score < minScore || isOverAge ? { status: "dismissed" as const } : {}),
         })
         .where(eq(playerCandidatesTable.id, candidate.id));
 

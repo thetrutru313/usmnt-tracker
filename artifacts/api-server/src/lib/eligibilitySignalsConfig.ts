@@ -109,3 +109,13 @@ export function getMinEligibilityScore(): number {
   }
   return 30;
 }
+
+/** Maximum age for a player to be stored as a candidate (default 23, env-overridable via DISCOVERY_MAX_AGE). */
+export function getMaxCandidateAge(): number {
+  const raw = process.env["DISCOVERY_MAX_AGE"];
+  if (raw !== undefined) {
+    const parsed = parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 23;
+}

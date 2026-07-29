@@ -132,6 +132,7 @@ vi.mock("../evaluateEligibility.js", () => ({
 
 vi.mock("../eligibilitySignalsConfig.js", () => ({
   getMinEligibilityScore: vi.fn().mockReturnValue(30),
+  getMaxCandidateAge: vi.fn().mockReturnValue(23),
 }));
 
 // Import AFTER mocks are registered
