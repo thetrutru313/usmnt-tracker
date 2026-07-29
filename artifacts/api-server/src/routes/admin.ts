@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, playerCandidatesTable, playersTable, clubsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull } from "drizzle-orm";
+import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
+import { eq, desc, isNull, isNotNull, or, gte, inArray } from "drizzle-orm";
 import { rescoreAllCandidates } from "../lib/playerDiscovery";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
@@ -192,6 +192,327 @@ router.post("/admin/player-candidates/:id/promote", async (req, res): Promise<vo
       res.status(500).json({ error: "Promote failed" });
     }
   }
+});
+
+/**
+ * GET /admin/review-queue
+ * Returns all player_candidates rows where status = "pending" or
+ * needs_review = true, ordered by eligibility_confidence descending.
+ * Each record includes the candidate's core fields, club name, and the
+ * full list of fired eligibility_signals.
+ */
+router.get("/admin/review-queue", async (_req, res): Promise<void> => {
+  const candidates = await db
+    .select({
+      id: playerCandidatesTable.id,
+      name: playerCandidatesTable.name,
+      position: playerCandidatesTable.position,
+      age: playerCandidatesTable.age,
+      clubName: clubsTable.name,
+      usmntStatus: playerCandidatesTable.usmntStatus,
+      eligibilityConfidence: playerCandidatesTable.eligibilityConfidence,
+      dataSources: playerCandidatesTable.dataSources,
+      status: playerCandidatesTable.status,
+      needsReview: playerCandidatesTable.needsReview,
+      isManualOverride: playerCandidatesTable.isManualOverride,
+      statusNotes: playerCandidatesTable.statusNotes,
+    })
+    .from(playerCandidatesTable)
+    .leftJoin(clubsTable, eq(playerCandidatesTable.clubId, clubsTable.id))
+    .where(
+      or(
+        eq(playerCandidatesTable.status, "pending"),
+        eq(playerCandidatesTable.needsReview, true),
+      ),
+    )
+    .orderBy(desc(playerCandidatesTable.eligibilityConfidence));
+
+  if (candidates.length === 0) {
+    res.json({ candidates: [] });
+    return;
+  }
+
+  const candidateIds = candidates.map((c) => c.id);
+  const signals = await db
+    .select({
+      id: eligibilitySignalsTable.id,
+      candidateId: eligibilitySignalsTable.candidateId,
+      signalType: eligibilitySignalsTable.signalType,
+      signalValue: eligibilitySignalsTable.signalValue,
+      weight: eligibilitySignalsTable.weight,
+      source: eligibilitySignalsTable.source,
+      detectedAt: eligibilitySignalsTable.detectedAt,
+    })
+    .from(eligibilitySignalsTable)
+    .where(inArray(eligibilitySignalsTable.candidateId, candidateIds));
+
+  const signalsByCandidate = new Map<number, typeof signals>();
+  for (const sig of signals) {
+    const list = signalsByCandidate.get(sig.candidateId) ?? [];
+    list.push(sig);
+    signalsByCandidate.set(sig.candidateId, list);
+  }
+
+  const enriched = candidates.map((c) => ({
+    ...c,
+    signals: signalsByCandidate.get(c.id) ?? [],
+  }));
+
+  res.json({ candidates: enriched });
+});
+
+/**
+ * POST /admin/review-queue/:id/approve
+ * Promotes the candidate into the players table (same logic as promote),
+ * sets needs_review = false, and appends an approval note to status_notes.
+ */
+router.post("/admin/review-queue/:id/approve", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: "Invalid candidate id" });
+    return;
+  }
+
+  const [candidate] = await db
+    .select()
+    .from(playerCandidatesTable)
+    .where(eq(playerCandidatesTable.id, id))
+    .limit(1);
+
+  if (!candidate) {
+    res.status(404).json({ error: "Candidate not found" });
+    return;
+  }
+  if (candidate.status !== "pending") {
+    res.status(409).json({ error: `Candidate is already ${candidate.status}` });
+    return;
+  }
+
+  const slug = slugify(candidate.name);
+  const approvedNote = `[${new Date().toISOString()}] Approved via review queue`;
+  const updatedNotes = candidate.statusNotes
+    ? `${candidate.statusNotes}\n${approvedNote}`
+    : approvedNote;
+
+  try {
+    const newPlayerId = await db.transaction(async (tx) => {
+      const [newPlayer] = await tx
+        .insert(playersTable)
+        .values({
+          name: candidate.name,
+          slug,
+          position: candidate.position ?? "MF",
+          category: "prospect",
+          clubId: candidate.clubId,
+          age: candidate.age ?? 0,
+          apiFootballPlayerId: candidate.apiFootballPlayerId,
+          nationalTeamCaps: 0,
+          nationalTeamGoals: 0,
+          performanceTrend: "steady",
+          trending: false,
+          bio: "",
+          worldCupRoster: false,
+        })
+        .returning({ id: playersTable.id });
+
+      await tx
+        .update(playerCandidatesTable)
+        .set({ status: "promoted", needsReview: false, statusNotes: updatedNotes })
+        .where(eq(playerCandidatesTable.id, id));
+
+      return newPlayer?.id;
+    });
+
+    logger.info({ candidateId: id, playerId: newPlayerId, name: candidate.name }, "Admin: review-queue candidate approved");
+    res.json({ ok: true, playerId: newPlayerId });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("unique") || msg.includes("duplicate")) {
+      logger.warn({ err, candidateId: id }, "Admin: review-queue approve failed — unique constraint violation");
+      res.status(409).json({ error: "A player with this name or API ID already exists in the pool" });
+    } else {
+      logger.error({ err, candidateId: id }, "Admin: review-queue approve failed");
+      res.status(500).json({ error: "Approve failed" });
+    }
+  }
+});
+
+/**
+ * POST /admin/review-queue/:id/reject
+ * Sets status = "dismissed" and clears needs_review.
+ * The candidate row is retained for history.
+ */
+router.post("/admin/review-queue/:id/reject", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: "Invalid candidate id" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(playerCandidatesTable)
+    .set({ status: "dismissed", needsReview: false })
+    .where(eq(playerCandidatesTable.id, id))
+    .returning({ id: playerCandidatesTable.id });
+
+  if (!updated) {
+    res.status(404).json({ error: "Candidate not found" });
+    return;
+  }
+
+  logger.info({ candidateId: id }, "Admin: review-queue candidate rejected");
+  res.json({ ok: true });
+});
+
+/**
+ * POST /admin/review-queue/:id/override-status
+ * Body: { usmnt_status: string; reason: string }
+ * Updates usmnt_status and appends to status_notes, sets is_manual_override = true
+ * so the scoring engine skips re-scoring this record, and leaves status = "pending"
+ * so it remains visible in the queue until explicitly approved or dismissed.
+ */
+router.post("/admin/review-queue/:id/override-status", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: "Invalid candidate id" });
+    return;
+  }
+
+  const { usmnt_status, reason } = req.body as { usmnt_status?: unknown; reason?: unknown };
+  if (typeof usmnt_status !== "string" || !usmnt_status.trim()) {
+    res.status(400).json({ error: "usmnt_status is required" });
+    return;
+  }
+  if (typeof reason !== "string" || !reason.trim()) {
+    res.status(400).json({ error: "reason is required" });
+    return;
+  }
+
+  const validStatuses = ["US_ELIGIBLE_PROSPECT", "DUAL_NATIONAL", "DECLARED_OTHER", "UNKNOWN"] as const;
+  type ValidStatus = typeof validStatuses[number];
+  if (!validStatuses.includes(usmnt_status.trim() as ValidStatus)) {
+    res.status(400).json({ error: `usmnt_status must be one of: ${validStatuses.join(", ")}` });
+    return;
+  }
+
+  const [candidate] = await db
+    .select({ id: playerCandidatesTable.id, statusNotes: playerCandidatesTable.statusNotes })
+    .from(playerCandidatesTable)
+    .where(eq(playerCandidatesTable.id, id))
+    .limit(1);
+
+  if (!candidate) {
+    res.status(404).json({ error: "Candidate not found" });
+    return;
+  }
+
+  const noteEntry = `[${new Date().toISOString()}] Override: ${usmnt_status.trim()} — ${reason.trim()}`;
+  const updatedNotes = candidate.statusNotes
+    ? `${candidate.statusNotes}\n${noteEntry}`
+    : noteEntry;
+
+  await db
+    .update(playerCandidatesTable)
+    .set({
+      usmntStatus: usmnt_status.trim() as ValidStatus,
+      isManualOverride: true,
+      statusNotes: updatedNotes,
+    })
+    .where(eq(playerCandidatesTable.id, id));
+
+  logger.info({ candidateId: id, usmntStatus: usmnt_status.trim(), reason: reason.trim() }, "Admin: review-queue status overridden");
+  res.json({ ok: true });
+});
+
+/**
+ * POST /admin/review-queue/bulk-approve
+ * Body (optional): { minConfidence?: number }  Default: 80
+ * Approves all pending candidates with eligibility_confidence >= minConfidence
+ * in a single transaction. Returns { promoted: number }.
+ */
+router.post("/admin/review-queue/bulk-approve", async (req, res): Promise<void> => {
+  const raw = (req.body as { minConfidence?: unknown })?.minConfidence;
+  const minConfidence = typeof raw === "number" && raw >= 0 ? raw : 80;
+
+  const candidates = await db
+    .select()
+    .from(playerCandidatesTable)
+    .where(
+      or(
+        eq(playerCandidatesTable.status, "pending"),
+        eq(playerCandidatesTable.needsReview, true),
+      ),
+    );
+
+  const qualifying = candidates.filter(
+    (c) =>
+      c.status === "pending" &&
+      !c.isManualOverride &&
+      (c.eligibilityConfidence ?? 0) >= minConfidence,
+  );
+
+  if (qualifying.length === 0) {
+    res.json({ promoted: 0 });
+    return;
+  }
+
+  let promoted = 0;
+  const errors: Array<{ id: number; name: string; error: string }> = [];
+
+  try {
+    await db.transaction(async (tx) => {
+      for (const candidate of qualifying) {
+        const slug = slugify(candidate.name);
+        const approvedNote = `[${new Date().toISOString()}] Bulk approved via review queue (minConfidence=${minConfidence})`;
+        const updatedNotes = candidate.statusNotes
+          ? `${candidate.statusNotes}\n${approvedNote}`
+          : approvedNote;
+
+        try {
+          await tx
+            .insert(playersTable)
+            .values({
+              name: candidate.name,
+              slug,
+              position: candidate.position ?? "MF",
+              category: "prospect",
+              clubId: candidate.clubId,
+              age: candidate.age ?? 0,
+              apiFootballPlayerId: candidate.apiFootballPlayerId,
+              nationalTeamCaps: 0,
+              nationalTeamGoals: 0,
+              performanceTrend: "steady",
+              trending: false,
+              bio: "",
+              worldCupRoster: false,
+            });
+
+          await tx
+            .update(playerCandidatesTable)
+            .set({ status: "promoted", needsReview: false, statusNotes: updatedNotes })
+            .where(eq(playerCandidatesTable.id, candidate.id));
+
+          promoted++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Skip duplicates and continue — log the skip but don't abort the batch
+          if (msg.includes("unique") || msg.includes("duplicate")) {
+            logger.warn({ candidateId: candidate.id, name: candidate.name }, "Admin: bulk-approve skipped — already in player pool");
+            errors.push({ id: candidate.id, name: candidate.name, error: "already exists" });
+          } else {
+            throw err; // unexpected — roll back the entire transaction
+          }
+        }
+      }
+    });
+  } catch (err) {
+    logger.error({ err }, "Admin: bulk-approve transaction failed");
+    res.status(500).json({ error: "Bulk approve failed" });
+    return;
+  }
+
+  logger.info({ promoted, skipped: errors.length, minConfidence }, "Admin: bulk-approve complete");
+  res.json({ promoted, skipped: errors.length });
 });
 
 /**

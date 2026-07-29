@@ -7,10 +7,11 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { Layout } from '@/components/Layout';
 import { MyPlayersProvider } from '@/context/MyPlayersContext';
 
-// Admin stays eagerly loaded — it lives outside the Layout wrapper and is used
-// infrequently, so the lazy-load flash would be more disruptive than the tiny
-// bundle cost of always including it.
+// Admin pages stay eagerly loaded — they live outside the Layout wrapper and are
+// used infrequently, so the lazy-load flash would be more disruptive than the
+// tiny bundle cost of always including them.
 import Admin from '@/pages/Admin';
+import AdminReviewQueue from '@/pages/AdminReviewQueue';
 
 // All other pages are lazy-loaded so each route's JS only parses on first
 // navigation, reducing initial bundle parse time. The service worker
@@ -56,8 +57,9 @@ function PageFallback() {
 function Router() {
   return (
     <Switch>
-      {/* Admin panel — no Layout wrapper, full-page experience */}
+      {/* Admin pages — no Layout wrapper, full-page experience */}
       <Route path="/admin" component={Admin} />
+      <Route path="/admin/review" component={AdminReviewQueue} />
       <Route>
         <Layout>
           <Suspense fallback={<PageFallback />}>
