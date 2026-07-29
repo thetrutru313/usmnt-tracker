@@ -3,7 +3,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
 import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt, lte } from "drizzle-orm";
 import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
-import { getMaxCandidateAge } from "../lib/eligibilitySignalsConfig";
+import { getMaxCandidateAge, SIGNAL_REGISTRY, getResolvedWeights } from "../lib/eligibilitySignalsConfig";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
@@ -954,6 +954,30 @@ router.post("/admin/trigger-commitment-check", async (_req, res): Promise<void> 
   runCommitmentSweep().catch((err) =>
     logger.error({ err }, "Admin commitment check failed"),
   );
+});
+
+/**
+ * GET /admin/config
+ * Returns the resolved eligibility signal registry — each signal's default
+ * weight, active weight, max contribution cap, and which env-var key is
+ * overriding it (if any). Read-only; weights can only be changed via env vars.
+ */
+router.get("/admin/config", (_req, res): void => {
+  const resolved = getResolvedWeights();
+  const signals = SIGNAL_REGISTRY.map((def) => {
+    const envKey = `ELIGIBILITY_WEIGHT_${def.signalType.toUpperCase()}`;
+    const activeWeight = resolved[def.signalType] ?? def.defaultWeight;
+    const isOverridden = process.env[envKey] !== undefined;
+    return {
+      signalType: def.signalType,
+      label: def.label,
+      defaultWeight: def.defaultWeight,
+      maxContribution: def.maxContribution,
+      activeWeight,
+      overriddenBy: isOverridden ? envKey : null,
+    };
+  });
+  res.json({ signals });
 });
 
 /**

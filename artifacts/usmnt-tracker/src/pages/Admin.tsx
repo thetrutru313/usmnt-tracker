@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   AlertTriangle,
   ClipboardList,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -530,6 +531,94 @@ function MonthForm({ initial, token, onSave, onCancel, onUnauthorized, isNew, is
   );
 }
 
+// ─── Eligibility config ───────────────────────────────────────────────────────
+
+interface SignalConfigRow {
+  signalType: string;
+  label: string;
+  defaultWeight: number;
+  maxContribution: number;
+  activeWeight: number;
+  overriddenBy: string | null;
+}
+
+function EligibilityConfigSection({ token }: { token: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-eligibility-config"],
+    queryFn: async () => {
+      const res = await apiFetch("/admin/config", token) as { signals: SignalConfigRow[] };
+      return res.signals;
+    },
+    retry: false,
+  });
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={16} className="text-muted-foreground" />
+          <h2 className="text-xl font-bold tracking-tight">Eligibility Config</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Active signal weights. Override via <code className="font-mono text-xs bg-muted px-1 rounded">ELIGIBILITY_WEIGHT_&lt;SIGNAL_TYPE&gt;</code> env vars; UI is read-only.
+        </p>
+      </div>
+
+      {isLoading && (
+        <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
+      )}
+      {error && (
+        <p className="text-sm text-destructive py-2">Failed to load config.</p>
+      )}
+
+      {data && (
+        <div className="rounded-xl border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Signal</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Default</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Active</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Max Cap</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Override</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr
+                  key={row.signalType}
+                  className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-sm leading-tight">{row.label}</p>
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.signalType}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{row.defaultWeight}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    <span className={row.overriddenBy ? "text-amber-400 font-semibold" : "text-foreground"}>
+                      {row.activeWeight}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{row.maxContribution}</td>
+                  <td className="px-4 py-3">
+                    {row.overriddenBy ? (
+                      <code className="text-xs font-mono bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">
+                        {row.overriddenBy}
+                      </code>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Main admin panel ─────────────────────────────────────────────────────────
 
 function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -743,6 +832,9 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
             )}
           </a>
         </section>
+
+        {/* Eligibility config */}
+        <EligibilityConfigSection token={token} />
 
         {/* Transparency section */}
         <section className="space-y-4">
