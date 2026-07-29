@@ -74,7 +74,8 @@ function hasSeniorNonUsCaps(statistics: AfDiscoveryStatBlock[]): boolean {
   );
 }
 
-function applyQualityGate(statistics: AfDiscoveryStatBlock[]): {
+/** Exported for unit tests — do not call from production code outside this module. */
+export function applyQualityGate(statistics: AfDiscoveryStatBlock[]): {
   passes: boolean;
   starts: number;
   minutes: number;
