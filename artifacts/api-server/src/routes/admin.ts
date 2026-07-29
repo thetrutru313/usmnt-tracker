@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, or, gte, inArray } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, or, gte, inArray, and } from "drizzle-orm";
 import { rescoreAllCandidates } from "../lib/playerDiscovery";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
@@ -14,7 +14,7 @@ import { runCommitmentSweep } from "../lib/commitmentTracker";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
-  player: { birth: { date: string | null } };
+  player: { birth: { date: string | null; place: string | null } };
 }
 
 const router: IRouter = Router();
@@ -569,6 +569,100 @@ router.post("/admin/backfill-dob", async (_req, res): Promise<void> => {
     }
     logger.info({ updated, failed, total: players.length }, "Admin: DOB backfill complete");
   })().catch((err) => logger.error({ err }, "Admin: DOB backfill crashed"));
+});
+
+/**
+ * POST /admin/backfill-candidate-birthplace
+ * For every player_candidates row that has an api_football_player_id but no
+ * birthplace, fetches birth.place from API-Football (/players?id=&season=…)
+ * and writes it to the DB.  Runs in the background — returns immediately with
+ * the number of candidates queued.  Check server logs for per-candidate progress.
+ * After this completes, trigger /admin/trigger-eligibility-rescore so the
+ * us_state_birthplace signal is evaluated against the newly-populated values.
+ */
+router.post("/admin/backfill-candidate-birthplace", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+
+  const candidates = await db
+    .select({
+      id: playerCandidatesTable.id,
+      name: playerCandidatesTable.name,
+      apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
+    })
+    .from(playerCandidatesTable)
+    .where(
+      and(
+        isNull(playerCandidatesTable.birthplace),
+        isNotNull(playerCandidatesTable.apiFootballPlayerId),
+      ),
+    );
+
+  logger.info({ count: candidates.length }, "Admin: candidate birthplace backfill started");
+  res.json({ ok: true, queued: candidates.length });
+
+  // Run in background — afFetch is already rate-limited by the shared queue.
+  // Try seasons in descending order so players whose most recent activity is
+  // in a prior season still get a birthplace returned.
+  const currentYear = new Date().getUTCFullYear();
+  const seasons = [currentYear, currentYear - 1, currentYear - 2];
+
+  (async () => {
+    let updated = 0;
+    let failed = 0;
+    let notFound = 0;
+    for (const candidate of candidates) {
+      // Defensive guard: skip any row that somehow arrived without an API ID
+      // to avoid sending a malformed request (id=null) to API-Football.
+      if (!candidate.apiFootballPlayerId) {
+        logger.warn(
+          { candidateId: candidate.id, name: candidate.name },
+          "Candidate birthplace backfill: skipping — no apiFootballPlayerId",
+        );
+        notFound++;
+        continue;
+      }
+      try {
+        let birthplace: string | null = null;
+        for (const season of seasons) {
+          const [data] = await afFetch<AfPlayerRecord[]>(
+            `/players?id=${candidate.apiFootballPlayerId}&season=${season}`,
+          );
+          birthplace = data?.player?.birth?.place ?? null;
+          if (birthplace) break; // found — no need to check older seasons
+        }
+        if (!birthplace) {
+          logger.debug(
+            { candidateId: candidate.id, name: candidate.name },
+            "Candidate birthplace backfill: no birthplace returned for any season",
+          );
+          notFound++;
+          continue;
+        }
+        await db
+          .update(playerCandidatesTable)
+          .set({ birthplace })
+          .where(eq(playerCandidatesTable.id, candidate.id));
+        logger.info(
+          { candidateId: candidate.id, name: candidate.name, birthplace },
+          "Candidate birthplace backfill: updated",
+        );
+        updated++;
+      } catch (err) {
+        logger.warn(
+          { err, candidateId: candidate.id, name: candidate.name },
+          "Candidate birthplace backfill: fetch failed",
+        );
+        failed++;
+      }
+    }
+    logger.info(
+      { updated, notFound, failed, total: candidates.length },
+      "Admin: candidate birthplace backfill complete",
+    );
+  })().catch((err) => logger.error({ err }, "Admin: candidate birthplace backfill crashed"));
 });
 
 /**
