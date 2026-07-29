@@ -382,6 +382,55 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
 });
 
 // ---------------------------------------------------------------------------
+// Weight cap clamping — env-var override above maxContribution
+// ---------------------------------------------------------------------------
+
+describe("evaluateEligibility – weight cap clamping (maxContribution)", () => {
+  afterEach(() => {
+    delete process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"];
+    _resetWeightsCacheForTesting();
+  });
+
+  /**
+   * us_nationality has defaultWeight=35 and maxContribution=50.
+   * Setting the env-var override to 999 must NOT produce a signal weight of 999
+   * or a score of 999.  The signal weight must be silently clamped to
+   * maxContribution (50), and the total score must reflect that clamped value.
+   *
+   * Profile: nationality=USA, birthCountry=England → only us_nationality fires.
+   *
+   *   us_nationality raw override : 999
+   *   clamped to maxContribution  : 50
+   *   total score (clamped to 100): 50  → UNKNOWN (below 60-pt threshold)
+   */
+  it("clamps a signal weight to maxContribution when the env-var override exceeds the cap", () => {
+    process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"] = "999";
+    _resetWeightsCacheForTesting(); // force recompute from updated env
+
+    const profile: EligibilityProfile = {
+      nationality: "USA",
+      birthCountry: "England",
+      statistics: [PREM_BLOCK],
+    };
+
+    const { score, signals, status } = evaluateEligibility(profile);
+
+    // The fired signal's weight must equal maxContribution (50), not the raw 999
+    const nationalitySignal = signals.find(
+      (s) => s.signalType === "us_nationality",
+    );
+    expect(nationalitySignal).toBeDefined();
+    expect(nationalitySignal!.weight).toBe(50); // maxContribution for us_nationality
+
+    // Total score is the sum of clamped signal weights, itself clamped to 100
+    expect(score).toBe(50);
+
+    // 50 < 60 → status stays UNKNOWN (not US_ELIGIBLE_PROSPECT)
+    expect(status).toBe("UNKNOWN");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Non-US birth / non-US nationality — only US youth NT fires
 // ---------------------------------------------------------------------------
 
