@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable } from "@workspace/db";
 import { eq, desc, isNull, isNotNull } from "drizzle-orm";
+import { rescoreAllCandidates } from "../lib/playerDiscovery";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
@@ -377,6 +378,25 @@ router.post("/admin/sync-player-stats", async (req, res): Promise<void> => {
   res.json({ ok: true, playerCount: playerIds.length });
   syncStatsForFinishedFixture(playerIds as number[]).catch((err) =>
     logger.error({ err }, "Admin sync-player-stats failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-eligibility-rescore
+ * Re-runs evaluateEligibility for all non-dismissed candidates and updates
+ * their eligibility_confidence, usmnt_status, data_sources, and signal rows.
+ * Never touches any row in the `players` table.
+ * Returns immediately; rescore runs in the background.
+ */
+router.post("/admin/trigger-eligibility-rescore", async (_req, res): Promise<void> => {
+  if (!process.env["API_FOOTBALL_KEY"]) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  logger.info("Admin: eligibility rescore triggered");
+  res.json({ ok: true });
+  rescoreAllCandidates().catch((err) =>
+    logger.error({ err }, "Admin eligibility rescore failed"),
   );
 });
 

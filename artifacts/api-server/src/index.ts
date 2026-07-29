@@ -7,6 +7,7 @@ import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
+import { rescoreAllCandidates } from "./lib/playerDiscovery";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
@@ -315,4 +316,18 @@ app.listen(port, async (err) => {
   // day. Runs immediately on server boot, then every 24 hours — mirrors what
   // POST /admin/cleanup-anon-users does but without requiring a manual trigger.
   startAnonUserCleanupSchedule();
+
+  // Weekly eligibility rescore — re-evaluates all non-dismissed candidates
+  // with the current signal registry weights and writes updated scores and
+  // signal rows back to the DB.  Chained after the discovery run by scheduling
+  // it on the same 7-day cadence but offset by a few seconds so the previous
+  // discovery pass has time to settle.  Never touches the `players` table.
+  if (process.env["API_FOOTBALL_KEY"]) {
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    setInterval(() => {
+      rescoreAllCandidates().catch((err) =>
+        logger.error({ err }, "Scheduled eligibility rescore failed"),
+      );
+    }, SEVEN_DAYS_MS);
+  }
 });
