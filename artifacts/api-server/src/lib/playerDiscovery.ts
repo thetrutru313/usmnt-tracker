@@ -383,17 +383,22 @@ export async function rescoreAllCandidates(
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
       apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
+      isManualOverride: playerCandidatesTable.isManualOverride,
     })
     .from(playerCandidatesTable)
     .where(eq(playerCandidatesTable.status, "pending"))
     .orderBy(asc(playerCandidatesTable.discoveredAt));
 
-  const skipped = Math.max(0, allCandidates.length - cap);
-  const candidates = allCandidates.slice(0, cap);
+  // Exclude manually-overridden candidates BEFORE applying the cap so they
+  // never consume cap slots and starve real (non-overridden) candidates.
+  const rescorable = allCandidates.filter((c) => !c.isManualOverride);
+
+  const skipped = Math.max(0, rescorable.length - cap);
+  const candidates = rescorable.slice(0, cap);
 
   if (skipped > 0) {
     logger.info(
-      { total: allCandidates.length, cap, skipped },
+      { total: rescorable.length, cap, skipped },
       "Rescore: candidate pool exceeds cap — oldest candidates processed first, remainder deferred",
     );
   }
