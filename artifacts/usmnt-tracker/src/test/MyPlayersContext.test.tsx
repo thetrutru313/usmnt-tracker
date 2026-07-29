@@ -20,6 +20,15 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MyPlayersContext, MyPlayersProvider } from "@/context/MyPlayersContext";
 
+// Mock sonner so we can assert on toast calls without a real DOM notifier.
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+import { toast } from "sonner";
+
 // ---------------------------------------------------------------------------
 // Constants matching the ones used inside MyPlayersContext
 // ---------------------------------------------------------------------------
@@ -86,6 +95,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   localStorage.clear();
+  (toast.error as ReturnType<typeof vi.fn>).mockClear();
+  (toast.warning as ReturnType<typeof vi.fn>).mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -239,6 +250,81 @@ describe("MyPlayersContext — fetch rejection (network timeout / AbortError)", 
     expect(stored).toContain(11);
     expect(stored).toContain(22);
     expect(stored).toContain(33);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync-failed toast — suppressed in private/incognito mode (no prior session)
+// ---------------------------------------------------------------------------
+
+describe("MyPlayersContext — sync-failed toast suppressed when no token was persisted", () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    // Simulate private/incognito mode: localStorage is entirely blocked.
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("Access denied");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("Access denied");
+    });
+
+    // Token provisioning POST succeeds; follows GET then fails (CORS / network).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, opts?: RequestInit) => {
+        if (!opts || opts.method === "POST") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ token: "fresh-token" }),
+          });
+        }
+        return Promise.reject(new Error("Network error"));
+      }),
+    );
+  });
+
+  it("does not fire the sync-failed toast when localStorage was never accessible", async () => {
+    renderWithProviders(qc);
+
+    // Wait long enough for the query to settle in error state.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync-failed toast — shown when a persisted token exists but the fetch fails
+// ---------------------------------------------------------------------------
+
+describe("MyPlayersContext — sync-failed toast shown when prior session token exists", () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    // Seed a real prior session token so hadPersistedToken.current is true.
+    seedLocalStorage([42]);
+
+    // Follows GET fails (network error).
+    stubFetchReject(new Error("Network error"));
+  });
+
+  it("fires the sync-failed toast when a persisted token exists and the fetch fails", async () => {
+    renderWithProviders(qc);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Watchlist couldn't sync",
+        expect.objectContaining({ description: expect.any(String) }),
+      );
+    });
   });
 });
 

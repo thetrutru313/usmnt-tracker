@@ -146,6 +146,13 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
   );
   const queryClient = useQueryClient();
 
+  // Captured once at mount: was there already a persisted token in localStorage?
+  // False in private/incognito mode (safeGetItem always returns null there).
+  // Used to suppress the sync-failed toast when there was never anything to sync.
+  const hadPersistedToken = React.useRef<boolean>(
+    safeGetItem(ANON_TOKEN_KEY) !== null,
+  );
+
   // Optimistic local state — initialised from localStorage so starred players
   // appear immediately without waiting for the API.
   const [optimisticIds, setOptimisticIds] = React.useState<Set<number>>(getLocalFollows);
@@ -185,9 +192,13 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   });
 
-  // Notify the user when the sync fails (but not before the first fetch runs).
+  // Notify the user when the sync fails (but not before the first fetch runs,
+  // and only when a prior session existed). If no token was ever persisted at
+  // mount time — e.g. private/incognito mode where localStorage is blocked —
+  // there is nothing meaningful to sync, so the error would be misleading.
   React.useEffect(() => {
     if (!followsFetched || !followsSyncFailed) return;
+    if (!hadPersistedToken.current) return;
     toast.error("Watchlist couldn't sync", {
       description:
         "Your watchlist is showing from local storage and may be out of date.",
