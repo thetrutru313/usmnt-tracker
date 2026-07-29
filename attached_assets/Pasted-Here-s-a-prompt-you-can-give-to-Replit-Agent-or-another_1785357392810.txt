@@ -1,0 +1,303 @@
+Here's a prompt you can give to Replit Agent (or another coding LLM) that is explicit about the architectural goal and asks it to audit the entire application rather than just making isolated fixes.
+
+---
+
+## Prompt: Audit and Refactor Data Pipeline to DB-First Architecture
+
+I want you to perform a comprehensive audit of the application's data architecture and refactor it so that **the database becomes the single source of truth for all non-live data**.
+
+### Current Architecture
+
+We use **API-Football** as our external data provider.
+
+Different datasets synchronize on different schedules:
+
+* Live match polling → seconds/minutes (keep this as-is)
+* Fixtures → hourly
+* Teams → daily
+* Players → daily
+* Standings → hourly
+* Statistics → various scheduled intervals
+
+Currently, some parts of the application still call API-Football directly from the frontend or request handlers.
+
+That should no longer happen.
+
+---
+
+# Desired Architecture
+
+The architecture should look like this:
+
+```
+API-Football
+      │
+      ▼
+Scheduled Sync Jobs
+      │
+      ▼
+Database
+      │
+      ▼
+Application Services
+      │
+      ▼
+API Routes
+      │
+      ▼
+Frontend
+```
+
+The only exception is:
+
+```
+Live Match Polling
+        │
+        ▼
+API-Football Live Endpoint
+        │
+        ▼
+Live Patch Service
+        │
+        ▼
+Merge onto cached DB data
+```
+
+Everything else should originate from the database.
+
+---
+
+# Goals
+
+Audit the entire project and identify every place where:
+
+* API-Football is called directly
+* External API clients are instantiated
+* Fetch requests bypass the database
+* Frontend components depend on API-Football responses
+* Route handlers proxy API-Football instead of reading stored data
+
+For each occurrence:
+
+1. Identify the file
+2. Explain why it violates the architecture
+3. Refactor it to read from the database instead
+4. Preserve existing functionality
+
+---
+
+# Required Rules
+
+## Rule 1
+
+The frontend must never call API-Football.
+
+It should only communicate with our backend.
+
+---
+
+## Rule 2
+
+Backend routes should never fetch API-Football data during normal user requests.
+
+Instead they should:
+
+```
+Request
+   ↓
+Read DB
+   ↓
+Return Result
+```
+
+---
+
+## Rule 3
+
+Only scheduled sync jobs may communicate with API-Football.
+
+Those jobs should:
+
+```
+Fetch API
+Validate
+Transform
+Upsert Database
+Log Results
+```
+
+---
+
+## Rule 4
+
+Every read endpoint should have this flow:
+
+```
+Request
+    ↓
+Database Query
+    ↓
+Return Cached Data
+```
+
+No external API requests.
+
+---
+
+## Rule 5
+
+If data is missing from the database:
+
+Return an appropriate response (404, empty result, or stale-data indicator depending on context).
+
+Do **not** automatically call API-Football.
+
+---
+
+# Live Data Exception
+
+Live match updates may continue using the current polling service.
+
+However:
+
+* Live polling should only retrieve rapidly changing fields
+* Those fields should overlay the cached database records
+* Stable data (teams, players, venues, standings, competition metadata, etc.) should still come from the database
+
+---
+
+# Deliverables
+
+Produce a report containing:
+
+## 1. Data Flow Diagram
+
+Document how data currently moves through the system.
+
+Then document the desired flow.
+
+---
+
+## 2. Direct API Usage Audit
+
+Create a table showing:
+
+* File
+* Function
+* Endpoint Used
+* Purpose
+* Should Become DB Read?
+* Refactored?
+
+---
+
+## 3. Database Coverage
+
+List every entity and indicate whether it is:
+
+* Fully cached
+* Partially cached
+* Not cached
+
+Include:
+
+* Teams
+* Players
+* Fixtures
+* Lineups
+* Standings
+* Leagues
+* Venues
+* Coaches
+* Injuries
+* Odds (if applicable)
+* Statistics
+* Events
+
+---
+
+## 4. Missing Sync Jobs
+
+Identify any entities that are read by the application but never synchronized into the database.
+
+Recommend appropriate synchronization intervals.
+
+---
+
+## 5. Architecture Violations
+
+List every place where:
+
+* Business logic fetches API-Football directly
+* React hooks fetch API-Football
+* API routes proxy API-Football
+* Services bypass repositories
+* Duplicate fetching occurs
+
+---
+
+## 6. Refactoring Plan
+
+For every violation:
+
+* Explain the change
+* Implement the refactor
+* Remove dead code
+* Preserve API compatibility
+
+---
+
+## 7. Repository Layer
+
+Ensure all reads occur through a consistent repository or service layer.
+
+Application code should never know whether data originated from API-Football.
+
+Example:
+
+```
+Frontend
+      ↓
+Route
+      ↓
+PlayerService
+      ↓
+PlayerRepository
+      ↓
+Database
+```
+
+---
+
+## 8. Sync Verification
+
+Verify every synchronization job:
+
+* Uses upserts
+* Is idempotent
+* Logs failures
+* Retries appropriately
+* Updates timestamps
+* Does not create duplicate records
+
+---
+
+## 9. Final Validation
+
+At completion, verify:
+
+* No frontend code calls API-Football.
+* No API route fetches API-Football during user requests.
+* All non-live reads come from the database.
+* Only scheduled synchronization jobs communicate with API-Football.
+* Live polling remains isolated to live-match patching.
+* The database is the application's single source of truth for all non-live football data.
+
+Finally, provide a summary listing:
+
+* Files modified
+* Architecture improvements made
+* Remaining technical debt (if any)
+* Any recommended follow-up work to further strengthen the data pipeline or performance.
+
+This version is intentionally prescriptive and audit-focused, which tends to produce much better results from Replit Agent because it instructs it to first inventory the current architecture, then systematically refactor and verify compliance rather than making piecemeal changes.

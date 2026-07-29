@@ -14,7 +14,7 @@ import { runCommitmentSweep } from "../lib/commitmentTracker";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
-  player: { birth: { date: string | null; place: string | null } };
+  player: { firstname: string | null; birth: { date: string | null; place: string | null } };
 }
 
 const router: IRouter = Router();
@@ -695,6 +695,70 @@ router.post("/admin/backfill-candidate-birthplace", async (_req, res): Promise<v
   backfillCandidateBirthplaces().catch((err) =>
     logger.error({ err }, "Admin: candidate birthplace backfill crashed"),
   );
+});
+
+/**
+ * POST /admin/backfill-candidate-first-names
+ * For every player_candidates row where first_name IS NULL, fetches the
+ * player's full firstname from API-Football and writes it back.
+ * Returns immediately with the count queued; runs in the background.
+ * Safe to call multiple times — only processes rows that are still null.
+ */
+router.post("/admin/backfill-candidate-first-names", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+
+  const candidates = await db
+    .select({ id: playerCandidatesTable.id, apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId })
+    .from(playerCandidatesTable)
+    .where(
+      and(
+        isNull(playerCandidatesTable.firstName),
+        isNotNull(playerCandidatesTable.apiFootballPlayerId),
+      ),
+    );
+
+  logger.info({ count: candidates.length }, "Admin: candidate first-name backfill triggered");
+  res.json({ ok: true, queued: candidates.length });
+
+  // Run in background, rate-limited through the shared afFetch queue.
+  (async () => {
+    const currentYear = new Date().getUTCFullYear();
+    const seasons = [currentYear, currentYear - 1];
+    let updated = 0;
+    let failed = 0;
+
+    for (const candidate of candidates) {
+      if (!candidate.apiFootballPlayerId) continue;
+      try {
+        let firstname: string | null = null;
+        for (const season of seasons) {
+          const results = await afFetch<AfPlayerRecord[]>(
+            `/players?id=${candidate.apiFootballPlayerId}&season=${season}`,
+          );
+          const fn = results[0]?.player?.firstname ?? null;
+          if (fn) { firstname = fn; break; }
+        }
+        if (firstname) {
+          await db
+            .update(playerCandidatesTable)
+            .set({ firstName: firstname })
+            .where(eq(playerCandidatesTable.id, candidate.id));
+          updated++;
+          logger.debug({ candidateId: candidate.id, firstname }, "First-name backfill: updated");
+        } else {
+          logger.debug({ candidateId: candidate.id }, "First-name backfill: no firstname returned");
+        }
+      } catch (err) {
+        failed++;
+        logger.warn({ err, candidateId: candidate.id }, "First-name backfill: fetch failed");
+      }
+    }
+
+    logger.info({ updated, failed, total: candidates.length }, "Admin: candidate first-name backfill complete");
+  })().catch((err) => logger.error({ err }, "Admin: candidate first-name backfill crashed"));
 });
 
 /**
