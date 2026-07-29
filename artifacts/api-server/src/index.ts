@@ -8,6 +8,7 @@ import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { rescoreAllCandidates } from "./lib/playerDiscovery";
+import { runCommitmentSweep } from "./lib/commitmentTracker";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
@@ -300,7 +301,15 @@ app.listen(port, async (err) => {
   // all player IDs are resolved and club stats are committed — running them
   // concurrently starved the USMNT sync of rate-limit quota and left it unable
   // to complete before the next server restart.
-  startPlayerStatsSyncSchedule(undefined, () => syncUsmntStats().then(() => {}));
+  // Chain: club-stats → USMNT stats → commitment sweep.
+  // The commitment check must run after fresh stat data is committed so it
+  // evaluates the latest competition history (not stale data from a prior run).
+  startPlayerStatsSyncSchedule(undefined, async () => {
+    await syncUsmntStats();
+    await runCommitmentSweep().catch((err) =>
+      logger.error({ err }, "Commitment sweep (chained after daily stats sync) failed"),
+    );
+  });
 
   // Also keeps an independent hourly poll so a newly-finished USMNT match
   // shows up promptly — not just on the next daily club-sync cycle.

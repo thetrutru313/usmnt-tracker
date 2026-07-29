@@ -10,6 +10,7 @@ import { syncPlayerStatsAndInjuries, syncStatsForFinishedFixture } from "../lib/
 import { syncPlayerClubs } from "../lib/playerClubSync";
 import { syncApiFootballFixtures, syncNationalTeamFixtures, syncYouthNtFixtures } from "../lib/apiFootballSync";
 import { cleanupOrphanedAnonUsers } from "../lib/anonUserCleanup";
+import { runCommitmentSweep } from "../lib/commitmentTracker";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -397,6 +398,26 @@ router.post("/admin/trigger-eligibility-rescore", async (_req, res): Promise<voi
   res.json({ ok: true });
   rescoreAllCandidates().catch((err) =>
     logger.error({ err }, "Admin eligibility rescore failed"),
+  );
+});
+
+/**
+ * POST /admin/trigger-commitment-check
+ * Manually triggers the commitment sweep for all tracked players and
+ * non-dismissed candidates. The sweep inspects API-Football competition history
+ * for non-US national team appearances, updates usmnt_status on high-confidence
+ * detections (CAP_TIED_OTHER), and flags ambiguous cases via needs_review = true.
+ * Returns immediately; sweep runs in the background.
+ */
+router.post("/admin/trigger-commitment-check", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+  logger.info("Admin: commitment check triggered");
+  res.json({ ok: true });
+  runCommitmentSweep().catch((err) =>
+    logger.error({ err }, "Admin commitment check failed"),
   );
 });
 

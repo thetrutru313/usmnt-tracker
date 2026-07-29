@@ -1,7 +1,26 @@
-import { date, integer, pgTable, serial, text, timestamp, doublePrecision, boolean } from "drizzle-orm/pg-core";
+import { date, integer, pgTable, serial, text, timestamp, doublePrecision, boolean, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clubsTable } from "./clubs";
+
+/**
+ * USMNT commitment status for a tracked player.
+ * Mirrors the candidate-side enum but lives on the main players table so the
+ * commitment-tracking pipeline can update it without touching player_candidates.
+ *
+ *  US_ELIGIBLE_PROSPECT  — eligible, never capped for another federation
+ *  DUAL_NATIONAL         — holds another passport; commitment unclear
+ *  CAP_TIED_OTHER        — senior debut for another federation (auto-detected)
+ *  DECLARED_OTHER        — publicly declared for another federation (operator-set)
+ *  UNKNOWN               — insufficient data to classify
+ */
+export const playerUsmntStatusEnum = pgEnum("player_usmnt_status", [
+  "US_ELIGIBLE_PROSPECT",
+  "DUAL_NATIONAL",
+  "CAP_TIED_OTHER",
+  "DECLARED_OTHER",
+  "UNKNOWN",
+]);
 
 export const playersTable = pgTable("players", {
   id: serial("id").primaryKey(),
@@ -45,6 +64,15 @@ export const playersTable = pgTable("players", {
   // SQUAD_CACHE_TTL_MS (6 hours), dramatically cutting daily quota usage.
   // Null means never checked; the sync will always call the API for those.
   squadLastCheckedAt: timestamp("squad_last_checked_at", { withTimezone: true }),
+  // --- Commitment-tracking pipeline ---
+  // USMNT eligibility commitment status, updated automatically by the daily
+  // commitment sweep or manually by an operator. Null until the sweep has run.
+  usmntStatus: playerUsmntStatusEnum("usmnt_status"),
+  // Set to true by evaluateFlagConditions when any auto-flag rule fires (low
+  // eligibility_confidence, conflicting nationalities, new international
+  // appearance for another federation). Cleared manually by an operator after
+  // review. Never cleared automatically.
+  needsReview: boolean("needs_review").notNull().default(false),
 });
 
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true });

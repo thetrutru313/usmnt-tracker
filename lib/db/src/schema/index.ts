@@ -13,3 +13,4 @@ export * from "./transparency";
 export * from "./anonUsers";
 export * from "./userFollows";
 export * from "./recoveryTokens";
+export * from "./playerStatusHistory";
