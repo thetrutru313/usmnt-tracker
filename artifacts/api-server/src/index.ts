@@ -7,7 +7,7 @@ import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
-import { rescoreAllCandidates } from "./lib/playerDiscovery";
+import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
@@ -33,6 +33,14 @@ app.listen(port, async (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // One-shot startup: re-score all candidates if eligibility weights have changed
+  // since the last server start. Uses stored signals — no API calls required.
+  // Runs before any sync schedules so the candidate queue is consistent from
+  // the first moment the server is live.
+  (async () => {
+    await checkAndApplyWeightDrift();
+  })();
 
   // One-shot startup: backfill api_football_fixture_id on seeded national-team
   // fixtures that were created without one. Finds the correct ID from existing

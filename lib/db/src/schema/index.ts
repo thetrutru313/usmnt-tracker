@@ -14,3 +14,4 @@ export * from "./anonUsers";
 export * from "./userFollows";
 export * from "./recoveryTokens";
 export * from "./playerStatusHistory";
+export * from "./serverConfig";

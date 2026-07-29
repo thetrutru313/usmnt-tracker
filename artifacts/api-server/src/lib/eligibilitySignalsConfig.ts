@@ -100,6 +100,26 @@ export function _resetWeightsCacheForTesting(): void {
   _resolvedWeights = null;
 }
 
+/**
+ * Returns a stable, order-independent JSON fingerprint of the current resolved
+ * weights.  Used to detect when an operator has changed a ELIGIBILITY_WEIGHT_*
+ * env var between server restarts so stale candidate scores can be refreshed.
+ *
+ * The fingerprint also encodes ELIGIBILITY_MIN_SCORE because a change there
+ * alone can flip which candidates sit above/below the acceptance threshold.
+ */
+export function getWeightFingerprint(): string {
+  const weights = getResolvedWeights();
+  // Sort keys so the fingerprint is stable regardless of registry ordering.
+  const sorted = Object.keys(weights)
+    .sort()
+    .reduce<Record<string, number>>((acc, k) => {
+      acc[k] = weights[k]!;
+      return acc;
+    }, {});
+  return JSON.stringify({ weights: sorted, minScore: getMinEligibilityScore() });
+}
+
 /** Min confidence score to store a candidate (default 30, env-overridable). */
 export function getMinEligibilityScore(): number {
   const raw = process.env["ELIGIBILITY_MIN_SCORE"];

@@ -1,10 +1,10 @@
-import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, asc, sql, isNull, isNotNull, and, or } from "drizzle-orm";
+import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable, serverConfigTable } from "@workspace/db";
+import { eq, asc, sql, isNull, isNotNull, and, or, ne } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
 import { evaluateEligibility, type EligibilityProfile } from "./evaluateEligibility";
-import { getMinEligibilityScore, getMaxCandidateAge } from "./eligibilitySignalsConfig";
+import { getMinEligibilityScore, getMaxCandidateAge, getWeightFingerprint, getResolvedWeights, SIGNAL_REGISTRY } from "./eligibilitySignalsConfig";
 
 // ---------------------------------------------------------------------------
 // Scans squad rosters at every tracked club for US-eligible players not yet
@@ -657,4 +657,191 @@ export async function backfillCandidateBirthplaces(options: {
     "Birthplace backfill: complete",
   );
   return { updated, notFound, failed, total: candidates.length };
+}
+
+// ---------------------------------------------------------------------------
+// Weight-drift detection and rescore from stored signals
+// ---------------------------------------------------------------------------
+
+const WEIGHT_FINGERPRINT_KEY = "eligibility_weight_fingerprint";
+
+/**
+ * Re-scores every non-manually-overridden candidate using the signals already
+ * stored in `eligibility_signals` and the *current* weights from the signal
+ * registry.  Makes no API-Football calls — this is a pure DB operation that
+ * recalculates each candidate's score by applying updated weights to whatever
+ * signal types previously fired for them.
+ *
+ * Status transitions:
+ *   - pending  → dismissed  when new score < minScore
+ *   - dismissed → pending   when new score >= minScore  (sets needsReview = true)
+ *   - promoted rows: score is updated but status is left intact (already reviewed)
+ *
+ * Returns counts of processed, demoted, surfaced, updated, and failed rows.
+ */
+export async function rescoreCandidatesFromStoredSignals(): Promise<{
+  processed: number;
+  updated: number;
+  demoted: number;
+  surfaced: number;
+  failed: number;
+}> {
+  const minScore = getMinEligibilityScore();
+  const currentWeights = getResolvedWeights();
+
+  // Build a lookup of maxContribution caps from the registry
+  const maxContributionByType = new Map<string, number>(
+    SIGNAL_REGISTRY.map((def) => [def.signalType, def.maxContribution]),
+  );
+
+  // Fetch all candidates that were not manually overridden.
+  // We include dismissed rows because a weight increase may push them above
+  // the threshold and they should be surfaced for review.
+  const candidates = await db
+    .select({
+      id: playerCandidatesTable.id,
+      name: playerCandidatesTable.name,
+      status: playerCandidatesTable.status,
+      isManualOverride: playerCandidatesTable.isManualOverride,
+    })
+    .from(playerCandidatesTable)
+    .where(
+      or(
+        eq(playerCandidatesTable.isManualOverride, false),
+        isNull(playerCandidatesTable.isManualOverride),
+      ),
+    );
+
+  // Fetch all stored signals in one query and group by candidateId
+  const allSignals = await db
+    .select({
+      candidateId: eligibilitySignalsTable.candidateId,
+      signalType: eligibilitySignalsTable.signalType,
+    })
+    .from(eligibilitySignalsTable);
+
+  const signalsByCandidateId = new Map<number, string[]>();
+  for (const row of allSignals) {
+    const existing = signalsByCandidateId.get(row.candidateId) ?? [];
+    existing.push(row.signalType);
+    signalsByCandidateId.set(row.candidateId, existing);
+  }
+
+  let processed = 0;
+  let updated = 0;
+  let demoted = 0;
+  let surfaced = 0;
+  let failed = 0;
+
+  for (const candidate of candidates) {
+    processed++;
+    try {
+      const firedSignalTypes = signalsByCandidateId.get(candidate.id) ?? [];
+
+      // Re-apply current weights to each signal type that previously fired.
+      let rawScore = 0;
+      for (const signalType of firedSignalTypes) {
+        const weight = currentWeights[signalType] ?? 0;
+        const cap = maxContributionByType.get(signalType) ?? weight;
+        rawScore += Math.min(weight, cap);
+      }
+      const newScore = Math.min(100, rawScore);
+
+      // Determine whether the status should change.
+      const currentStatus = candidate.status as "pending" | "dismissed" | "promoted";
+      let newStatus: typeof currentStatus | null = null;
+      if (newScore < minScore && currentStatus === "pending") {
+        newStatus = "dismissed";
+        demoted++;
+        logger.info(
+          { candidateId: candidate.id, name: candidate.name, newScore, minScore },
+          "Weight-drift rescore: candidate demoted below threshold",
+        );
+      } else if (newScore >= minScore && currentStatus === "dismissed") {
+        newStatus = "pending";
+        surfaced++;
+        logger.info(
+          { candidateId: candidate.id, name: candidate.name, newScore, minScore },
+          "Weight-drift rescore: dismissed candidate now meets threshold — surfaced for review",
+        );
+      }
+
+      await db
+        .update(playerCandidatesTable)
+        .set({
+          eligibilityConfidence: newScore,
+          lastScoredAt: new Date(),
+          ...(newStatus === "dismissed" ? { status: "dismissed" as const } : {}),
+          ...(newStatus === "pending" ? { status: "pending" as const, needsReview: true } : {}),
+        })
+        .where(eq(playerCandidatesTable.id, candidate.id));
+
+      updated++;
+    } catch (err) {
+      failed++;
+      logger.warn(
+        { err, candidateId: candidate.id, name: candidate.name },
+        "Weight-drift rescore: update failed for candidate",
+      );
+    }
+  }
+
+  logger.info(
+    { processed, updated, demoted, surfaced, failed },
+    "Weight-drift rescore: complete",
+  );
+  return { processed, updated, demoted, surfaced, failed };
+}
+
+/**
+ * Reads the stored eligibility weight fingerprint from `server_config`,
+ * compares it to the current resolved weights, and — if they differ —
+ * runs `rescoreCandidatesFromStoredSignals()` and persists the new fingerprint.
+ *
+ * Designed to be called once on server startup.  Logs a warning if the
+ * fingerprint has changed so operators know a rescore was triggered.
+ * All errors are caught and logged non-fatally so a DB hiccup never
+ * prevents the server from starting.
+ */
+export async function checkAndApplyWeightDrift(): Promise<void> {
+  try {
+    const currentFingerprint = getWeightFingerprint();
+
+    const rows = await db
+      .select({ value: serverConfigTable.value })
+      .from(serverConfigTable)
+      .where(eq(serverConfigTable.key, WEIGHT_FINGERPRINT_KEY));
+
+    const storedFingerprint = rows[0]?.value ?? null;
+
+    if (storedFingerprint === currentFingerprint) {
+      logger.debug("Startup: eligibility weights unchanged — no rescore needed");
+      return;
+    }
+
+    if (storedFingerprint === null) {
+      logger.info(
+        { fingerprint: currentFingerprint },
+        "Startup: no stored weight fingerprint found — saving baseline (first run)",
+      );
+    } else {
+      logger.warn(
+        { previous: storedFingerprint, current: currentFingerprint },
+        "Startup: eligibility weights have changed — triggering rescore of all candidates",
+      );
+      const result = await rescoreCandidatesFromStoredSignals();
+      logger.info(result, "Startup: weight-drift rescore finished");
+    }
+
+    // Persist the new fingerprint (upsert)
+    await db
+      .insert(serverConfigTable)
+      .values({ key: WEIGHT_FINGERPRINT_KEY, value: currentFingerprint })
+      .onConflictDoUpdate({
+        target: serverConfigTable.key,
+        set: { value: currentFingerprint, updatedAt: new Date() },
+      });
+  } catch (err) {
+    logger.warn({ err }, "Startup: weight-drift check failed (non-fatal)");
+  }
 }
