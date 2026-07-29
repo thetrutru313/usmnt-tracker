@@ -8,6 +8,7 @@ import {
   X,
   ShieldCheck,
   AlertTriangle,
+  ClipboardList,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -593,6 +594,17 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  const { data: reviewData } = useQuery({
+    queryKey: ["admin-review-queue-count"],
+    queryFn: async () => {
+      const res = await apiFetch("/admin/review-queue", token) as { candidates: { id: number }[] };
+      return res.candidates.length;
+    },
+    retry: false,
+  });
+
+  const pendingCount = reviewData ?? null;
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-transparency"],
     queryFn: async () => {
@@ -708,6 +720,30 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
       </header>
 
       <div className="max-w-4xl mx-auto p-6 space-y-8">
+        {/* Quick navigation */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Links</h2>
+          <a
+            href="/admin/review"
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 hover:bg-sidebar-accent transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary shrink-0">
+                <ClipboardList size={18} />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Review Queue</p>
+                <p className="text-xs text-muted-foreground">Approve or reject discovered prospects</p>
+              </div>
+            </div>
+            {pendingCount !== null && pendingCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full bg-primary text-primary-foreground text-xs font-bold tabular-nums shrink-0">
+                {pendingCount}
+              </span>
+            )}
+          </a>
+        </section>
+
         {/* Transparency section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
