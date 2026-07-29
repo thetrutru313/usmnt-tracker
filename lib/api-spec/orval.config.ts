@@ -53,7 +53,10 @@ export default defineConfig({
       target: "generated",
       schemas: { path: "generated/types", type: "typescript" },
       mode: "split",
-      clean: true,
+      // clean intentionally omitted: removing generated files before
+      // rewriting them creates a brief window where the module cannot be
+      // resolved by concurrent test runners. The zod output is always a
+      // single api.ts file, so there are no stale files to clean up.
       prettier: true,
       override: {
         zod: {

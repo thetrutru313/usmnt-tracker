@@ -168,6 +168,77 @@ test.describe("Star toggle with localStorage blocked (private/incognito mode)", 
   });
 
   /**
+   * Reload after toggle in private mode: toggle a specific player's star,
+   * reload the page, and confirm that player's star resets to "Add to My
+   * Players" without a crash.
+   *
+   * In private mode the token is never written to localStorage, so on reload
+   * ensureToken fires again (a fresh provisioning call), the remote follows
+   * list comes back empty, and optimisticIds resets to an empty Set.  The star
+   * must return to its unfollowed label — no persistence is the correct
+   * behaviour — and neither a crash nor an error UI must appear.
+   *
+   * Scoping strategy: the PlayerCard renders its star inside the same <a>
+   * anchor as the player link (`<Link href="/players/{id}">`), so we can
+   * identify the card container by its href and scope all assertions to that
+   * anchor.  After reload we re-locate the same card by href and assert its
+   * button is back to "Add to My Players".  We also assert that zero
+   * "Remove from My Players" buttons exist anywhere on the page, ruling out
+   * the case where a different card still shows the followed state.
+   */
+  test("star resets to unfollowed state after page reload in private mode", async ({
+    page,
+  }) => {
+    await blockLocalStorage(page);
+
+    await page.goto("players");
+    await waitForApp(page);
+    await expectNoErrorUI(page);
+
+    // Grab the href of the first player card so we can re-locate it after
+    // reload by a stable identifier (the player's own URL path).
+    const firstCard = page.locator('a[href*="/players/"]').first();
+    await expect(firstCard).toBeVisible();
+    const playerHref = await firstCard.getAttribute("href");
+
+    // The star button lives inside the card anchor — scope directly to it.
+    const starInCard = firstCard.locator('button[aria-label="Add to My Players"]');
+    await expect(starInCard).toBeVisible();
+
+    // ── Toggle on: optimistic update flips the button label ──────────────────
+    await starInCard.click();
+
+    // The same card should now show "Remove from My Players".
+    const removeInCard = firstCard.locator('button[aria-label="Remove from My Players"]');
+    await expect(removeInCard).toBeVisible();
+    await expectNoErrorUI(page);
+
+    // ── Reload — init script re-runs so localStorage remains blocked ─────────
+    await page.reload();
+    await waitForApp(page);
+    await expectNoErrorUI(page);
+
+    // Re-locate the same card by its player href.
+    const sameCard = page.locator(`a[href="${playerHref}"]`);
+    await expect(sameCard).toBeVisible();
+
+    // PRIMARY assertion: that specific card's star must be back to "Add".
+    await expect(
+      sameCard.locator('button[aria-label="Add to My Players"]'),
+    ).toBeVisible();
+
+    // SECONDARY (stronger negative): zero "Remove from My Players" buttons
+    // anywhere on the page — the private-mode token was never persisted so no
+    // player should appear as followed after the fresh provisioning.
+    await expect(
+      page.locator('button[aria-label="Remove from My Players"]'),
+    ).toHaveCount(0);
+
+    // No crash, no error UI after reload + re-provisioning.
+    await expectNoErrorUI(page);
+  });
+
+  /**
    * Player-list card star: open the players list, click the first card's star,
    * and confirm the label flips and back without a crash.
    */
