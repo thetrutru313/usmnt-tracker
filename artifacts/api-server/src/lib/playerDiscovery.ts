@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
@@ -388,7 +388,7 @@ export async function rescoreAllCandidates(
     })
     .from(playerCandidatesTable)
     .where(eq(playerCandidatesTable.status, "pending"))
-    .orderBy(asc(playerCandidatesTable.discoveredAt));
+    .orderBy(sql`${playerCandidatesTable.lastScoredAt} ASC NULLS FIRST`);
 
   // Exclude manually-overridden candidates BEFORE applying the cap so they
   // never consume cap slots and starve real (non-overridden) candidates.
@@ -450,6 +450,7 @@ export async function rescoreAllCandidates(
           eligibilityConfidence: score,
           usmntStatus: status,
           dataSources: ["api_football"],
+          lastScoredAt: new Date(),
           // Demote below-threshold candidates to avoid surfacing low-quality noise
           ...(score < minScore ? { status: "dismissed" as const } : {}),
         })

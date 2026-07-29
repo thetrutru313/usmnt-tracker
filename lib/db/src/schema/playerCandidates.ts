@@ -49,6 +49,7 @@ export const playerCandidatesTable = pgTable("player_candidates", {
   discoveredAt: timestamp("discovered_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  lastScoredAt: timestamp("last_scored_at", { withTimezone: true }),
 
   // --- Eligibility pipeline expansion ---
   usmntStatus: usmntCandidateStatus("usmnt_status"),
