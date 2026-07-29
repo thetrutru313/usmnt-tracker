@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
 import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt } from "drizzle-orm";
-import { rescoreAllCandidates } from "../lib/playerDiscovery";
+import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
 import { ageFromBirthDate } from "../lib/playerClubSync";
@@ -687,83 +687,14 @@ router.post("/admin/backfill-candidate-birthplace", async (_req, res): Promise<v
     return;
   }
 
-  const candidates = await db
-    .select({
-      id: playerCandidatesTable.id,
-      name: playerCandidatesTable.name,
-      apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
-    })
-    .from(playerCandidatesTable)
-    .where(
-      and(
-        isNull(playerCandidatesTable.birthplace),
-        isNotNull(playerCandidatesTable.apiFootballPlayerId),
-      ),
-    );
+  logger.info("Admin: candidate birthplace backfill triggered");
+  res.json({ ok: true });
 
-  logger.info({ count: candidates.length }, "Admin: candidate birthplace backfill started");
-  res.json({ ok: true, queued: candidates.length });
-
-  // Run in background — afFetch is already rate-limited by the shared queue.
-  // Try seasons in descending order so players whose most recent activity is
-  // in a prior season still get a birthplace returned.
-  const currentYear = new Date().getUTCFullYear();
-  const seasons = [currentYear, currentYear - 1, currentYear - 2];
-
-  (async () => {
-    let updated = 0;
-    let failed = 0;
-    let notFound = 0;
-    for (const candidate of candidates) {
-      // Defensive guard: skip any row that somehow arrived without an API ID
-      // to avoid sending a malformed request (id=null) to API-Football.
-      if (!candidate.apiFootballPlayerId) {
-        logger.warn(
-          { candidateId: candidate.id, name: candidate.name },
-          "Candidate birthplace backfill: skipping — no apiFootballPlayerId",
-        );
-        notFound++;
-        continue;
-      }
-      try {
-        let birthplace: string | null = null;
-        for (const season of seasons) {
-          const [data] = await afFetch<AfPlayerRecord[]>(
-            `/players?id=${candidate.apiFootballPlayerId}&season=${season}`,
-          );
-          birthplace = data?.player?.birth?.place ?? null;
-          if (birthplace) break; // found — no need to check older seasons
-        }
-        if (!birthplace) {
-          logger.debug(
-            { candidateId: candidate.id, name: candidate.name },
-            "Candidate birthplace backfill: no birthplace returned for any season",
-          );
-          notFound++;
-          continue;
-        }
-        await db
-          .update(playerCandidatesTable)
-          .set({ birthplace })
-          .where(eq(playerCandidatesTable.id, candidate.id));
-        logger.info(
-          { candidateId: candidate.id, name: candidate.name, birthplace },
-          "Candidate birthplace backfill: updated",
-        );
-        updated++;
-      } catch (err) {
-        logger.warn(
-          { err, candidateId: candidate.id, name: candidate.name },
-          "Candidate birthplace backfill: fetch failed",
-        );
-        failed++;
-      }
-    }
-    logger.info(
-      { updated, notFound, failed, total: candidates.length },
-      "Admin: candidate birthplace backfill complete",
-    );
-  })().catch((err) => logger.error({ err }, "Admin: candidate birthplace backfill crashed"));
+  // Run in background — backfillCandidateBirthplaces is rate-limited via
+  // the shared afFetch queue.
+  backfillCandidateBirthplaces().catch((err) =>
+    logger.error({ err }, "Admin: candidate birthplace backfill crashed"),
+  );
 });
 
 /**

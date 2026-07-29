@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, asc, sql } from "drizzle-orm";
+import { eq, asc, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
@@ -473,4 +473,101 @@ export async function rescoreAllCandidates(
 
   logger.info({ processed, updated, failed, skipped }, "Rescore: all candidates rescored");
   return { processed, updated, failed, skipped };
+}
+
+// ---------------------------------------------------------------------------
+// Birthplace backfill
+// ---------------------------------------------------------------------------
+
+/** Minimal shape we need from the API-Football /players endpoint. */
+interface AfBirthplaceRecord {
+  player: { birth: { place: string | null } };
+}
+
+/**
+ * For every `player_candidates` row that has an `api_football_player_id` but
+ * no `birthplace`, fetches `birth.place` from API-Football and writes it to
+ * the DB.  Seasons are tried in descending order so players whose most recent
+ * activity is in a prior season still get a birthplace returned.
+ *
+ * Returns counts of updated, notFound, and failed candidates.
+ *
+ * @param options.seasons  Season years to try, newest first.  Defaults to the
+ *   three most recent years relative to today.
+ */
+export async function backfillCandidateBirthplaces(options: {
+  seasons?: number[];
+} = {}): Promise<{ updated: number; notFound: number; failed: number; total: number }> {
+  const candidates = await db
+    .select({
+      id: playerCandidatesTable.id,
+      name: playerCandidatesTable.name,
+      apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
+    })
+    .from(playerCandidatesTable)
+    .where(
+      and(
+        isNull(playerCandidatesTable.birthplace),
+        isNotNull(playerCandidatesTable.apiFootballPlayerId),
+      ),
+    );
+
+  const currentYear = new Date().getUTCFullYear();
+  const seasons = options.seasons ?? [currentYear, currentYear - 1, currentYear - 2];
+
+  logger.info({ count: candidates.length }, "Birthplace backfill: started");
+
+  let updated = 0;
+  let failed = 0;
+  let notFound = 0;
+
+  for (const candidate of candidates) {
+    if (!candidate.apiFootballPlayerId) {
+      logger.warn(
+        { candidateId: candidate.id, name: candidate.name },
+        "Birthplace backfill: skipping — no apiFootballPlayerId",
+      );
+      notFound++;
+      continue;
+    }
+    try {
+      let birthplace: string | null = null;
+      for (const season of seasons) {
+        const [data] = await afFetch<AfBirthplaceRecord[]>(
+          `/players?id=${candidate.apiFootballPlayerId}&season=${season}`,
+        );
+        birthplace = data?.player?.birth?.place ?? null;
+        if (birthplace) break;
+      }
+      if (!birthplace) {
+        logger.debug(
+          { candidateId: candidate.id, name: candidate.name },
+          "Birthplace backfill: no birthplace returned for any season",
+        );
+        notFound++;
+        continue;
+      }
+      await db
+        .update(playerCandidatesTable)
+        .set({ birthplace })
+        .where(eq(playerCandidatesTable.id, candidate.id));
+      logger.info(
+        { candidateId: candidate.id, name: candidate.name, birthplace },
+        "Birthplace backfill: updated",
+      );
+      updated++;
+    } catch (err) {
+      logger.warn(
+        { err, candidateId: candidate.id, name: candidate.name },
+        "Birthplace backfill: fetch failed",
+      );
+      failed++;
+    }
+  }
+
+  logger.info(
+    { updated, notFound, failed, total: candidates.length },
+    "Birthplace backfill: complete",
+  );
+  return { updated, notFound, failed, total: candidates.length };
 }
