@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { evaluateEligibility, type EligibilityProfile, type StatBlock } from "../evaluateEligibility";
+import { _resetWeightsCacheForTesting } from "../eligibilitySignalsConfig";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -273,6 +274,110 @@ describe("evaluateEligibility – env-var weight overrides", () => {
     const weights = getResolvedWeights();
     expect(weights["us_nationality"]).toBe(5);
     delete process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"];
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Threshold guard — weight-config change must not silently flip status
+// ---------------------------------------------------------------------------
+
+describe("evaluateEligibility – threshold guard (weight-config change)", () => {
+  afterEach(() => {
+    // Restore any env-var overrides and flush the weight cache so subsequent
+    // tests always start from a clean default-weights state.
+    delete process.env["ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY"];
+    delete process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"];
+    _resetWeightsCacheForTesting();
+  });
+
+  /**
+   * Baseline: a borderline profile whose default score (55) sits just below the
+   * US_ELIGIBLE_PROSPECT threshold (60).  This is the anchor for the two
+   * override tests below.
+   *
+   * Signals that fire with default weights:
+   *   us_birth_country    (25)
+   *   us_state_birthplace (15)
+   *   us_youth_nt         (15)
+   *   ─────────────────────────
+   *   total               55  → UNKNOWN
+   */
+  it("borderline profile (score=55) stays UNKNOWN with default weights", () => {
+    const profile: EligibilityProfile = {
+      nationality: "Germany",
+      birthCountry: "USA",
+      birthplace: "Houston, Texas",
+      statistics: [
+        PREM_BLOCK,
+        ntBlock("United States U20", "CONCACAF U20 Championship"),
+      ],
+    };
+    const { score, status } = evaluateEligibility(profile);
+    expect(score).toBe(55);
+    expect(status).toBe("UNKNOWN");
+  });
+
+  /**
+   * Weight-bump test: raising ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY from 25 → 30
+   * pushes the borderline profile from 55 → 60, which must flip status to
+   * US_ELIGIBLE_PROSPECT.  Verifies the threshold gate is actually enforced.
+   *
+   * Signals that fire with overridden weight:
+   *   us_birth_country    (30)  ← bumped via env var
+   *   us_state_birthplace (15)
+   *   us_youth_nt         (15)
+   *   ─────────────────────────
+   *   total               60  → US_ELIGIBLE_PROSPECT
+   */
+  it("bumping ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY to 30 crosses 60 → US_ELIGIBLE_PROSPECT", () => {
+    process.env["ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY"] = "30";
+    _resetWeightsCacheForTesting(); // force recompute from updated env
+
+    const profile: EligibilityProfile = {
+      nationality: "Germany",
+      birthCountry: "USA",
+      birthplace: "Houston, Texas",
+      statistics: [
+        PREM_BLOCK,
+        ntBlock("United States U20", "CONCACAF U20 Championship"),
+      ],
+    };
+    // us_birth_country(30) + us_state_birthplace(15) + us_youth_nt(15) = 60
+    const { score, status } = evaluateEligibility(profile);
+    expect(score).toBe(60);
+    expect(status).toBe("US_ELIGIBLE_PROSPECT");
+  });
+
+  /**
+   * Weight-decrease test: a profile that with default weights scores exactly 60
+   * (us_nationality=35 + us_birth_country=25) must drop back to UNKNOWN when
+   * ELIGIBILITY_WEIGHT_US_NATIONALITY is reduced to 34 (total → 59).
+   * Verifies that a small weight reduction is not silently masked.
+   *
+   * Signals that fire with overridden weight:
+   *   us_nationality   (34)  ← decreased via env var
+   *   us_birth_country (25)
+   *   ─────────────────────
+   *   total            59  → UNKNOWN
+   */
+  it("decreasing ELIGIBILITY_WEIGHT_US_NATIONALITY to 34 drops a 60-point profile back to UNKNOWN", () => {
+    // Sanity-check baseline: without an override this profile scores exactly 60.
+    const profile: EligibilityProfile = {
+      nationality: "USA",
+      birthCountry: "USA",
+      statistics: [PREM_BLOCK],
+    };
+    const defaultResult = evaluateEligibility(profile);
+    expect(defaultResult.score).toBe(60);
+    expect(defaultResult.status).toBe("US_ELIGIBLE_PROSPECT");
+
+    // Override us_nationality to 34 → 34 + 25 = 59 → UNKNOWN.
+    process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"] = "34";
+    _resetWeightsCacheForTesting();
+
+    const { score, status } = evaluateEligibility(profile);
+    expect(score).toBe(59);
+    expect(status).toBe("UNKNOWN");
   });
 });
 

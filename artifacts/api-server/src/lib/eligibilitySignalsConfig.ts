@@ -24,43 +24,48 @@ export interface SignalDefinition {
 }
 
 /** Canonical registry.  Weights sum to 120 so that two strong signals alone
- *  clear the US_ELIGIBLE_PROSPECT threshold (≥70) without needing all of them. */
+ *  clear the US_ELIGIBLE_PROSPECT threshold (≥60) without needing all of them.
+ *
+ *  maxContribution is the hard ceiling for a signal's per-firing contribution.
+ *  It is intentionally set above defaultWeight so that operators can boost
+ *  individual signals via env-var overrides without hitting the cap
+ *  (e.g. ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY=30 is valid). */
 export const SIGNAL_REGISTRY: SignalDefinition[] = [
   {
     signalType: "us_nationality",
     label: "US nationality on API-Football profile",
     defaultWeight: 35,
-    maxContribution: 35,
+    maxContribution: 50,
   },
   {
     signalType: "us_birth_country",
     label: "Born in the United States (birth.country)",
     defaultWeight: 25,
-    maxContribution: 25,
+    maxContribution: 40,
   },
   {
     signalType: "us_state_birthplace",
     label: "Birthplace text matches a US state or US city",
     defaultWeight: 15,
-    maxContribution: 15,
+    maxContribution: 25,
   },
   {
     signalType: "us_youth_nt",
     label: "Prior appearance for a US youth national team",
     defaultWeight: 15,
-    maxContribution: 15,
+    maxContribution: 25,
   },
   {
     signalType: "us_senior_nt_cap",
     label: "Prior USMNT senior cap (lineups > 0)",
     defaultWeight: 20,
-    maxContribution: 20,
+    maxContribution: 35,
   },
   {
     signalType: "mls_usl_league",
     label: "Plays in MLS or USL (soft US-nexus signal)",
     defaultWeight: 10,
-    maxContribution: 10,
+    maxContribution: 20,
   },
 ];
 
@@ -86,6 +91,13 @@ export function getResolvedWeights(): ResolvedWeights {
   }
   _resolvedWeights = weights;
   return weights;
+}
+
+/** Resets the resolved-weights cache so the next call to getResolvedWeights()
+ *  recomputes from current env vars.  Exposed for unit tests only — do not
+ *  call this in production code. */
+export function _resetWeightsCacheForTesting(): void {
+  _resolvedWeights = null;
 }
 
 /** Min confidence score to store a candidate (default 30, env-overridable). */
