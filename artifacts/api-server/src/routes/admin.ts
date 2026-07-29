@@ -709,15 +709,25 @@ router.post("/admin/sync-player-stats", async (req, res): Promise<void> => {
  * their eligibility_confidence, usmnt_status, data_sources, and signal rows.
  * Never touches any row in the `players` table.
  * Returns immediately; rescore runs in the background.
+ *
+ * Body (optional): { maxCandidates?: number }
+ *   Overrides the per-run candidate cap (default: RESCORE_MAX_CANDIDATES env
+ *   var or 50). Pass a higher value only when you need a full rescore and can
+ *   afford the extra API-Football quota spend.
  */
-router.post("/admin/trigger-eligibility-rescore", async (_req, res): Promise<void> => {
+router.post("/admin/trigger-eligibility-rescore", async (req, res): Promise<void> => {
   if (!process.env["API_FOOTBALL_KEY"]) {
     res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
     return;
   }
-  logger.info("Admin: eligibility rescore triggered");
-  res.json({ ok: true });
-  rescoreAllCandidates().catch((err) =>
+  const rawMax = (req.body as { maxCandidates?: unknown })?.maxCandidates;
+  const maxCandidates =
+    typeof rawMax === "number" && Number.isInteger(rawMax) && rawMax > 0
+      ? rawMax
+      : undefined;
+  logger.info({ maxCandidates }, "Admin: eligibility rescore triggered");
+  res.json({ ok: true, maxCandidates: maxCandidates ?? null });
+  rescoreAllCandidates({ maxCandidates }).catch((err) =>
     logger.error({ err }, "Admin eligibility rescore failed"),
   );
 });

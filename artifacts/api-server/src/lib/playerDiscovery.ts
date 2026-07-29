@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
@@ -352,25 +352,51 @@ export async function discoverUSProspects(): Promise<{
 // Rescore all non-dismissed candidates
 // ---------------------------------------------------------------------------
 
+const DEFAULT_RESCORE_MAX_CANDIDATES = 50;
+
 /**
  * Re-fetches stats from API-Football for every non-dismissed candidate and
  * re-evaluates their eligibility score using the current signal registry
  * weights.  Writes updated `eligibility_confidence`, `usmnt_status`,
  * `data_sources`, and signal rows back to the DB.  Never touches `players`.
+ *
+ * @param options.maxCandidates  Cap on how many candidates are processed in a
+ *   single run.  Defaults to the `RESCORE_MAX_CANDIDATES` env var or 50.
+ *   When the pending pool exceeds the cap the oldest-discovered candidates are
+ *   processed first and the remainder are deferred to the next run.
  */
-export async function rescoreAllCandidates(): Promise<{
+export async function rescoreAllCandidates(
+  options: { maxCandidates?: number } = {},
+): Promise<{
   processed: number;
   updated: number;
   failed: number;
+  skipped: number;
 }> {
-  const candidates = await db
+  const envCap = parseInt(process.env["RESCORE_MAX_CANDIDATES"] ?? "", 10);
+  const cap =
+    options.maxCandidates ??
+    (Number.isFinite(envCap) && envCap > 0 ? envCap : DEFAULT_RESCORE_MAX_CANDIDATES);
+
+  const allCandidates = await db
     .select({
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
       apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
     })
     .from(playerCandidatesTable)
-    .where(eq(playerCandidatesTable.status, "pending"));
+    .where(eq(playerCandidatesTable.status, "pending"))
+    .orderBy(asc(playerCandidatesTable.discoveredAt));
+
+  const skipped = Math.max(0, allCandidates.length - cap);
+  const candidates = allCandidates.slice(0, cap);
+
+  if (skipped > 0) {
+    logger.info(
+      { total: allCandidates.length, cap, skipped },
+      "Rescore: candidate pool exceeds cap — oldest candidates processed first, remainder deferred",
+    );
+  }
 
   const currentYear = new Date().getUTCFullYear();
   const seasonCandidates = [currentYear, currentYear - 1];
@@ -436,6 +462,6 @@ export async function rescoreAllCandidates(): Promise<{
     }
   }
 
-  logger.info({ processed, updated, failed }, "Rescore: all candidates rescored");
-  return { processed, updated, failed };
+  logger.info({ processed, updated, failed, skipped }, "Rescore: all candidates rescored");
+  return { processed, updated, failed, skipped };
 }
