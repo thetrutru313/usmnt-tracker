@@ -15,6 +15,13 @@
       "when": 1753660800000,
       "tag": "0001_recovery_tokens_superseded_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785343991409,
+      "tag": "0002_groovy_korath",
+      "breakpoints": true
     }
   ]
 }

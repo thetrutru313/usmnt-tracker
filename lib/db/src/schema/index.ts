@@ -7,6 +7,7 @@ export * from "./injuries";
 export * from "./transfers";
 export * from "./nationalTeam";
 export * from "./playerCandidates";
+export * from "./eligibilitySignals";
 export * from "./syncMetadata";
 export * from "./transparency";
 export * from "./anonUsers";

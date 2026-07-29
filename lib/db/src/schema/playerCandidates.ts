@@ -1,5 +1,24 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  pgEnum,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { clubsTable } from "./clubs";
+
+/**
+ * Status enum for USMNT eligibility candidate pipeline.
+ * US_SENIOR and US_YOUTH live only on the main players table.
+ */
+export const usmntCandidateStatus = pgEnum("usmnt_candidate_status", [
+  "US_ELIGIBLE_PROSPECT",
+  "DUAL_NATIONAL",
+  "DECLARED_OTHER",
+  "UNKNOWN",
+]);
 
 /**
  * Holds US-eligible squad members discovered at tracked clubs who are not
@@ -27,7 +46,19 @@ export const playerCandidatesTable = pgTable("player_candidates", {
   eligibilityBasis: text("eligibility_basis").notNull(),
   // "pending" | "dismissed" | "promoted"
   status: text("status").notNull().default("pending"),
-  discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull().defaultNow(),
+  discoveredAt: timestamp("discovered_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+
+  // --- Eligibility pipeline expansion ---
+  usmntStatus: usmntCandidateStatus("usmnt_status"),
+  eligibilityConfidence: integer("eligibility_confidence"),
+  secondaryNationalities: text("secondary_nationalities").array(),
+  birthplace: text("birthplace"),
+  dataSources: text("data_sources").array(),
+  needsReview: boolean("needs_review").default(false),
+  isManualOverride: boolean("is_manual_override").default(false),
+  statusNotes: text("status_notes"),
 });
 
 export type PlayerCandidate = typeof playerCandidatesTable.$inferSelect;
