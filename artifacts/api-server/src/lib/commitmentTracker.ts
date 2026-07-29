@@ -375,6 +375,7 @@ export async function runCommitmentSweep(): Promise<{
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
       usmntStatus: playersTable.usmntStatus,
       needsReview: playersTable.needsReview,
+      eligibilityConfidence: playersTable.eligibilityConfidence,
     })
     .from(playersTable)
     .where(
@@ -420,7 +421,7 @@ export async function runCommitmentSweep(): Promise<{
           id: player.id,
           name: player.name,
           needsReview: player.needsReview,
-          eligibilityConfidence: null, // not tracked on players table yet
+          eligibilityConfidence: player.eligibilityConfidence,
         },
         hadDetection,
       );

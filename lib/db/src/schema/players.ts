@@ -68,6 +68,11 @@ export const playersTable = pgTable("players", {
   // USMNT eligibility commitment status, updated automatically by the daily
   // commitment sweep or manually by an operator. Null until the sweep has run.
   usmntStatus: playerUsmntStatusEnum("usmnt_status"),
+  // Eligibility confidence score (0–100) copied from the candidate row at
+  // promotion time. Null for players who were seeded directly without going
+  // through the candidate pipeline. Used by the commitment sweep to auto-flag
+  // players whose confidence drops below MIN_CONFIDENCE_THRESHOLD (40).
+  eligibilityConfidence: integer("eligibility_confidence"),
   // Set to true by evaluateFlagConditions when any auto-flag rule fires (low
   // eligibility_confidence, conflicting nationalities, new international
   // appearance for another federation). Cleared manually by an operator after

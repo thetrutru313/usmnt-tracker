@@ -167,6 +167,7 @@ router.post("/admin/player-candidates/:id/promote", async (req, res): Promise<vo
           trending: false,
           bio: "",
           worldCupRoster: false,
+          eligibilityConfidence: candidate.eligibilityConfidence ?? undefined,
         })
         .returning({ id: playersTable.id });
 
@@ -316,6 +317,7 @@ router.post("/admin/review-queue/:id/approve", async (req, res): Promise<void> =
           trending: false,
           bio: "",
           worldCupRoster: false,
+          eligibilityConfidence: candidate.eligibilityConfidence ?? undefined,
         })
         .returning({ id: playersTable.id });
 
@@ -489,6 +491,7 @@ router.post("/admin/review-queue/bulk-approve", async (req, res): Promise<void> 
               trending: false,
               bio: "",
               worldCupRoster: false,
+              eligibilityConfidence: candidate.eligibilityConfidence ?? undefined,
             });
 
           await tx
