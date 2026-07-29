@@ -6,10 +6,11 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 // ---------------------------------------------------------------------------
-// Auth guard (same pattern as admin.ts)
+// Auth guard (same pattern as admin.ts — must use ADMIN_PASSWORD, not
+// SESSION_SECRET, to match the verify endpoint in transparency.ts)
 // ---------------------------------------------------------------------------
 function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env["SESSION_SECRET"];
+  const secret = process.env["ADMIN_PASSWORD"];
   if (!secret) {
     res.status(503).json({ error: "Admin endpoints are not configured on this server" });
     return;

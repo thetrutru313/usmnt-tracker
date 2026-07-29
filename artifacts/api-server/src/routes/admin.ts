@@ -30,11 +30,15 @@ function slugify(name: string): string {
 
 /**
  * Simple token gate for all /admin/* routes.
- * Callers must supply `Authorization: Bearer <SESSION_SECRET>`.
- * If SESSION_SECRET is not configured the routes are disabled entirely.
+ * Callers must supply `Authorization: Bearer <ADMIN_PASSWORD>`.
+ * If ADMIN_PASSWORD is not configured the routes are disabled entirely.
+ *
+ * NOTE: must use ADMIN_PASSWORD (not SESSION_SECRET) — the verify endpoint in
+ * transparency.ts checks ADMIN_PASSWORD, so both must use the same secret or
+ * login succeeds but every subsequent admin API call returns 401.
  */
 function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env["SESSION_SECRET"];
+  const secret = process.env["ADMIN_PASSWORD"];
   if (!secret) {
     res.status(503).json({ error: "Admin endpoints are not configured on this server" });
     return;
