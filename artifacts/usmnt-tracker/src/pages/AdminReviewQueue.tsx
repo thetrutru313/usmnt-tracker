@@ -531,6 +531,7 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
       {/* Header */}
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur border-b border-border px-4 py-3 flex items-center justify-between gap-3">
         <div>
+          <a href="/admin" className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Admin Panel</a>
           <h1 className="font-bold text-base">Review Queue</h1>
           <p className="text-xs text-muted-foreground">
             {loading ? "Loading…" : `${candidates.length} candidate${candidates.length !== 1 ? "s" : ""} pending review`}
