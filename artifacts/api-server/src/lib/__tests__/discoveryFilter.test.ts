@@ -98,6 +98,30 @@ describe("discoveryFilter – quality gate rejects bench-warmers", () => {
     expect(passes).toBe(true);
     expect(starts).toBe(5); // only the competitive block
   });
+
+  it("passes a player with 50 substitute appearances (0 starts each, 10 min each = 500 min total)", () => {
+    // 50 blocks × 0 lineups × 10 minutes — 0 starts but 500 minutes
+    const statistics: AfDiscoveryStatBlock[] = Array.from({ length: 50 }, () =>
+      statBlock({ leagueName: "Premier League", lineups: 0, minutes: 10 }),
+    );
+    const { passes, starts, minutes } = applyQualityGate(statistics);
+    expect(starts).toBe(0);
+    expect(minutes).toBe(500); // 50 × 10
+    // minutes (500) >= MIN_MINUTES (450) → should pass despite 0 starts
+    expect(passes).toBe(true);
+  });
+
+  it("rejects a player with 40 short appearances (0 starts each, 10 min each = 400 min total)", () => {
+    // 40 blocks × 0 lineups × 10 minutes — 0 starts and only 400 minutes
+    const statistics: AfDiscoveryStatBlock[] = Array.from({ length: 40 }, () =>
+      statBlock({ leagueName: "Championship", lineups: 0, minutes: 10 }),
+    );
+    const { passes, starts, minutes } = applyQualityGate(statistics);
+    expect(starts).toBe(0);
+    expect(minutes).toBe(400); // 40 × 10
+    // starts (0) < MIN_STARTS (5) AND minutes (400) < MIN_MINUTES (450) → should reject
+    expect(passes).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
