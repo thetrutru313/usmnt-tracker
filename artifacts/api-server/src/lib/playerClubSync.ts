@@ -18,7 +18,7 @@ interface AfPlayerProfile {
 }
 
 interface AfTransfer {
-  date: string; // YYYY-MM-DD
+  date: string | null; // YYYY-MM-DD, or null when freshly announced and not yet confirmed
   // API-Football overloads this field with either a fee ("€5M", "Free") or "Loan".
   type: string | null;
   teams: {
@@ -33,7 +33,7 @@ interface AfTransfersResponse {
 }
 
 type ClubRow = { id: number; name: string; apiFootballTeamId: number | null; country?: string };
-type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number };
+type PlayerRow = { id: number; name: string; clubId: number; apiFootballPlayerId: number | null; age?: number; clubOverrideId?: number | null };
 
 /**
  * Manually-verified API-Football player ids, kept as a pinned fast-path for
@@ -676,6 +676,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       clubId: playersTable.clubId,
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
       age: playersTable.age,
+      clubOverrideId: playersTable.clubOverrideId,
     })
     .from(playersTable);
   const clubs: ClubRow[] = await db
@@ -693,6 +694,16 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
   const transferredPlayerIds: number[] = [];
 
   for (const player of players) {
+    // When an operator has pinned a club override, skip API transfer resolution
+    // entirely — the override is authoritative until it is explicitly cleared.
+    if (player.clubOverrideId != null) {
+      if (player.clubId !== player.clubOverrideId) {
+        await db.update(playersTable).set({ clubId: player.clubOverrideId }).where(eq(playersTable.id, player.id));
+        logger.info({ playerId: player.id, clubOverrideId: player.clubOverrideId }, "Club sync: enforced admin club override — skipping API resolution");
+      }
+      continue;
+    }
+
     const apiFootballPlayerId = player.apiFootballPlayerId;
     if (!apiFootballPlayerId) {
       failures++;
@@ -704,9 +715,19 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       playersChecked++;
       const transfers = transferData?.transfers ?? [];
       const now = Date.now();
+      // Treat a null/missing date as "newer than any dated transfer" — API-Football
+      // often logs a freshly announced move before the official date is confirmed,
+      // so a null-date row should win over an older dated row (e.g. the stale
+      // Vancouver transfer) rather than being silently dropped.
+      // Future-dated rows (date > now) are excluded to avoid acting on transfers
+      // that were announced early but haven't taken effect yet.
       const latest = [...transfers]
-        .filter((t) => t.date && new Date(t.date).getTime() <= now)
+        .filter((t) => !t.date || new Date(t.date).getTime() <= now)
         .sort((a, b) => {
+          // Null dates sort to the front (treated as the most recent).
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return -1; // a (null-date) is newer
+          if (!b.date) return 1;  // b (null-date) is newer
           const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
           if (dateDiff !== 0) return dateDiff;
           // API-Football sometimes reports the same move twice with the same
@@ -749,6 +770,13 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       // club — if the DB club was wrong at sync time, currentClub?.name would
       // record the transfer direction backwards.
       const fromClubName = latest.teams.out.name || currentClub?.name || "Unknown";
+      // Use today's date when the transfer has no confirmed date yet — a
+      // null-date row means the move was just announced. Using now() means
+      // the conflict key (player_id + announced_at) may differ from a
+      // future API response once the date is confirmed, but that's acceptable:
+      // the unconditional club_id update below keeps the player at the right
+      // club regardless of whether the insert fires.
+      const announcedAt = latest.date ? new Date(latest.date) : new Date();
       const inserted = await db.insert(transfersTable).values({
         playerId: player.id,
         fromClub: fromClubName,
@@ -756,7 +784,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
         transferType: isLoan ? "loan" : "transfer",
         fee: !isLoan ? (latest.type ?? null) : null,
         status: "confirmed",
-        announcedAt: new Date(latest.date),
+        announcedAt,
         summary: `${player.name} moved from ${fromClubName} to ${newClub.name} (synced from API-Football transfer history).`,
       }).onConflictDoNothing().returning({ id: transfersTable.id });
       // Always update club_id to the destination club — whether the transfer

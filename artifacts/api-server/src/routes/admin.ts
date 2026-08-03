@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt, lte } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt, lte, asc } from "drizzle-orm";
 import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
 import { getMaxCandidateAge, SIGNAL_REGISTRY, getResolvedWeights } from "../lib/eligibilitySignalsConfig";
 import { logger } from "../lib/logger";
@@ -978,6 +978,129 @@ router.get("/admin/config", (_req, res): void => {
     };
   });
   res.json({ signals });
+});
+
+/**
+ * GET /admin/players
+ * Returns all tracked players with their current club (and override, if set).
+ * Lightweight — just id, name, clubId, clubName, clubOverrideId, clubOverrideName.
+ */
+router.get("/admin/players", async (_req, res): Promise<void> => {
+  const overrideClubs = clubsTable;
+  const rows = await db
+    .select({
+      id: playersTable.id,
+      name: playersTable.name,
+      clubId: playersTable.clubId,
+      clubName: clubsTable.name,
+      clubOverrideId: playersTable.clubOverrideId,
+      clubOverrideSetAt: playersTable.clubOverrideSetAt,
+    })
+    .from(playersTable)
+    .leftJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
+    .orderBy(asc(playersTable.name));
+
+  // Enrich rows that have an override with the override club name
+  const overrideIds = rows
+    .map((r) => r.clubOverrideId)
+    .filter((id): id is number => id != null);
+
+  const overrideClubRows =
+    overrideIds.length > 0
+      ? await db
+          .select({ id: overrideClubs.id, name: overrideClubs.name })
+          .from(overrideClubs)
+          .where(inArray(overrideClubs.id, overrideIds))
+      : [];
+  const overrideClubById = new Map(overrideClubRows.map((c) => [c.id, c.name]));
+
+  const enriched = rows.map((r) => ({
+    ...r,
+    clubOverrideName: r.clubOverrideId != null ? (overrideClubById.get(r.clubOverrideId) ?? null) : null,
+  }));
+
+  res.json({ players: enriched });
+});
+
+/**
+ * GET /admin/clubs
+ * Returns all clubs (id + name) for use in dropdowns.
+ */
+router.get("/admin/clubs", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({ id: clubsTable.id, name: clubsTable.name })
+    .from(clubsTable)
+    .orderBy(asc(clubsTable.name));
+  res.json({ clubs: rows });
+});
+
+/**
+ * PATCH /admin/players/:id/club
+ * Body: { clubId: number } to set an override, or { clubId: null } to clear it.
+ * Sets (or clears) the manual club override for a player.  When set, the
+ * transfer-sync and fixture-sync both skip API resolution and use this club
+ * directly.  Clearing it (clubId: null) restores automatic API-driven sync.
+ */
+router.patch("/admin/players/:id/club", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: "Invalid player id" });
+    return;
+  }
+
+  const body = req.body as { clubId?: unknown };
+  const rawClubId = body.clubId;
+
+  // null clears the override; a positive integer sets it.
+  if (rawClubId !== null && (typeof rawClubId !== "number" || !Number.isInteger(rawClubId) || rawClubId <= 0)) {
+    res.status(400).json({ error: "clubId must be a positive integer or null" });
+    return;
+  }
+
+  const [player] = await db
+    .select({ id: playersTable.id, name: playersTable.name })
+    .from(playersTable)
+    .where(eq(playersTable.id, id))
+    .limit(1);
+
+  if (!player) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
+  if (rawClubId === null) {
+    // Clear the override — restore automatic sync.
+    await db
+      .update(playersTable)
+      .set({ clubOverrideId: null, clubOverrideSetAt: null })
+      .where(eq(playersTable.id, id));
+    logger.info({ playerId: id, playerName: player.name }, "Admin: club override cleared");
+    res.json({ ok: true, cleared: true });
+    return;
+  }
+
+  // Validate the target club exists.
+  const [club] = await db
+    .select({ id: clubsTable.id, name: clubsTable.name })
+    .from(clubsTable)
+    .where(eq(clubsTable.id, rawClubId as number))
+    .limit(1);
+
+  if (!club) {
+    res.status(404).json({ error: "Club not found" });
+    return;
+  }
+
+  await db
+    .update(playersTable)
+    .set({ clubOverrideId: club.id, clubOverrideSetAt: new Date(), clubId: club.id })
+    .where(eq(playersTable.id, id));
+
+  logger.info(
+    { playerId: id, playerName: player.name, clubId: club.id, clubName: club.name },
+    "Admin: club override set",
+  );
+  res.json({ ok: true, clubId: club.id, clubName: club.name });
 });
 
 /**

@@ -302,7 +302,7 @@ describe(
           .insert(playersTable)
           .values({
             name: "__SSMC Test Player__",
-            slug: "__ssmc-test-player__",
+            slug: `__ssmc-test-player-${Date.now()}__`,
             position: "MF",
             category: "current",
             clubId: oldClub.id,

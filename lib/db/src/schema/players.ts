@@ -78,6 +78,12 @@ export const playersTable = pgTable("players", {
   // appearance for another federation). Cleared manually by an operator after
   // review. Never cleared automatically.
   needsReview: boolean("needs_review").notNull().default(false),
+  // Manual club override — set by an admin when API data is lagging or wrong.
+  // When non-null, both the club-sync and fixture-sync paths skip API
+  // resolution and use this value for club_id instead. Preserved across
+  // syncs until an admin explicitly clears it.
+  clubOverrideId: integer("club_override_id").references(() => clubsTable.id),
+  clubOverrideSetAt: timestamp("club_override_set_at", { withTimezone: true }),
 });
 
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true });

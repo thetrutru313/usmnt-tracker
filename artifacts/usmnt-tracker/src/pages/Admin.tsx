@@ -619,6 +619,215 @@ function EligibilityConfigSection({ token }: { token: string }) {
   );
 }
 
+// ─── Club Override Section ────────────────────────────────────────────────────
+
+interface PlayerWithClub {
+  id: number;
+  name: string;
+  clubId: number | null;
+  clubName: string | null;
+  clubOverrideId: number | null;
+  clubOverrideName: string | null;
+  clubOverrideSetAt: string | null;
+}
+
+interface ClubOption {
+  id: number;
+  name: string;
+}
+
+function ClubOverrideSection({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = React.useState("");
+  const [editingPlayerId, setEditingPlayerId] = React.useState<number | null>(null);
+  const [selectedClubId, setSelectedClubId] = React.useState<string>("");
+
+  const { data: playersData, isLoading: playersLoading } = useQuery({
+    queryKey: ["admin-players-clubs"],
+    queryFn: async () => {
+      const res = await apiFetch("/admin/players", token) as { players: PlayerWithClub[] };
+      return res.players;
+    },
+    retry: false,
+  });
+
+  const { data: clubsData } = useQuery({
+    queryKey: ["admin-clubs-list"],
+    queryFn: async () => {
+      const res = await apiFetch("/admin/clubs", token) as { clubs: ClubOption[] };
+      return res.clubs;
+    },
+    retry: false,
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: async ({ playerId, clubId }: { playerId: number; clubId: number | null }) => {
+      await apiFetch(`/admin/players/${playerId}/club`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ clubId }),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-players-clubs"] });
+      setEditingPlayerId(null);
+      setSelectedClubId("");
+    },
+    onError: (err) => {
+      if (err instanceof SessionExpiredError) onUnauthorized();
+    },
+  });
+
+  const players = playersData ?? [];
+  const clubs = clubsData ?? [];
+
+  const overriddenPlayers = players.filter((p) => p.clubOverrideId != null);
+  const filteredPlayers = search.trim()
+    ? players.filter((p) =>
+        p.name.toLowerCase().includes(search.trim().toLowerCase()),
+      )
+    : players;
+
+  function startEdit(player: PlayerWithClub) {
+    setEditingPlayerId(player.id);
+    setSelectedClubId(player.clubOverrideId != null ? String(player.clubOverrideId) : "");
+  }
+
+  function cancelEdit() {
+    setEditingPlayerId(null);
+    setSelectedClubId("");
+  }
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight">Club Overrides</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Manually pin a player's club when API data is lagging (e.g. after a fresh transfer). The override is preserved across syncs until cleared.
+        </p>
+      </div>
+
+      {overriddenPlayers.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Active overrides</p>
+          {overriddenPlayers.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium">{p.name}</span>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="line-through">{p.clubName ?? "—"}</span>
+                <span className="text-amber-400">→ {p.clubOverrideName ?? "Unknown"}</span>
+                <button
+                  onClick={() => overrideMutation.mutate({ playerId: p.id, clubId: null })}
+                  disabled={overrideMutation.isPending}
+                  className="px-2 py-0.5 rounded bg-destructive/10 text-destructive text-xs hover:bg-destructive/20 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <input
+          type="text"
+          placeholder="Search player…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+        />
+      </div>
+
+      {playersLoading && (
+        <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
+      )}
+
+      {!playersLoading && filteredPlayers.length === 0 && (
+        <p className="text-sm text-muted-foreground py-4 text-center">No players match.</p>
+      )}
+
+      <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+        {filteredPlayers.map((player) => (
+          <div
+            key={player.id}
+            className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+              player.clubOverrideId != null
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-border bg-card"
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <span className="font-medium truncate block">{player.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {player.clubOverrideId != null ? (
+                  <>
+                    <span className="line-through">{player.clubName ?? "—"}</span>
+                    {" → "}
+                    <span className="text-amber-400 font-medium">{player.clubOverrideName ?? "?"}</span>
+                    {" (overridden)"}
+                  </>
+                ) : (
+                  player.clubName ?? "—"
+                )}
+              </span>
+            </div>
+
+            {editingPlayerId === player.id ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  value={selectedClubId}
+                  onChange={(e) => setSelectedClubId(e.target.value)}
+                  className="px-2 py-1 rounded border border-border bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 max-w-[180px]"
+                  autoFocus
+                >
+                  <option value="">— select club —</option>
+                  {clubs.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    const clubId = parseInt(selectedClubId, 10);
+                    if (!Number.isFinite(clubId)) return;
+                    overrideMutation.mutate({ playerId: player.id, clubId });
+                  }}
+                  disabled={!selectedClubId || overrideMutation.isPending}
+                  className="px-2.5 py-1 rounded bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                >
+                  Set
+                </button>
+                {player.clubOverrideId != null && (
+                  <button
+                    onClick={() => overrideMutation.mutate({ playerId: player.id, clubId: null })}
+                    disabled={overrideMutation.isPending}
+                    className="px-2.5 py-1 rounded bg-destructive/10 text-destructive text-xs font-semibold hover:bg-destructive/20 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={cancelEdit}
+                  className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground transition-colors"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => startEdit(player)}
+                className="shrink-0 p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+                title="Override club"
+              >
+                <Pencil size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main admin panel ─────────────────────────────────────────────────────────
 
 function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -835,6 +1044,9 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
 
         {/* Eligibility config */}
         <EligibilityConfigSection token={token} />
+
+        {/* Club overrides */}
+        <ClubOverrideSection token={token} onUnauthorized={handleUnauthorized} />
 
         {/* Transparency section */}
         <section className="space-y-4">

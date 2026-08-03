@@ -29,6 +29,13 @@
       "when": 1785350539627,
       "tag": "0003_players_eligibility_confidence",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785794112473,
+      "tag": "0008_player_club_override",
+      "breakpoints": true
     }
   ]
 }

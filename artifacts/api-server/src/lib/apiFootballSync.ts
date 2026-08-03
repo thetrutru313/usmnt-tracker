@@ -1117,6 +1117,7 @@ export async function syncApiFootballFixtures(
       clubId: playersTable.clubId,
       apiFootballPlayerId: playersTable.apiFootballPlayerId,
       squadLastCheckedAt: playersTable.squadLastCheckedAt,
+      clubOverrideId: playersTable.clubOverrideId,
     })
     .from(playersTable);
   const scopedPlayers = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
@@ -1132,6 +1133,21 @@ export async function syncApiFootballFixtures(
   let squadCacheHits = 0;
 
   for (const player of scopedPlayers) {
+    // ── Admin club override ──────────────────────────────────────────────────
+    // When an operator has manually pinned a club, skip API squad resolution
+    // entirely and use the pinned club for fixture tagging. This preserves
+    // the override across sync cycles until an admin explicitly clears it.
+    if (player.clubOverrideId != null) {
+      const effectiveClubId = player.clubOverrideId;
+      if (effectiveClubId !== player.clubId) {
+        await db.update(playersTable).set({ clubId: effectiveClubId }).where(eq(playersTable.id, player.id));
+      }
+      const list = clubPlayerMap.get(effectiveClubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(effectiveClubId, list);
+      continue;
+    }
+
     const apiId = player.apiFootballPlayerId;
 
     if (!apiId) {
@@ -1157,14 +1173,6 @@ export async function syncApiFootballFixtures(
     // Ask API-Football which squad this player is currently registered with.
     const current = await fetchPlayerCurrentTeam(apiId);
 
-    // Stamp the cache timestamp regardless of outcome — a null result (API
-    // error or international-window-only squad) is fine to cache: the stored
-    // club_id is still correct and we avoid repeated fallback calls every hour.
-    await db
-      .update(playersTable)
-      .set({ squadLastCheckedAt: new Date() })
-      .where(eq(playersTable.id, player.id));
-
     if (!current) {
       // Call failed or no squad data returned — fall back gracefully.
       failures++;
@@ -1187,6 +1195,15 @@ export async function syncApiFootballFixtures(
       clubPlayerMap.set(player.clubId, list);
       continue;
     }
+
+    // Stamp the cache only on a successful squad resolution — a null result
+    // (API error or international-window-only squad) must NOT be stamped so
+    // the next sync retries immediately rather than waiting 6 hours with stale
+    // club data locked in.
+    await db
+      .update(playersTable)
+      .set({ squadLastCheckedAt: new Date() })
+      .where(eq(playersTable.id, player.id));
 
     // Keep players.club_id current as a side-effect — no separate sync needed.
     if (club.id !== player.clubId) {
