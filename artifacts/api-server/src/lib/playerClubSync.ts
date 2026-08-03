@@ -1,7 +1,7 @@
 import { db, clubsTable, playersTable, transfersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
-import { afFetch } from "./apiFootballSync";
+import { afFetch, ensureClubForTeam } from "./apiFootballSync";
 
 interface AfSquadPlayer {
   id: number;
@@ -719,13 +719,28 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       const currentClub = clubsById.get(player.clubId);
       if (currentClub?.apiFootballTeamId === latest.teams.in.id) continue; // already up to date
 
-      const newClub = clubsByApiFootballId.get(latest.teams.in.id);
+      let newClub: { id: number; name: string } | undefined = clubsByApiFootballId.get(latest.teams.in.id);
       if (!newClub) {
-        logger.warn(
-          { player: player.name, newClubName: latest.teams.in.name },
-          "Player transferred to a club not tracked in our clubs table — keeping last known club",
+        if (latest.teams.in.id == null) {
+          logger.warn(
+            { player: player.name, newClubName: latest.teams.in.name },
+            "Player transfer has no destination team ID — skipping",
+          );
+          continue;
+        }
+        logger.info(
+          { player: player.name, newClubName: latest.teams.in.name, teamId: latest.teams.in.id },
+          "Player transferred to untracked club — auto-creating club row",
         );
-        continue;
+        try {
+          newClub = await ensureClubForTeam(latest.teams.in.id, latest.teams.in.name, latest.teams.in.logo);
+        } catch (clubErr) {
+          logger.warn(
+            { clubErr, player: player.name, newClubName: latest.teams.in.name },
+            "Failed to auto-create destination club — skipping transfer",
+          );
+          continue;
+        }
       }
 
       const isLoan = (latest.type ?? "").toLowerCase().includes("loan");

@@ -100,6 +100,10 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("../apiFootballSync.js", () => ({
   afFetch: mockAfFetch,
+  // ensureClubForTeam is imported by playerClubSync but never called in these
+  // tests (the destination club is always pre-seeded in clubsByApiFootballId).
+  // We still need to export a stub so the import doesn't resolve to undefined.
+  ensureClubForTeam: vi.fn(),
 }));
 
 vi.mock("../logger.js", () => ({

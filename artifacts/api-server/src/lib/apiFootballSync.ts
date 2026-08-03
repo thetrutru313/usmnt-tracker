@@ -1007,7 +1007,7 @@ async function fetchPlayerCurrentTeam(
  *      so the club-level league string is not critical).
  * Handles concurrent sync runs via `onConflictDoNothing` + re-fetch on race.
  */
-async function ensureClubForTeam(
+export async function ensureClubForTeam(
   teamId: number,
   teamName: string,
   logoUrl: string | null,
