@@ -749,11 +749,6 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       // club — if the DB club was wrong at sync time, currentClub?.name would
       // record the transfer direction backwards.
       const fromClubName = latest.teams.out.name || currentClub?.name || "Unknown";
-      // NOTE: we intentionally do NOT update players.club_id here. The fixture
-      // sync derives current club from /players/squads (authoritative squad
-      // membership) and is the single source of truth for club_id. The transfer
-      // history from /transfers lags real moves; writing it here would overwrite
-      // the fixture sync's correct assignment with stale data.
       const inserted = await db.insert(transfersTable).values({
         playerId: player.id,
         fromClub: fromClubName,
@@ -764,10 +759,29 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
         announcedAt: new Date(latest.date),
         summary: `${player.name} moved from ${fromClubName} to ${newClub.name} (synced from API-Football transfer history).`,
       }).onConflictDoNothing().returning({ id: transfersTable.id });
+      // Always update club_id to the destination club — whether the transfer
+      // row was newly inserted or already existed (conflict on player_id +
+      // announced_at). Both cases mean newClub is the latest confirmed
+      // destination, and updating here is safe. This also handles the edge
+      // case where a prior run inserted the row but crashed before reaching
+      // the update: the next run's onConflictDoNothing returns nothing, so
+      // without this unconditional write club_id would stay stale forever.
+      // The subsequent syncApiFootballFixtures call re-verifies via
+      // /players/squads and can overwrite club_id if API-Football later
+      // reports something different.
+      await db
+        .update(playersTable)
+        .set({ clubId: newClub.id })
+        .where(eq(playersTable.id, player.id));
+
       if (inserted.length > 0) {
         transfersInserted++;
         transferredPlayerIds.push(player.id);
-        logger.info({ player: player.name, from: fromClubName, to: newClub.name }, "Transfer record inserted from API-Football history (club_id owned by fixture sync)");
+        logger.info({ player: player.name, from: fromClubName, to: newClub.name, newClubId: newClub.id }, "Transfer record inserted — updated players.club_id to destination club immediately; squad sync will re-verify");
+      } else {
+        // Transfer row already existed — still ensure club_id is current in
+        // case a prior run failed after the insert but before the update.
+        logger.info({ player: player.name, to: newClub.name, newClubId: newClub.id }, "Transfer row already existed — ensured players.club_id matches destination club");
       }
     } catch (err) {
       failures++;
@@ -806,7 +820,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
     }
   }
 
-  logger.info({ playersChecked, transfersInserted, transfersWithNewClub: transferredPlayerIds.length, failures }, "API-Football player-club sync complete (club_id unchanged — owned by fixture sync)");
+  logger.info({ playersChecked, transfersInserted, transfersWithNewClub: transferredPlayerIds.length, failures }, "API-Football player-club sync complete (club_id set from confirmed transfer; re-verified by subsequent squad sync)");
 
   // Discovery pass — scan squads for US-eligible players not yet in the pool.
   // Runs after the main sync so all API IDs are up to date before we compare.

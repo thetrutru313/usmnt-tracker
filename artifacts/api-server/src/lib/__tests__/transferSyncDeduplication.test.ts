@@ -270,6 +270,29 @@ describe("transfer sync deduplication — sequential double-sync", () => {
     ).toHaveBeenCalledTimes(1);
   });
 
+  it("updates club_id even when the insert conflicts (prior-run-crash recovery)", async () => {
+    // Simulates a prior sync run that inserted the transfer row successfully
+    // but crashed before updating players.club_id. The next run hits
+    // onConflictDoNothing (returns []), but club_id must still be updated so
+    // the player profile doesn't stay stale indefinitely.
+    onConflictDoNothingMock.mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }); // conflict — no rows returned
+
+    mockDb.select
+      .mockReturnValueOnce(makeSelectResult([PLAYER]))             // player still at OLD_CLUB in DB
+      .mockReturnValueOnce(makeSelectResult([OLD_CLUB, NEW_CLUB]));
+
+    await syncPlayerClubs();
+
+    // club_id must have been set to NEW_CLUB.id even though the insert returned no rows.
+    const clubIdUpdates = capturedUpdateSets.filter(
+      (s) => (s as Record<string, unknown>).clubId === NEW_CLUB.id,
+    );
+    expect(
+      clubIdUpdates.length,
+      "players.club_id must be updated to the destination club even when the transfer row already exists (conflict)",
+    ).toBeGreaterThanOrEqual(1);
+  });
+
   it("skips the insert entirely when the player is already at the correct club", async () => {
     const ALREADY_AT_NEW_CLUB = { ...PLAYER, clubId: NEW_CLUB.id };
 
