@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, transfersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, ensureClubForTeam } from "./apiFootballSync";
 
@@ -668,7 +668,7 @@ async function checkNullPinnedPlayers(players: PlayerRow[], clubsById: Map<numbe
  * and the player's last known club is left in place rather than guessing at
  * league/country details we don't have.
  */
-export async function syncPlayerClubs(): Promise<{ playersChecked: number; transfersInserted: number; failures: number }> {
+export async function syncPlayerClubs(): Promise<{ playersChecked: number; transfersInserted: number; transfersWithNewClub: number; failures: number }> {
   const players: PlayerRow[] = await db
     .select({
       id: playersTable.id,
@@ -690,6 +690,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
   let playersChecked = 0;
   let transfersInserted = 0;
   let failures = 0;
+  const transferredPlayerIds: number[] = [];
 
   for (const player of players) {
     const apiFootballPlayerId = player.apiFootballPlayerId;
@@ -753,7 +754,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       // membership) and is the single source of truth for club_id. The transfer
       // history from /transfers lags real moves; writing it here would overwrite
       // the fixture sync's correct assignment with stale data.
-      await db.insert(transfersTable).values({
+      const inserted = await db.insert(transfersTable).values({
         playerId: player.id,
         fromClub: fromClubName,
         toClub: newClub.name,
@@ -762,16 +763,50 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
         status: "confirmed",
         announcedAt: new Date(latest.date),
         summary: `${player.name} moved from ${fromClubName} to ${newClub.name} (synced from API-Football transfer history).`,
-      }).onConflictDoNothing();
-      transfersInserted++;
-      logger.info({ player: player.name, from: fromClubName, to: newClub.name }, "Transfer record inserted from API-Football history (club_id owned by fixture sync)");
+      }).onConflictDoNothing().returning({ id: transfersTable.id });
+      if (inserted.length > 0) {
+        transfersInserted++;
+        transferredPlayerIds.push(player.id);
+        logger.info({ player: player.name, from: fromClubName, to: newClub.name }, "Transfer record inserted from API-Football history (club_id owned by fixture sync)");
+      }
     } catch (err) {
       failures++;
       logger.warn({ err, player: player.name }, "API-Football transfers fetch failed — keeping last known club");
     }
   }
 
-  logger.info({ playersChecked, transfersInserted, failures }, "API-Football player-club sync complete (club_id unchanged — owned by fixture sync)");
+  // After the main loop: if any genuine new transfers were detected, force
+  // those players' squad cache stale so the next fixture sync re-checks their
+  // current team from the API, then immediately fire a scoped fixture sync for
+  // them so new-club fixtures appear without waiting for the hourly run.
+  if (transferredPlayerIds.length > 0) {
+    await db
+      .update(playersTable)
+      .set({ squadLastCheckedAt: null })
+      .where(inArray(playersTable.id, transferredPlayerIds));
+    logger.info(
+      { playerIds: transferredPlayerIds },
+      "Nulled squadLastCheckedAt for transferred players — triggering scoped fixture sync",
+    );
+
+    try {
+      const { syncApiFootballFixtures } = await import("./apiFootballSync");
+      await syncApiFootballFixtures(transferredPlayerIds);
+      logger.info(
+        { playerIds: transferredPlayerIds },
+        "Scoped fixture sync complete for transferred players",
+      );
+    } catch (err) {
+      // Transfer records are already committed; cache bust ensures the next
+      // hourly run retries the fixture fetch automatically.
+      logger.warn(
+        { err, playerIds: transferredPlayerIds },
+        "Scoped fixture sync for transferred players failed — will retry on next hourly run",
+      );
+    }
+  }
+
+  logger.info({ playersChecked, transfersInserted, transfersWithNewClub: transferredPlayerIds.length, failures }, "API-Football player-club sync complete (club_id unchanged — owned by fixture sync)");
 
   // Discovery pass — scan squads for US-eligible players not yet in the pool.
   // Runs after the main sync so all API IDs are up to date before we compare.
@@ -782,7 +817,7 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
     logger.warn({ err }, "Player discovery pass failed — main sync unaffected");
   }
 
-  return { playersChecked, transfersInserted, failures };
+  return { playersChecked, transfersInserted, transfersWithNewClub: transferredPlayerIds.length, failures };
 }
 
 let intervalHandle: NodeJS.Timeout | null = null;

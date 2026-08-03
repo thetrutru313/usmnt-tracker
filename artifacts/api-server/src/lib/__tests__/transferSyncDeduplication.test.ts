@@ -43,7 +43,7 @@ const {
   const capturedInsertTables: unknown[] = [];
   const capturedInsertValues: unknown[] = [];
   const capturedUpdateSets: unknown[] = [];
-  const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
+  const onConflictDoNothingMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 
   const mockDb = {
     select: vi.fn(),
@@ -91,6 +91,7 @@ vi.mock("@workspace/db", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: (_col: unknown, val: unknown) => ({ _eq: [_col, val] }),
+  inArray: (_col: unknown, vals: unknown) => ({ _inArray: [_col, vals] }),
   // sql is imported but only used in the schema file, not in playerClubSync directly
   sql: Object.assign(
     (..._args: unknown[]) => ({ _sql: true }),
@@ -104,6 +105,9 @@ vi.mock("../apiFootballSync.js", () => ({
   // tests (the destination club is always pre-seeded in clubsByApiFootballId).
   // We still need to export a stub so the import doesn't resolve to undefined.
   ensureClubForTeam: vi.fn(),
+  // syncApiFootballFixtures is dynamically imported after a detected transfer;
+  // stub it out so the scoped fixture sync doesn't make real API calls.
+  syncApiFootballFixtures: vi.fn().mockResolvedValue({ clubsSynced: 0, fixturesUpserted: 0, fixturesReconciled: 0, fixturesRemoved: 0, failures: 0 }),
 }));
 
 vi.mock("../logger.js", () => ({
@@ -180,7 +184,7 @@ describe("transfer sync deduplication — sequential double-sync", () => {
     capturedInsertTables.length = 0;
     capturedInsertValues.length = 0;
     capturedUpdateSets.length = 0;
-    onConflictDoNothingMock.mockResolvedValue(undefined);
+    onConflictDoNothingMock.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 
     // afFetch always returns the same transfer response for all URLs.
     // - ensurePlayerApiFootballIds: skips squad/search calls because PLAYER

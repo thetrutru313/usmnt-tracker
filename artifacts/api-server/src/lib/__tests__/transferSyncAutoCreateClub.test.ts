@@ -33,7 +33,7 @@ const {
 
   const capturedInsertTables: unknown[] = [];
   const capturedInsertValues: unknown[] = [];
-  const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
+  const onConflictDoNothingMock = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 
   const mockDb = {
     select: vi.fn(),
@@ -83,6 +83,7 @@ vi.mock("@workspace/db", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: (_col: unknown, val: unknown) => ({ _eq: [_col, val] }),
+  inArray: (_col: unknown, vals: unknown) => ({ _inArray: [_col, vals] }),
   sql: Object.assign(
     (..._args: unknown[]) => ({ _sql: true }),
     { raw: (..._args: unknown[]) => ({ _sql: true }) },
@@ -92,6 +93,9 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("../apiFootballSync.js", () => ({
   afFetch: mockAfFetch,
   ensureClubForTeam: mockEnsureClubForTeam,
+  // syncApiFootballFixtures is dynamically imported after a detected transfer;
+  // stub it out so the scoped fixture sync doesn't make real API calls.
+  syncApiFootballFixtures: vi.fn().mockResolvedValue({ clubsSynced: 0, fixturesUpserted: 0, fixturesReconciled: 0, fixturesRemoved: 0, failures: 0 }),
 }));
 
 vi.mock("../logger.js", () => ({
@@ -180,7 +184,7 @@ describe("transfer sync — auto-create missing destination club", () => {
     vi.clearAllMocks();
     capturedInsertTables.length = 0;
     capturedInsertValues.length = 0;
-    onConflictDoNothingMock.mockResolvedValue(undefined);
+    onConflictDoNothingMock.mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 1 }]) });
 
     mockAfFetch.mockResolvedValue(UNTRACKED_TRANSFER_RESPONSE);
 
