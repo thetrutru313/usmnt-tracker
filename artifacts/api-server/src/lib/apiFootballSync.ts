@@ -1,5 +1,5 @@
-import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray, isNotNull, sql } from "drizzle-orm";
+import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, transfersTable } from "@workspace/db";
+import { eq, and, inArray, isNotNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
 import {
   type AfFixture,
@@ -1205,8 +1205,74 @@ export async function syncApiFootballFixtures(
       .set({ squadLastCheckedAt: new Date() })
       .where(eq(playersTable.id, player.id));
 
-    // Keep players.club_id current as a side-effect — no separate sync needed.
+    // ── Transfer-precedence guard ─────────────────────────────────────────────
+    // Squad registration lags transfers by days or weeks. If the player's most
+    // recent confirmed transfer points to a different club than what
+    // /players/squads just returned, the squad data is stale — keep the
+    // transfer-confirmed club_id and skip the backward overwrite.
+    // squadLastCheckedAt is still stamped above so we don't hammer the API
+    // on every hourly run.
+    //
+    // Query order matters: select the newest confirmed transfer FIRST (limit 1,
+    // order by announced_at desc), then check whether its destination disagrees
+    // with the squad result. Filtering on the destination before sorting would
+    // let an older conflicting transfer shadow a newer one that agrees with squad.
+    //
+    // Club resolution: we look up the destination club by player.clubId (the
+    // FK-authoritative id set by the transfer sync's ensureClubForTeam call)
+    // rather than by the toClub name string.  Name-based lookup is unreliable
+    // because club names are not unique — a legacy or duplicate row can share
+    // the same name.  We then verify the stored name matches the transfer record
+    // as a consistency guard, and require a non-null apiFootballTeamId so an
+    // unresolved club row cannot accidentally block a legitimate squad update.
     if (club.id !== player.clubId) {
+      // Step 1: get the most recent confirmed transfer for this player.
+      const [latestTransfer] = await db
+        .select({ toClub: transfersTable.toClub })
+        .from(transfersTable)
+        .where(and(eq(transfersTable.playerId, player.id), eq(transfersTable.status, "confirmed")))
+        .orderBy(desc(transfersTable.announcedAt))
+        .limit(1);
+
+      // Step 2: look up the player's current club by its FK-guaranteed id, then
+      // verify it is the confirmed transfer destination (name matches) and that
+      // it has a resolved API team id that differs from what squad returned.
+      if (latestTransfer) {
+        const [confirmedDestClub] = await db
+          .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
+          .from(clubsTable)
+          .where(and(eq(clubsTable.id, player.clubId), isNotNull(clubsTable.apiFootballTeamId)))
+          .limit(1);
+
+        if (
+          confirmedDestClub &&
+          confirmedDestClub.name === latestTransfer.toClub &&
+          confirmedDestClub.apiFootballTeamId !== current.teamId
+        ) {
+          // The player's current club (FK-resolved, name-verified against the
+          // latest confirmed transfer) disagrees with the squad endpoint — squad
+          // registration lags the actual move. Keep the transfer-confirmed club
+          // and route this player's fixtures to it.
+          logger.warn(
+            {
+              playerId: player.id,
+              squadClub: current.teamName,
+              squadTeamId: current.teamId,
+              transferDestination: confirmedDestClub.name,
+              transferDestClubId: confirmedDestClub.id,
+            },
+            "Squad data disagrees with confirmed transfer — keeping transfer destination",
+          );
+          preResolvedTeamId.set(confirmedDestClub.id, confirmedDestClub.apiFootballTeamId!);
+          const list = clubPlayerMap.get(confirmedDestClub.id) ?? [];
+          list.push(player.id);
+          clubPlayerMap.set(confirmedDestClub.id, list);
+          continue;
+        }
+      }
+
+      // No conflicting confirmed transfer (or the latest transfer agrees with
+      // squad data) — squad wins, update club_id.
       await db.update(playersTable).set({ clubId: club.id }).where(eq(playersTable.id, player.id));
       logger.info(
         { playerId: player.id, fromClubId: player.clubId, toClubId: club.id, toClub: club.name },

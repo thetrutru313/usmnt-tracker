@@ -118,7 +118,10 @@ import { syncPlayerClubs } from "../playerClubSync.js";
 // ---------------------------------------------------------------------------
 
 const PAST_ISO   = "2024-06-01";
-const FUTURE_ISO = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+// Transfers up to 90 days in the future are now accepted (confirmed summer
+// moves). Use 91 days to represent a transfer that is still too speculative
+// to act on and should be excluded by the filter.
+const FUTURE_ISO = new Date(Date.now() + 91 * 24 * 60 * 60 * 1000)
   .toISOString()
   .slice(0, 10);
 

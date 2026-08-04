@@ -22,7 +22,7 @@
  * players → clubs.
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import {
   db,
   clubsTable,
@@ -30,7 +30,7 @@ import {
   fixturesTable,
   fixturePlayersTable,
 } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { runNationalTeamRepairPass } from "../apiFootballSync.js";
 
 // ─── Cleanup state ────────────────────────────────────────────────────────────
@@ -39,11 +39,41 @@ const insertedClubIds: number[] = [];
 const insertedPlayerIds: number[] = [];
 const insertedFixtureIds: number[] = [];
 
+beforeAll(async () => {
+  // Remove any stale rows left by a previously crashed run.  The test uses
+  // "__NTRP_" / "__ntrp-" prefixes for all inserted rows; we delete them in
+  // FK-safe order so fresh inserts can proceed cleanly.
+  const stalePlayers = await db
+    .select({ id: playersTable.id })
+    .from(playersTable)
+    .where(like(playersTable.slug, "__ntrp-%"));
+  if (stalePlayers.length > 0) {
+    const ids = stalePlayers.map((r) => r.id);
+    await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.playerId, ids)).catch(() => {});
+    await db.delete(playersTable).where(inArray(playersTable.id, ids)).catch(() => {});
+  }
+  await db
+    .delete(clubsTable)
+    .where(like(clubsTable.name, "__NTRP_%"))
+    .catch(() => {});
+});
+
 afterAll(async () => {
+  // Belt-and-suspenders: delete fixture_players by BOTH playerId and fixtureId
+  // so that rows created by runNationalTeamRepairPass for fixtures outside
+  // insertedFixtureIds (e.g. pre-existing NT fixtures in the shared DB) are
+  // also removed before we try to delete the player and fixture rows themselves.
+  if (insertedPlayerIds.length > 0) {
+    await db
+      .delete(fixturePlayersTable)
+      .where(inArray(fixturePlayersTable.playerId, insertedPlayerIds))
+      .catch(() => {});
+  }
   if (insertedFixtureIds.length > 0) {
     await db
       .delete(fixturePlayersTable)
-      .where(inArray(fixturePlayersTable.fixtureId, insertedFixtureIds));
+      .where(inArray(fixturePlayersTable.fixtureId, insertedFixtureIds))
+      .catch(() => {});
     await db
       .delete(fixturesTable)
       .where(inArray(fixturesTable.id, insertedFixtureIds));

@@ -719,10 +719,21 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       // often logs a freshly announced move before the official date is confirmed,
       // so a null-date row should win over an older dated row (e.g. the stale
       // Vancouver transfer) rather than being silently dropped.
-      // Future-dated rows (date > now) are excluded to avoid acting on transfers
-      // that were announced early but haven't taken effect yet.
+      // Future-dated rows up to 90 days ahead are included — summer moves are
+      // commonly entered with a future effective date but represent a confirmed
+      // signed deal. Transfers beyond 90 days are excluded as too speculative.
+      const futureLimit = now + 90 * 24 * 60 * 60 * 1000;
       const latest = [...transfers]
-        .filter((t) => !t.date || new Date(t.date).getTime() <= now)
+        .filter((t) => {
+          if (!t.date) return true; // null date = just announced, always include
+          const dateMs = new Date(t.date).getTime();
+          if (dateMs <= futureLimit) return true;
+          logger.warn(
+            { player: player.name, transferDate: t.date },
+            "Transfer date is more than 90 days in the future — skipping",
+          );
+          return false;
+        })
         .sort((a, b) => {
           // Null dates sort to the front (treated as the most recent).
           if (!a.date && !b.date) return 0;
@@ -809,7 +820,16 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       } else {
         // Transfer row already existed — still ensure club_id is current in
         // case a prior run failed after the insert but before the update.
-        logger.info({ player: player.name, to: newClub.name, newClubId: newClub.id }, "Transfer row already existed — ensured players.club_id matches destination club");
+        // If the club_id actually changed (i.e. a prior run wrote the transfer
+        // row but crashed before the club_id update), bust the squad cache so
+        // the next fixture sync re-verifies from the API instead of serving a
+        // stale cache hit that locks the old club back in.
+        if (player.clubId !== newClub.id) {
+          transferredPlayerIds.push(player.id);
+          logger.info({ player: player.name, from: player.clubId, to: newClub.name, newClubId: newClub.id }, "Transfer row already existed but club_id was stale — updated club_id and busting squad cache");
+        } else {
+          logger.info({ player: player.name, to: newClub.name, newClubId: newClub.id }, "Transfer row already existed — ensured players.club_id matches destination club");
+        }
       }
     } catch (err) {
       failures++;
