@@ -723,8 +723,30 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
       // commonly entered with a future effective date but represent a confirmed
       // signed deal. Transfers beyond 90 days are excluded as too speculative.
       const futureLimit = now + 90 * 24 * 60 * 60 * 1000;
+      // Case-insensitive substrings that identify exhibition / event squads
+      // (e.g. MLS All-Star Game). These are not real clubs and must never
+      // overwrite a player's current club assignment.
+      const EXHIBITION_PATTERNS = ["all-star", "all star", "allstar"];
+      const isExhibitionTeam = (name: string | null | undefined) =>
+        !!name && EXHIBITION_PATTERNS.some((p) => name.toLowerCase().includes(p));
       const latest = [...transfers]
         .filter((t) => {
+          // Exhibition/All-Star event team check runs first, regardless of date,
+          // so that null-date (freshly announced) All-Star entries are also blocked.
+          if (isExhibitionTeam(t.teams.in.name)) {
+            logger.warn(
+              { player: player.name, teamName: t.teams.in.name },
+              "Transfer destination is an exhibition/All-Star team — skipping",
+            );
+            return false;
+          }
+          if (isExhibitionTeam(t.teams.out.name)) {
+            logger.warn(
+              { player: player.name, teamName: t.teams.out.name },
+              "Transfer origin is an exhibition/All-Star team — skipping",
+            );
+            return false;
+          }
           if (!t.date) return true; // null date = just announced, always include
           const dateMs = new Date(t.date).getTime();
           if (dateMs <= futureLimit) return true;
@@ -758,6 +780,15 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
           logger.warn(
             { player: player.name, newClubName: latest.teams.in.name },
             "Player transfer has no destination team ID — skipping",
+          );
+          continue;
+        }
+        // Second guard: if the destination club name matches an exhibition
+        // pattern and it isn't already tracked, do NOT auto-create a row for it.
+        if (isExhibitionTeam(latest.teams.in.name)) {
+          logger.warn(
+            { player: player.name, newClubName: latest.teams.in.name },
+            "Transfer destination is an exhibition/All-Star team (untracked) — skipping auto-create",
           );
           continue;
         }

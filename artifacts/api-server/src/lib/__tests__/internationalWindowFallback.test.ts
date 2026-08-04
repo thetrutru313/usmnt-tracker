@@ -29,7 +29,7 @@
  * ample headroom.
  */
 
-import { vi, describe, it, expect, afterAll, afterEach } from "vitest";
+import { vi, describe, it, expect, afterAll, afterEach, beforeAll } from "vitest";
 import {
   db,
   clubsTable,
@@ -224,6 +224,22 @@ function mockFetch(url: string | URL | Request): Promise<Response> {
 
 const insertedClubIds: number[] = [];
 const insertedPlayerIds: number[] = [];
+
+beforeAll(async () => {
+  // Guard against stale rows left by a previously crashed run.
+  // Delete in FK order: fixture_players → fixtures → players → clubs.
+  const staleFixture = await db
+    .select({ id: fixturesTable.id })
+    .from(fixturesTable)
+    .where(eq(fixturesTable.apiFootballFixtureId, FAKE_FIXTURE_API_ID))
+    .then((rows) => rows[0]);
+  if (staleFixture) {
+    await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, staleFixture.id)).catch(() => {});
+    await db.delete(fixturesTable).where(eq(fixturesTable.id, staleFixture.id)).catch(() => {});
+  }
+  await db.delete(playersTable).where(eq(playersTable.slug, "__iwf-test-player__")).catch(() => {});
+  await db.delete(clubsTable).where(eq(clubsTable.apiFootballTeamId, FAKE_CLUB_TEAM_ID)).catch(() => {});
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
