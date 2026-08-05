@@ -653,6 +653,9 @@ components:
         competition: { type: string }
         kickoff: { type: string, format: date-time }
         venue: { type: string }
+        # City/state display string, e.g. "Orlando, FL". Null for club fixtures
+        # and for NT fixtures where the venue city is not yet announced.
+        city: { type: ["string", "null"] }
         homeTeam: { type: string }
         awayTeam: { type: string }
         homeLogoUrl: { type: ["string", "null"] }
@@ -832,6 +835,7 @@ components:
         - sortOrder
         - createdAt
         - updatedAt
+        - fixtures
       properties:
         id: { type: integer }
         slug: { type: string }
@@ -847,6 +851,12 @@ components:
         sortOrder: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        # NT fixtures whose kickoff falls within this event's date window.
+        # Empty array when the event has no date window or no matching fixtures.
+        fixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
 
     ScheduleEventsResult:
       type: object
@@ -870,6 +880,7 @@ components:
         - dateLabel
         - description
         - sortOrder
+        - fixtures
       properties:
         id: { type: integer }
         slug: { type: string }
@@ -883,6 +894,12 @@ components:
         dateLabel: { type: string }
         description: { type: string }
         sortOrder: { type: integer }
+        # NT fixtures whose kickoff falls within this event's date window.
+        # Empty array when the event has no date window or no matching fixtures.
+        fixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
 
     DashboardSummary:
       type: object

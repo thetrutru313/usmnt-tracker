@@ -1610,7 +1610,11 @@ export async function purgePhantomNtFixtures(
   let failures = 0;
 
   for (const row of usaRows) {
-    if (row.apiFootballFixtureId !== null) continue; // already bound — not a phantom
+    // Skip rows that already have an api_football_fixture_id (positive = bound to
+    // a confirmed API-Football fixture; negative = sentinel for an officially
+    // announced future match seeded before the feed publishes it). Only rows with
+    // a null ID are truly speculative and eligible for the phantom check.
+    if (row.apiFootballFixtureId !== null) continue;
     const kickoffMs = row.kickoff.getTime();
     if (kickoffMs <= nowMs) continue; // past fixture — leave historical rows alone
     if (kickoffMs > nowMs + NINETY_DAYS_MS) continue; // too far out — may not be in API-Football yet
@@ -1712,15 +1716,21 @@ export async function syncNationalTeamFixtures(): Promise<{
     try {
       let afMatch: AfFixture | undefined;
 
-      if (row.apiFootballFixtureId !== null) {
-        // Already bound — look up directly, no date scan needed.
-        afMatch = afByFixtureId.get(row.apiFootballFixtureId);
+      // Treat rows with a negative api_football_fixture_id as unbound —
+      // negative IDs are sentinel values used for officially-announced fixtures
+      // seeded before the feed publishes them. Once the real positive ID is
+      // found via date-based matching it replaces the sentinel.
+      const isBound = row.apiFootballFixtureId !== null && row.apiFootballFixtureId > 0;
+
+      if (isBound) {
+        // Already bound to a real API-Football ID — look up directly.
+        afMatch = afByFixtureId.get(row.apiFootballFixtureId!);
       } else {
-        // Unbound — match by kickoff within ±1 day. Use a generous window
-        // because API-Football stores UTC times and seeded kickoffs may have
-        // been entered in local time; ±1 day covers any plausible timezone
-        // difference while remaining unambiguous for USMNT fixtures (they
-        // rarely play more than once in a 48-hour span).
+        // Unbound (null or negative sentinel) — match by kickoff within ±1 day.
+        // Use a generous window because API-Football stores UTC times and seeded
+        // kickoffs may have been entered in local time; ±1 day covers any
+        // plausible timezone difference while remaining unambiguous for USMNT
+        // fixtures (they rarely play more than once in a 48-hour span).
         const kickoffMs = row.kickoff.getTime();
         afMatch = afFixtures.find((af) => {
           const afMs = new Date(af.fixture.date).getTime();
@@ -1733,7 +1743,7 @@ export async function syncNationalTeamFixtures(): Promise<{
       const newStatus = mapStatus(afMatch.fixture.status.short);
       const newHomeScore = afMatch.goals.home ?? null;
       const newAwayScore = afMatch.goals.away ?? null;
-      const needsIdBind = row.apiFootballFixtureId === null;
+      const needsIdBind = !isBound;
 
       const statusChanged = row.status !== newStatus;
       const scoresChanged = row.homeScore !== newHomeScore || row.awayScore !== newAwayScore;

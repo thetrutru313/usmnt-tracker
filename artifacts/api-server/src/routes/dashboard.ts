@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, avg, desc, eq, gte, inArray, isNotNull, lt, notIlike, notInArray, or } from "drizzle-orm";
+import { and, asc, avg, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, notIlike, notInArray, or, sql } from "drizzle-orm";
 import {
   fixturesTable,
   matchLogsTable,
@@ -93,10 +93,46 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .orderBy(desc(playerStatsTable.avgRating))
       .limit(50),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(4),
+    // Select the event whose window is either currently active or starts in the
+    // future. Crucially, the effective end of a windowed event is extended by
+    // 30 hours beyond endDate midnight UTC — exactly matching the fixture-
+    // attachment window — so a final match that kicks off in ET (and therefore
+    // has a UTC date of the next calendar day) does not cause the event to be
+    // dropped prematurely.
+    //
+    // Example: Sept 26–29 window. Chile kicks off at Sept 30 00:00 UTC (8 PM
+    // ET Sept 29). Without the +30 h extension, todayStr = "2026-09-30" would
+    // make endDate ("2026-09-29") fail a >= check and the October event would be
+    // shown instead. With the extension, the effective close is Sept 30 06:00
+    // UTC, so the September event stays selected until the match finishes.
+    //
+    // Rules (all NULL-safe):
+    //  - Has endDate   → keep while (endDate::date + 30 h) > NOW()
+    //  - No endDate, has startDate → keep while startDate >= todayStr
+    //  - No dates at all → always include (undated / TBD events)
     db
       .select()
       .from(scheduleEventsTable)
-      .where(gte(scheduleEventsTable.startDate, todayStr))
+      .where(
+        or(
+          // Has endDate: active until 30 h after endDate midnight UTC.
+          and(
+            isNotNull(scheduleEventsTable.endDate),
+            sql`(${scheduleEventsTable.endDate}::date + interval '30 hours') > NOW()`,
+          ),
+          // No endDate but has startDate: keep while the start date is upcoming.
+          and(
+            isNull(scheduleEventsTable.endDate),
+            isNotNull(scheduleEventsTable.startDate),
+            gte(scheduleEventsTable.startDate, todayStr),
+          ),
+          // No dates at all: undated / TBD events always appear.
+          and(
+            isNull(scheduleEventsTable.endDate),
+            isNull(scheduleEventsTable.startDate),
+          ),
+        ),
+      )
       .orderBy(asc(scheduleEventsTable.sortOrder), asc(scheduleEventsTable.startDate))
       .limit(1),
   ]);
@@ -151,6 +187,29 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     })
     .slice(0, 6);
 
+  // If the next schedule event has a defined date window, fetch any NT fixtures
+  // that fall within it so the frontend can render a per-match layout.
+  const nextEvent = nextScheduleEventRows[0];
+  let nextEventFixtures: (typeof fixturesTable.$inferSelect)[] = [];
+  if (nextEvent?.startDate != null && nextEvent?.endDate != null) {
+    const startTs = new Date(nextEvent.startDate + "T00:00:00Z");
+    // Extend by 30 h to cover late-ET matches (e.g. 10 PM ET = 02:00 UTC next day).
+    const endExclusive = new Date(
+      new Date(nextEvent.endDate + "T00:00:00Z").getTime() + 30 * 60 * 60 * 1000,
+    );
+    nextEventFixtures = await db
+      .select()
+      .from(fixturesTable)
+      .where(
+        and(
+          eq(fixturesTable.isNationalTeam, true),
+          gte(fixturesTable.kickoff, startTs),
+          lt(fixturesTable.kickoff, endExclusive),
+        ),
+      )
+      .orderBy(asc(fixturesTable.kickoff));
+  }
+
   const payload = {
     todaysGames,
     upcomingGames,
@@ -160,7 +219,12 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     topPerformers: withPoolTier(overlayBadge(topPerformersRaw)),
     trending: withPoolTier(overlayBadge(trendingFiltered)),
     recentlyReturned,
-    nextScheduleEvent: nextScheduleEventRows[0],
+    nextScheduleEvent: nextEvent
+      ? {
+          ...nextEvent,
+          fixtures: nextEventFixtures.map((f) => ({ ...f, featuredPlayers: [] })),
+        }
+      : undefined,
   };
 
   res.json(GetDashboardResponse.parse(payload));

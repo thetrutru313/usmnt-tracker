@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Fixture } from './fixture';
 import type { ScheduleEventKind } from './scheduleEventKind';
 import type { ScheduleEventStatus } from './scheduleEventStatus';
 
@@ -21,4 +22,5 @@ export interface NextScheduleEvent {
   dateLabel: string;
   description: string;
   sortOrder: number;
+  fixtures: Fixture[];
 }

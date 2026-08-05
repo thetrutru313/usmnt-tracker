@@ -25,6 +25,9 @@ export const fixturesTable = pgTable("fixtures", {
   tvNetwork: text("tv_network"),
   streamingService: text("streaming_service"),
   broadcastLink: text("broadcast_link"),
+  // City/state display string for venue location, e.g. "Orlando, FL".
+  // Populated for seeded NT fixtures; null for club fixtures synced from API-Football.
+  city: text("city"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -199,6 +199,8 @@ export interface Fixture {
   competition: string;
   kickoff: string;
   venue: string;
+  /** @nullable */
+  city?: string | null;
   homeTeam: string;
   awayTeam: string;
   /** @nullable */
@@ -414,6 +416,7 @@ export interface ScheduleEvent {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  fixtures: Fixture[];
 }
 
 export interface ScheduleEventsResult {
@@ -433,6 +436,7 @@ export interface NextScheduleEvent {
   dateLabel: string;
   description: string;
   sortOrder: number;
+  fixtures: Fixture[];
 }
 
 export interface DashboardSummary {

@@ -220,6 +220,7 @@ export const GetPlayerResponse = zod.object({
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
   "venue": zod.string(),
+  "city": zod.string().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "homeLogoUrl": zod.string().nullable(),
@@ -277,6 +278,7 @@ export const ListFixturesResponseItem = zod.object({
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
   "venue": zod.string(),
+  "city": zod.string().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "homeLogoUrl": zod.string().nullable(),
@@ -314,6 +316,7 @@ export const GetFixtureResponse = zod.object({
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
   "venue": zod.string(),
+  "city": zod.string().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "homeLogoUrl": zod.string().nullable(),
@@ -454,6 +457,7 @@ export const GetDashboardResponse = zod.object({
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
   "venue": zod.string(),
+  "city": zod.string().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "homeLogoUrl": zod.string().nullable(),
@@ -481,6 +485,7 @@ export const GetDashboardResponse = zod.object({
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
   "venue": zod.string(),
+  "city": zod.string().nullish(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
   "homeLogoUrl": zod.string().nullable(),
@@ -626,7 +631,35 @@ export const GetDashboardResponse = zod.object({
   "endDate": zod.string().nullable(),
   "dateLabel": zod.string(),
   "description": zod.string(),
-  "sortOrder": zod.number()
+  "sortOrder": zod.number(),
+  "fixtures": zod.array(zod.object({
+  "id": zod.number(),
+  "isNationalTeam": zod.boolean(),
+  "competition": zod.string(),
+  "kickoff": zod.coerce.date(),
+  "venue": zod.string(),
+  "city": zod.string().nullish(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeLogoUrl": zod.string().nullable(),
+  "awayLogoUrl": zod.string().nullable(),
+  "homeScore": zod.number().nullable(),
+  "awayScore": zod.number().nullable(),
+  "status": zod.enum(['scheduled', 'live', 'finished', 'postponed']),
+  "tvNetwork": zod.string().nullable(),
+  "streamingService": zod.string().nullable(),
+  "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
+  "featuredPlayers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "position": zod.string(),
+  "photoUrl": zod.string().nullable()
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
+}))
 }).optional()
 })
 
@@ -787,7 +820,35 @@ export const ListScheduleEventsResponse = zod.object({
   "description": zod.string(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "fixtures": zod.array(zod.object({
+  "id": zod.number(),
+  "isNationalTeam": zod.boolean(),
+  "competition": zod.string(),
+  "kickoff": zod.coerce.date(),
+  "venue": zod.string(),
+  "city": zod.string().nullish(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeLogoUrl": zod.string().nullable(),
+  "awayLogoUrl": zod.string().nullable(),
+  "homeScore": zod.number().nullable(),
+  "awayScore": zod.number().nullable(),
+  "status": zod.enum(['scheduled', 'live', 'finished', 'postponed']),
+  "tvNetwork": zod.string().nullable(),
+  "streamingService": zod.string().nullable(),
+  "broadcastLink": zod.string().nullish(),
+  "elapsedMinute": zod.number().nullish(),
+  "featuredPlayers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "position": zod.string(),
+  "photoUrl": zod.string().nullable()
+}).and(zod.object({
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
+})))
+}))
 }))
 })
 

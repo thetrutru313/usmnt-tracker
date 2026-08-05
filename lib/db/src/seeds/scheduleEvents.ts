@@ -11,9 +11,9 @@ const events = [
     name: "September Friendlies",
     kind: "friendly",
     status: "confirmed",
-    startDate: "2026-09-04",
-    endDate: "2026-09-09",
-    dateLabel: "Sept 4–9, 2026",
+    startDate: "2026-09-26",
+    endDate: "2026-09-29",
+    dateLabel: "Sept 26 & 29, 2026",
     description:
       "The first international window of the post-World Cup cycle. Pochettino uses this window to begin auditions for the next generation as Nations League group stage play begins for CONCACAF's lower-ranked nations.",
     sortOrder: 10,
@@ -23,9 +23,9 @@ const events = [
     name: "October Friendlies",
     kind: "friendly",
     status: "confirmed",
-    startDate: "2026-10-09",
-    endDate: "2026-10-14",
-    dateLabel: "Oct 9–14, 2026",
+    startDate: "2026-10-03",
+    endDate: "2026-10-06",
+    dateLabel: "Oct 3 & 6, 2026",
     description:
       "Second window of the fall friendly run. With the Nations League group stage still ongoing for smaller CONCACAF sides, the USMNT continues building squad depth ahead of their quarterfinal entry.",
     sortOrder: 20,
@@ -123,7 +123,20 @@ async function seed() {
     await db
       .insert(scheduleEventsTable)
       .values({ ...event, updatedAt: new Date() })
-      .onConflictDoNothing({ target: scheduleEventsTable.slug });
+      .onConflictDoUpdate({
+        target: scheduleEventsTable.slug,
+        set: {
+          name: event.name,
+          kind: event.kind,
+          status: event.status,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          dateLabel: event.dateLabel,
+          description: event.description,
+          sortOrder: event.sortOrder,
+          updatedAt: new Date(),
+        },
+      });
   }
 
   const rows = await db.select({ slug: scheduleEventsTable.slug }).from(scheduleEventsTable);

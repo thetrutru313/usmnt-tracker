@@ -14,6 +14,8 @@ export interface Fixture {
   competition: string;
   kickoff: Date;
   venue: string;
+  /** @nullable */
+  city?: string | null;
   homeTeam: string;
   awayTeam: string;
   /** @nullable */

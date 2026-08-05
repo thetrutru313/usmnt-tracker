@@ -10,7 +10,7 @@ import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
 import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
-import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
 const rawPort = process.env["PORT"];
 
@@ -25,6 +25,160 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// ── Critical startup seeds ────────────────────────────────────────────────────
+// These database corrections MUST complete before the server starts accepting
+// requests. Running them after `app.listen()` would allow `/api/schedule` and
+// `/api/dashboard` to return stale data (e.g. wrong date windows or missing
+// fixture rows) during the first few seconds of each deployment/restart.
+//
+// Non-critical background tasks (NT backfill, Obed Vargas cleanup, etc.) are
+// still launched as fire-and-forget blocks inside the listen callback; only the
+// schedule-event corrections and friendly fixture seeding require this ordering
+// guarantee.
+async function runCriticalStartupSeeds(): Promise<void> {
+  // One-time correction: update Sept and Oct 2026 schedule event date windows
+  // to match the officially announced dates. Idempotent — no-ops once correct.
+  try {
+    await db.execute(sql`
+      UPDATE schedule_events
+      SET start_date = '2026-09-26',
+          end_date   = '2026-09-29',
+          date_label = 'Sept 26 & 29, 2026',
+          status     = 'confirmed',
+          updated_at = NOW()
+      WHERE slug = 'friendlies-sept-2026'
+        AND (start_date != '2026-09-26' OR end_date != '2026-09-29')
+    `);
+    await db.execute(sql`
+      UPDATE schedule_events
+      SET start_date = '2026-10-03',
+          end_date   = '2026-10-06',
+          date_label = 'Oct 3 & 6, 2026',
+          status     = 'confirmed',
+          updated_at = NOW()
+      WHERE slug = 'friendlies-oct-2026'
+        AND (start_date != '2026-10-03' OR end_date != '2026-10-06')
+    `);
+  } catch (err) {
+    logger.warn({ err }, "Startup: schedule event date correction failed (non-fatal)");
+  }
+
+  // Seed the 4 announced Sept/Oct 2026 USMNT friendlies. Idempotency is keyed
+  // on (home_team, away_team, competition, is_national_team, kickoff ±2 days) —
+  // NOT on api_football_fixture_id — so the seed is safe across the full
+  // fixture lifecycle (see friendlySeedLifecycle.test.ts for the contract).
+  //
+  // Kickoffs converted from EDT (UTC-4) — the offset in Sept/Oct 2026:
+  //   Sept 26 USA vs Peru  : 4:30 PM ET = 20:30 UTC same day
+  //   Sept 29 USA vs Chile : 8:00 PM ET = 00:00 UTC next day (Sept 30)
+  //   Oct  3  USA vs Mexico: 10:00 PM ET = 02:00 UTC next day (Oct 4)
+  //   Oct  6  USA vs Canada: 8:00 PM ET  = 00:00 UTC next day (Oct 7)
+  try {
+    type MatchDef = {
+      sentinelId: number;
+      homeTeam: string;
+      awayTeam: string;
+      kickoffUtc: string;
+      venue: string;
+      city: string;
+      windowStart: string;
+      windowEnd: string;
+    };
+    const matches: MatchDef[] = [
+      {
+        sentinelId: -2001, homeTeam: "USA", awayTeam: "Peru",
+        kickoffUtc: "2026-09-26 20:30:00+00", venue: "Inter&Co Stadium", city: "Orlando, FL",
+        windowStart: "2026-09-24 00:00:00+00", windowEnd: "2026-09-28 23:59:59+00",
+      },
+      {
+        sentinelId: -2002, homeTeam: "USA", awayTeam: "Chile",
+        kickoffUtc: "2026-09-30 00:00:00+00", venue: "Energizer Park", city: "St. Louis, MO",
+        windowStart: "2026-09-28 00:00:00+00", windowEnd: "2026-10-01 23:59:59+00",
+      },
+      {
+        sentinelId: -2003, homeTeam: "USA", awayTeam: "Mexico",
+        kickoffUtc: "2026-10-04 02:00:00+00", venue: "State Farm Stadium", city: "Glendale, AZ",
+        windowStart: "2026-10-02 00:00:00+00", windowEnd: "2026-10-06 23:59:59+00",
+      },
+      {
+        sentinelId: -2004, homeTeam: "USA", awayTeam: "Canada",
+        kickoffUtc: "2026-10-07 00:00:00+00", venue: "Allianz Field", city: "St. Paul, MN",
+        windowStart: "2026-10-05 00:00:00+00", windowEnd: "2026-10-09 23:59:59+00",
+      },
+    ];
+
+    let totalInserted = 0;
+    let totalCorrected = 0;
+    let totalDeduped = 0;
+
+    for (const m of matches) {
+      // Insert if no row with matching match identity already exists.
+      const insertResult = await db.execute(sql`
+        INSERT INTO fixtures (
+          api_football_fixture_id, home_team, away_team,
+          competition, kickoff, venue, city, is_national_team, status
+        )
+        SELECT ${m.sentinelId}, ${m.homeTeam}, ${m.awayTeam},
+               'International Friendly', ${m.kickoffUtc}::timestamptz,
+               ${m.venue}, ${m.city}, true, 'scheduled'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM fixtures
+          WHERE home_team       = ${m.homeTeam}
+            AND away_team       = ${m.awayTeam}
+            AND is_national_team = true
+            AND competition      = 'International Friendly'
+            AND kickoff BETWEEN ${m.windowStart}::timestamptz
+                            AND ${m.windowEnd}::timestamptz
+        )
+      `);
+      totalInserted += (insertResult as unknown as { rowCount?: number }).rowCount ?? 0;
+
+      // Correct field values on any remaining sentinel row (no-op if already bound to a real ID).
+      const correctResult = await db.execute(sql`
+        UPDATE fixtures
+        SET kickoff = ${m.kickoffUtc}::timestamptz,
+            venue   = ${m.venue},
+            city    = ${m.city}
+        WHERE api_football_fixture_id = ${m.sentinelId}
+          AND (
+            kickoff IS DISTINCT FROM ${m.kickoffUtc}::timestamptz
+            OR venue IS DISTINCT FROM ${m.venue}
+            OR city  IS DISTINCT FROM ${m.city}
+          )
+      `);
+      totalCorrected += (correctResult as unknown as { rowCount?: number }).rowCount ?? 0;
+
+      // Dedup: if a real (positive) bound row exists for this match alongside
+      // the sentinel, delete the sentinel. Handles environments where an earlier
+      // ON CONFLICT–based seed left a duplicate when the sync bound the real ID.
+      const dedupResult = await db.execute(sql`
+        DELETE FROM fixtures
+        WHERE api_football_fixture_id = ${m.sentinelId}
+          AND EXISTS (
+            SELECT 1 FROM fixtures f2
+            WHERE f2.home_team       = ${m.homeTeam}
+              AND f2.away_team       = ${m.awayTeam}
+              AND f2.is_national_team = true
+              AND f2.competition      = 'International Friendly'
+              AND f2.api_football_fixture_id > 0
+              AND f2.kickoff BETWEEN ${m.windowStart}::timestamptz
+                             AND ${m.windowEnd}::timestamptz
+          )
+      `);
+      totalDeduped += (dedupResult as unknown as { rowCount?: number }).rowCount ?? 0;
+    }
+
+    if (totalInserted > 0) logger.info({ totalInserted }, "Startup: seeded Sept/Oct 2026 USMNT friendly fixtures");
+    if (totalCorrected > 0) logger.info({ totalCorrected }, "Startup: corrected Sept/Oct 2026 USMNT friendly fixture fields");
+    if (totalDeduped > 0) logger.info({ totalDeduped }, "Startup: removed duplicate Sept/Oct 2026 USMNT friendly sentinel rows");
+  } catch (err) {
+    logger.warn({ err }, "Startup: Sept/Oct 2026 friendly fixture seed failed (non-fatal)");
+  }
+}
+
+// Run critical seeds synchronously before the server begins accepting requests.
+await runCriticalStartupSeeds();
 
 app.listen(port, async (err) => {
   if (err) {
@@ -49,10 +203,20 @@ app.listen(port, async (err) => {
   // Runs silently on every restart; no-ops when fixtures already have an ID.
   (async () => {
     try {
+      // Include both NULL-id rows (legacy seeded fixtures) and negative-id
+      // sentinel rows (the announced Sept/Oct 2026 friendlies seeded above).
+      // Real API-Football IDs are always positive, so negative values are safe
+      // sentinels. When match logs appear after a fixture is played the backfill
+      // will find the real ID and replace the sentinel.
       const ntFixturesWithoutId = await db
         .select()
         .from(fixturesTable)
-        .where(and(eq(fixturesTable.isNationalTeam, true), isNull(fixturesTable.apiFootballFixtureId)));
+        .where(
+          and(
+            eq(fixturesTable.isNationalTeam, true),
+            or(isNull(fixturesTable.apiFootballFixtureId), lt(fixturesTable.apiFootballFixtureId, 0)),
+          ),
+        );
 
       for (const fixture of ntFixturesWithoutId) {
         const kickoffMs = new Date(fixture.kickoff).getTime();
