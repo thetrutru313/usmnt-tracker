@@ -193,18 +193,26 @@ async function runCriticalStartupSeeds(): Promise<void> {
     if (totalCorrected > 0) logger.info({ totalCorrected }, "Startup: corrected Sept/Oct 2026 USMNT friendly fixture fields");
     if (totalDeduped > 0) logger.info({ totalDeduped }, "Startup: removed duplicate Sept/Oct 2026 USMNT friendly sentinel rows");
 
-    // Enforce the seed list as the authoritative set: delete any negative-sentinel
-    // national-team fixture whose ID is NOT in the current canonical list.
-    // This self-heals production when an opponent is dropped from the seed
-    // (e.g. a stale USA–Colombia row left from a previous seed version).
-    const canonicalIds = matches.map((m) => m.sentinelId);
-    const retiredResult = await db.execute(sql`
-      DELETE FROM fixtures
+    // Enforce the seed list as the authoritative set: delete any national-team
+    // fixture (NULL or negative api_football_fixture_id) whose (home_team, away_team)
+    // pair is NOT in the current canonical list.
+    // Must delete fixture_players children first — FK constraint blocks parent DELETE.
+    const canonicalPairs = matches.map(m => `('${m.homeTeam}','${m.awayTeam}')`).join(",");
+    const retiredRows = await db.execute(sql`
+      SELECT id FROM fixtures
       WHERE is_national_team = true
         AND (api_football_fixture_id IS NULL OR api_football_fixture_id < 0)
-        AND (home_team, away_team) NOT IN (${sql.raw(matches.map(m => `('${m.homeTeam}','${m.awayTeam}')`).join(","))})`);
-    const retiredCount = (retiredResult as unknown as { rowCount?: number }).rowCount ?? 0;
-    if (retiredCount > 0) logger.info({ retiredCount, canonicalIds }, "Startup: purged retired national-team sentinel fixtures not in current seed list");
+        AND (home_team, away_team) NOT IN (${sql.raw(canonicalPairs)})`);
+    const retiredIds = (retiredRows as unknown as { rows?: { id: number }[] }).rows?.map(r => r.id) ?? [];
+    if (retiredIds.length > 0) {
+      await db.execute(sql`
+        DELETE FROM fixture_players
+        WHERE fixture_id = ANY(${sql.raw(`ARRAY[${retiredIds.join(",")}]::int[]`)})`);
+      await db.execute(sql`
+        DELETE FROM fixtures
+        WHERE id = ANY(${sql.raw(`ARRAY[${retiredIds.join(",")}]::int[]`)})`);
+      logger.info({ retiredCount: retiredIds.length, retiredIds }, "Startup: purged retired national-team sentinel fixtures (and their fixture_players links)");
+    }
   } catch (err) {
     logger.warn({ err }, "Startup: Sept/Oct 2026 friendly fixture seed failed (non-fatal)");
   }
