@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FormBadge } from "@/components/FormBadge";
 import { FixtureCard } from "@/components/FixtureCard";
+import { ScheduleMatchRow } from "@/components/ScheduleMatchRow";
 import { Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
 import soccerBall from "@/assets/soccer-ball.png";
 import { Link } from "wouter";
@@ -95,18 +96,33 @@ export default function Dashboard() {
                   <h1 className="text-2xl md:text-5xl font-bold tracking-tight mb-2 uppercase text-foreground">
                     {nextEvent.name}
                   </h1>
-                  <p className="text-muted-foreground max-w-xl text-sm md:text-lg">
-                    {nextEvent.description}
-                  </p>
+
+                  {/* When fixtures are available, show match tiles; otherwise show description */}
+                  {nextEvent.fixtures && nextEvent.fixtures.length > 0 ? (
+                    <div className="mt-3 bg-background/20 rounded-xl border border-border/40 backdrop-blur divide-y divide-border/30 overflow-hidden max-w-xl">
+                      {nextEvent.fixtures.map((fixture) => (
+                        <div key={fixture.id} className="px-3">
+                          <ScheduleMatchRow fixture={fixture} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground max-w-xl text-sm md:text-lg">
+                      {nextEvent.description}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col items-start md:items-end gap-4 shrink-0">
-                  <div className="p-4 bg-background/50 rounded-xl border border-border backdrop-blur">
-                    <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider block mb-1">
-                      {(nextEvent.status as EventStatus) === "confirmed" ? "Dates" : (nextEvent.status as EventStatus) === "approximate" ? "Approx." : "TBD"}
-                    </span>
-                    <span className="text-xl font-bold data-value">{nextEvent.dateLabel}</span>
-                  </div>
+                  {/* Show date box only when no fixtures */}
+                  {(!nextEvent.fixtures || nextEvent.fixtures.length === 0) && (
+                    <div className="p-4 bg-background/50 rounded-xl border border-border backdrop-blur">
+                      <span className="text-xs text-muted-foreground uppercase font-mono tracking-wider block mb-1">
+                        {(nextEvent.status as EventStatus) === "confirmed" ? "Dates" : (nextEvent.status as EventStatus) === "approximate" ? "Approx." : "TBD"}
+                      </span>
+                      <span className="text-xl font-bold data-value">{nextEvent.dateLabel}</span>
+                    </div>
+                  )}
                   <div className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary group-hover:gap-2 transition-all">
                     VIEW FULL SCHEDULE <ChevronRight size={13} />
                   </div>

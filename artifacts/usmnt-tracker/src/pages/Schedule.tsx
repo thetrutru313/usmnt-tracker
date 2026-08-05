@@ -8,6 +8,7 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
 } from "@/data/schedule";
+import { ScheduleMatchRow } from "@/components/ScheduleMatchRow";
 
 function groupByYear(events: ScheduleEvent[]): [string, ScheduleEvent[]][] {
   const map = new Map<string, ScheduleEvent[]>();
@@ -121,6 +122,7 @@ export default function Schedule() {
                     </div>
                   )}
 
+                  {/* Header: badges + name + (date box when no fixtures) */}
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       {/* Badges */}
@@ -140,21 +142,36 @@ export default function Schedule() {
                       <h3 className="font-bold text-lg leading-tight mb-1">
                         {event.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {event.description}
-                      </p>
+
+                      {/* Show description only when no fixtures are available */}
+                      {(!event.fixtures || event.fixtures.length === 0) && (
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {event.description}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Date box */}
-                    <div className="sm:text-right shrink-0">
-                      <div className="text-xs text-muted-foreground uppercase font-mono tracking-wider mb-0.5">
-                        {event.status === "confirmed" ? "Dates" : event.status === "approximate" ? "Approx." : "TBD"}
+                    {/* Date box — only shown when no fixtures */}
+                    {(!event.fixtures || event.fixtures.length === 0) && (
+                      <div className="sm:text-right shrink-0">
+                        <div className="text-xs text-muted-foreground uppercase font-mono tracking-wider mb-0.5">
+                          {event.status === "confirmed" ? "Dates" : event.status === "approximate" ? "Approx." : "TBD"}
+                        </div>
+                        <div className="font-bold text-base text-foreground">
+                          {event.dateLabel}
+                        </div>
                       </div>
-                      <div className="font-bold text-base text-foreground">
-                        {event.dateLabel}
-                      </div>
-                    </div>
+                    )}
                   </div>
+
+                  {/* Match rows — shown when fixtures are present */}
+                  {event.fixtures && event.fixtures.length > 0 && (
+                    <div className="mt-3">
+                      {event.fixtures.map((fixture) => (
+                        <ScheduleMatchRow key={fixture.id} fixture={fixture} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
