@@ -201,8 +201,8 @@ async function runCriticalStartupSeeds(): Promise<void> {
     const retiredResult = await db.execute(sql`
       DELETE FROM fixtures
       WHERE is_national_team = true
-        AND api_football_fixture_id < 0
-        AND api_football_fixture_id != ALL(${sql.raw(`ARRAY[${canonicalIds.join(",")}]::integer[]`)})`);
+        AND (api_football_fixture_id IS NULL OR api_football_fixture_id < 0)
+        AND (home_team, away_team) NOT IN (${sql.raw(matches.map(m => `('${m.homeTeam}','${m.awayTeam}')`).join(","))})`);
     const retiredCount = (retiredResult as unknown as { rowCount?: number }).rowCount ?? 0;
     if (retiredCount > 0) logger.info({ retiredCount, canonicalIds }, "Startup: purged retired national-team sentinel fixtures not in current seed list");
   } catch (err) {
