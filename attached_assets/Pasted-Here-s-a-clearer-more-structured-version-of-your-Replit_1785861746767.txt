@@ -1,0 +1,121 @@
+Here's a clearer, more structured version of your Replit prompt with explicit requirements, acceptance criteria, and implementation guidance:
+
+# Update USMNT September & October Friendly Matches
+
+The USMNT has officially announced its September and October friendly matches. These fixtures may not yet be available in our API since they were only recently released, so the implementation should gracefully handle both scenarios.
+
+## General Requirements
+
+* First, check whether the newly announced fixtures already exist in the API.
+* If they exist:
+
+  * Use the API data as the source of truth.
+  * Ensure the matches are displayed correctly throughout the application.
+* If they do **not** exist:
+
+  * Add temporary UI support so the announced matches are still visible where appropriate.
+  * Structure the implementation so that once the fixtures are added to the API, the application automatically uses the API data without requiring additional code changes.
+* Preserve the existing visual design and layout across all pages. Any new UI should feel like a natural extension of the current design system.
+
+---
+
+## 1. USMNT Schedule (`/schedule`)
+
+Update the September and October international window sections to display the officially announced friendlies.
+
+Requirements:
+
+* Keep the current page structure intact.
+* Add match cards (or a similar UI component) within each international window.
+* Each match should display:
+
+  * Opponent
+  * Date
+  * Kickoff time
+  * Venue
+  * Location
+* Each card should link to that match's feature page (or the appropriate route if it already exists).
+* The new UI should match the existing aesthetic and spacing of the page.
+
+---
+
+## 2. Dashboard
+
+Update the international window hero/card to reflect the officially announced matches.
+
+Requirements:
+
+* Maintain the existing dashboard design.
+* Display the announced fixtures using a clean UI element consistent with the current design language.
+* Ensure the active international window updates automatically:
+
+  * During the September window, show the September fixtures.
+  * Once the September window has concluded, automatically transition to displaying the October fixtures without requiring a manual code change.
+
+---
+
+## 3. Fixtures Page
+
+Ensure the new friendlies appear correctly on the Fixtures page.
+
+Implementation steps:
+
+1. Verify whether the fixtures already exist in the API.
+2. If they exist:
+
+   * Confirm they render correctly.
+   * Verify sorting, dates, links, and metadata.
+3. If they do not exist:
+
+   * Do not hardcode logic that will conflict with future API data.
+   * Make any necessary updates so that when these fixtures are added to the API, they will automatically appear and render correctly.
+
+---
+
+## Official Match Information
+
+### September Window
+
+**September 26**
+
+* USMNT vs. Peru
+* 4:30 PM ET
+* Inter&Co Stadium
+* Orlando, Florida
+
+**September 29**
+
+* USMNT vs. Chile
+* 8:00 PM ET (7:00 PM local)
+* Energizer Park
+* St. Louis, Missouri
+
+### October Window
+
+**October 3**
+
+* USMNT vs. Mexico
+* 10:00 PM ET (7:00 PM local)
+* State Farm Stadium
+* Glendale, Arizona
+
+**October 6**
+
+* USMNT vs. Canada
+* 8:00 PM ET (7:00 PM local)
+* Allianz Field
+* St. Paul, Minnesota
+
+---
+
+## Acceptance Criteria
+
+* ✓ September and October friendlies appear on the `/schedule` page.
+* ✓ Each fixture includes an appropriate UI card and links to its feature page.
+* ✓ The Dashboard reflects the officially announced fixtures while preserving the existing design.
+* ✓ The Dashboard automatically transitions from the September window to the October window after the September matches are complete.
+* ✓ The Fixtures page correctly displays the new matches if they are already available in the API.
+* ✓ If the API has not yet been updated, the implementation is future-proof so the fixtures automatically appear once they become available.
+* ✓ Existing layouts and styling remain consistent throughout the application.
+
+This version is more actionable for an AI coding agent by separating requirements, implementation guidance, and acceptance criteria while explicitly addressing the API availability edge case.

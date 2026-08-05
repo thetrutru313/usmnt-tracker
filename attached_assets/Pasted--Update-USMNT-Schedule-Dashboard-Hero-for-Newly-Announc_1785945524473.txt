@@ -1,0 +1,222 @@
+# Update USMNT Schedule & Dashboard Hero for Newly Announced Friendlies
+
+The first USMNT friendlies have now been officially announced, so we need to update both the **USMNT Schedule page** and the **Dashboard Hero** to support officially scheduled matches while maintaining our existing design language.
+
+**Do not begin implementation immediately.** First, inspect the existing codebase and ask any clarifying questions you need before making architectural or UI changes.
+
+---
+
+# Goal
+
+Maintain the current visual aesthetic of the application while making the Schedule page and Dashboard Hero dynamic enough to support two different states:
+
+1. **Upcoming events that have not yet been officially scheduled**
+2. **Events that have officially announced matches**
+
+The transition between these two states should feel seamless and require minimal future development work.
+
+---
+
+# 1. USMNT Schedule Page
+
+## Current Behavior
+
+The existing design works well for events that have not yet been scheduled.
+
+Each event currently contains:
+
+* Generic event header
+* Description/blurb
+* Approximate date range
+
+I want to preserve this experience for unscheduled events.
+
+---
+
+## New Behavior
+
+Once matches for an event are officially announced, the UI should automatically transition into a match-driven layout.
+
+Instead of only showing the generic event information, the event should display:
+
+* Individual matches
+* Opponent
+* Date
+* Kickoff time
+* Venue
+* Location
+* Competition/event name (where appropriate)
+
+---
+
+## Important Design Requirements
+
+Maintain the existing visual aesthetic.
+
+The new layout should feel like a natural extension of the current design rather than a redesign.
+
+The component must also be flexible enough to support different event sizes.
+
+Examples:
+
+* September Friendlies → 2 matches
+* November Friendlies → 2–3 matches
+* Gold Cup → several matches
+* Copa América / World Cup → potentially 6+ matches
+
+Do **not** hardcode assumptions around the number of matches.
+
+The layout should gracefully expand regardless of how many games exist.
+
+---
+
+## Responsive Design
+
+The new design must work cleanly across all breakpoints.
+
+Pay particular attention to:
+
+* Desktop
+* Tablet
+* Mobile
+
+Ensure cards stack and resize naturally without overflowing or creating awkward spacing.
+
+---
+
+# 2. Dashboard Hero
+
+Maintain the existing hero design and branding.
+
+The goal is to introduce more dynamic behavior without changing the overall aesthetic.
+
+---
+
+## Current Behavior
+
+The hero currently displays an event block (for example, September Friendlies).
+
+---
+
+## Desired Behavior
+
+When that event has officially scheduled matches:
+
+Replace the generic event information with the actual scheduled matches.
+
+Display:
+
+* Opponent
+* Date
+* Time
+* Venue (if appropriate)
+* Any existing styling already used elsewhere in the app
+
+The layout should accommodate varying numbers of matches while remaining visually balanced.
+
+---
+
+## Automatic Progression
+
+The hero should automatically advance to the next upcoming event after the current event has concluded.
+
+Example:
+
+September Friendlies
+
+↓
+
+November Friendlies
+
+↓
+
+Next competition
+
+This should happen automatically based on event dates rather than requiring manual updates.
+
+Design this so future events continue to work automatically.
+
+---
+
+# 3. Backend / Data
+
+Before making UI changes, inspect how schedule data currently flows through the application.
+
+Determine:
+
+* Which API currently powers the schedule
+* Whether the newly announced friendlies already exist in the API
+* Whether the Hero, Schedule page, and Features page all consume the same data source
+
+---
+
+## If the Matches Already Exist
+
+Ensure they populate correctly in:
+
+* USMNT Schedule page
+* Dashboard Hero
+* Features page
+* Any shared schedule components
+
+---
+
+## If They Do NOT Yet Exist
+
+Implement a robust fallback strategy so these matches still appear until the API is updated.
+
+The fallback should integrate cleanly with the existing data model and be easy to remove once the API begins returning the official data.
+
+Avoid duplicating logic across multiple components.
+
+---
+
+# Newly Announced Friendlies (2026)
+
+### September 26
+
+USMNT vs Peru
+
+* 4:30 PM ET
+* Inter&Co Stadium
+* Orlando, Florida
+
+### September 29
+
+USMNT vs Chile
+
+* 8:00 PM ET
+* Energizer Park
+* St. Louis, Missouri
+
+### October 3
+
+USMNT vs Mexico
+
+* 10:00 PM ET
+* State Farm Stadium
+* Glendale, Arizona
+
+### October 6
+
+USMNT vs Canada
+
+* 8:00 PM ET
+* Allianz Field
+* St. Paul, Minnesota
+
+---
+
+# Before Building
+
+Do **not** begin implementation until you've completed the following:
+
+1. Inspect the current Schedule page architecture.
+2. Inspect the Dashboard Hero implementation.
+3. Determine how event and match data are currently modeled.
+4. Verify whether the new friendlies already exist in the API.
+5. Identify any shared components that should be reused.
+6. Present your proposed implementation plan.
+7. Ask any clarifying questions about UI, data flow, edge cases, or architecture before writing code.
+
+The objective is to build a flexible, reusable solution that will continue to work as future USMNT schedules are announced without requiring additional redesigns or hardcoded logic.
