@@ -79,30 +79,42 @@ async function runCriticalStartupSeeds(): Promise<void> {
       sentinelId: number;
       homeTeam: string;
       awayTeam: string;
+      homeLogoUrl: string;
+      awayLogoUrl: string;
       kickoffUtc: string;
       venue: string;
       city: string;
       windowStart: string;
       windowEnd: string;
     };
+    // Logo URLs from the API-Football CDN: media.api-sports.io/football/teams/{id}.png
+    // USA=2384, Peru=30, Chile=2383, Mexico=16, Canada=5529
     const matches: MatchDef[] = [
       {
         sentinelId: -2001, homeTeam: "USA", awayTeam: "Peru",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/30.png",
         kickoffUtc: "2026-09-26 20:30:00+00", venue: "Inter&Co Stadium", city: "Orlando, FL",
         windowStart: "2026-09-24 00:00:00+00", windowEnd: "2026-09-28 23:59:59+00",
       },
       {
         sentinelId: -2002, homeTeam: "USA", awayTeam: "Chile",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/2383.png",
         kickoffUtc: "2026-09-30 00:00:00+00", venue: "Energizer Park", city: "St. Louis, MO",
         windowStart: "2026-09-28 00:00:00+00", windowEnd: "2026-10-01 23:59:59+00",
       },
       {
         sentinelId: -2003, homeTeam: "USA", awayTeam: "Mexico",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/16.png",
         kickoffUtc: "2026-10-04 02:00:00+00", venue: "State Farm Stadium", city: "Glendale, AZ",
         windowStart: "2026-10-02 00:00:00+00", windowEnd: "2026-10-06 23:59:59+00",
       },
       {
         sentinelId: -2004, homeTeam: "USA", awayTeam: "Canada",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/5529.png",
         kickoffUtc: "2026-10-07 00:00:00+00", venue: "Allianz Field", city: "St. Paul, MN",
         windowStart: "2026-10-05 00:00:00+00", windowEnd: "2026-10-09 23:59:59+00",
       },
@@ -117,11 +129,13 @@ async function runCriticalStartupSeeds(): Promise<void> {
       const insertResult = await db.execute(sql`
         INSERT INTO fixtures (
           api_football_fixture_id, home_team, away_team,
-          competition, kickoff, venue, city, is_national_team, status
+          competition, kickoff, venue, city, is_national_team, status,
+          home_logo_url, away_logo_url
         )
         SELECT ${m.sentinelId}, ${m.homeTeam}, ${m.awayTeam},
                'International Friendly', ${m.kickoffUtc}::timestamptz,
-               ${m.venue}, ${m.city}, true, 'scheduled'
+               ${m.venue}, ${m.city}, true, 'scheduled',
+               ${m.homeLogoUrl}, ${m.awayLogoUrl}
         WHERE NOT EXISTS (
           SELECT 1 FROM fixtures
           WHERE home_team       = ${m.homeTeam}
@@ -135,16 +149,22 @@ async function runCriticalStartupSeeds(): Promise<void> {
       totalInserted += (insertResult as unknown as { rowCount?: number }).rowCount ?? 0;
 
       // Correct field values on any remaining sentinel row (no-op if already bound to a real ID).
+      // Also backfills logo URLs when null — this handles rows that were inserted before
+      // logo URLs were added to the seed (e.g. existing production rows on first deploy).
       const correctResult = await db.execute(sql`
         UPDATE fixtures
-        SET kickoff = ${m.kickoffUtc}::timestamptz,
-            venue   = ${m.venue},
-            city    = ${m.city}
+        SET kickoff        = ${m.kickoffUtc}::timestamptz,
+            venue          = ${m.venue},
+            city           = ${m.city},
+            home_logo_url  = ${m.homeLogoUrl},
+            away_logo_url  = ${m.awayLogoUrl}
         WHERE api_football_fixture_id = ${m.sentinelId}
           AND (
-            kickoff IS DISTINCT FROM ${m.kickoffUtc}::timestamptz
-            OR venue IS DISTINCT FROM ${m.venue}
-            OR city  IS DISTINCT FROM ${m.city}
+            kickoff        IS DISTINCT FROM ${m.kickoffUtc}::timestamptz
+            OR venue       IS DISTINCT FROM ${m.venue}
+            OR city        IS DISTINCT FROM ${m.city}
+            OR home_logo_url IS DISTINCT FROM ${m.homeLogoUrl}
+            OR away_logo_url IS DISTINCT FROM ${m.awayLogoUrl}
           )
       `);
       totalCorrected += (correctResult as unknown as { rowCount?: number }).rowCount ?? 0;
