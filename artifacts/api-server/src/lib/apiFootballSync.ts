@@ -1759,6 +1759,10 @@ export async function syncNationalTeamFixtures(): Promise<{
       };
       if (needsIdBind) {
         updatePayload["apiFootballFixtureId"] = afMatch.fixture.id;
+        // Also write logo URLs on first bind so the hero and schedule page
+        // can display country flags rather than the null placeholder.
+        if (afMatch.teams.home.logo) updatePayload["homeLogoUrl"] = afMatch.teams.home.logo;
+        if (afMatch.teams.away.logo) updatePayload["awayLogoUrl"] = afMatch.teams.away.logo;
         idsBound++;
       }
 

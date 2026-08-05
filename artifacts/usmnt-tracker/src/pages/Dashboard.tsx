@@ -99,7 +99,7 @@ export default function Dashboard() {
 
                   {/* When fixtures are available, show match tiles; otherwise show description */}
                   {nextEvent.fixtures && nextEvent.fixtures.length > 0 ? (
-                    <div className="mt-3 bg-background/20 rounded-xl border border-border/40 backdrop-blur divide-y divide-border/30 overflow-hidden max-w-xl">
+                    <div className="mt-3 bg-black/50 rounded-xl border border-white/10 divide-y divide-white/10 overflow-hidden max-w-xl">
                       {nextEvent.fixtures.map((fixture) => (
                         <div key={fixture.id} className="px-3">
                           <ScheduleMatchRow fixture={fixture} />

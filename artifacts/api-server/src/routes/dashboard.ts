@@ -52,6 +52,12 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
         lt(fixturesTable.kickoff, endOfDay),
         notInArray(fixturesTable.status, ["finished", "cancelled", "postponed"]),
         or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%")),
+        // Only show fixtures that have at least one tagged USMNT player; national-team
+        // fixtures are always relevant regardless of fixture_players links.
+        or(
+          eq(fixturesTable.isNationalTeam, true),
+          sql`EXISTS (SELECT 1 FROM fixture_players fp WHERE fp.fixture_id = ${fixturesTable.id})`,
+        ),
       ))
       .orderBy(asc(fixturesTable.kickoff)),
     db
@@ -61,6 +67,11 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
         gte(fixturesTable.kickoff, endOfDay),
         notInArray(fixturesTable.status, ["finished", "cancelled", "postponed"]),
         or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%")),
+        // Same ghost-fixture guard as todaysGames and the Fixtures page.
+        or(
+          eq(fixturesTable.isNationalTeam, true),
+          sql`EXISTS (SELECT 1 FROM fixture_players fp WHERE fp.fixture_id = ${fixturesTable.id})`,
+        ),
       ))
       .orderBy(asc(fixturesTable.kickoff))
       .limit(8),

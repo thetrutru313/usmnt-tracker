@@ -16,6 +16,7 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
     fixture.homeTeam.toLowerCase().includes(n)
   );
   const opponent = homeIsUS ? fixture.awayTeam : fixture.homeTeam;
+  const usLogoUrl = homeIsUS ? fixture.homeLogoUrl : fixture.awayLogoUrl;
   const opponentLogoUrl = homeIsUS
     ? fixture.awayLogoUrl
     : fixture.homeLogoUrl;
@@ -43,13 +44,15 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
 
       {/* Match info */}
       <div className="flex-1 min-w-0 flex items-center gap-2">
-        {/* USMNT crest */}
-        <img
-          src={`${import.meta.env.BASE_URL}badges/usmnt-crest.png`}
-          alt="USMNT"
-          className="w-5 h-5 object-contain shrink-0"
-          aria-hidden="true"
-        />
+        {/* USMNT flag */}
+        {usLogoUrl && (
+          <img
+            src={usLogoUrl}
+            alt="USMNT"
+            className="w-5 h-5 object-contain shrink-0"
+            aria-hidden="true"
+          />
+        )}
 
         {/* Score or "vs" label */}
         {hasScore ? (
