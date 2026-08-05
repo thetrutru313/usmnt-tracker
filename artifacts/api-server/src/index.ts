@@ -192,6 +192,19 @@ async function runCriticalStartupSeeds(): Promise<void> {
     if (totalInserted > 0) logger.info({ totalInserted }, "Startup: seeded Sept/Oct 2026 USMNT friendly fixtures");
     if (totalCorrected > 0) logger.info({ totalCorrected }, "Startup: corrected Sept/Oct 2026 USMNT friendly fixture fields");
     if (totalDeduped > 0) logger.info({ totalDeduped }, "Startup: removed duplicate Sept/Oct 2026 USMNT friendly sentinel rows");
+
+    // Enforce the seed list as the authoritative set: delete any negative-sentinel
+    // national-team fixture whose ID is NOT in the current canonical list.
+    // This self-heals production when an opponent is dropped from the seed
+    // (e.g. a stale USA–Colombia row left from a previous seed version).
+    const canonicalIds = matches.map((m) => m.sentinelId);
+    const retiredResult = await db.execute(sql`
+      DELETE FROM fixtures
+      WHERE is_national_team = true
+        AND api_football_fixture_id < 0
+        AND api_football_fixture_id != ALL(${sql.raw(`ARRAY[${canonicalIds.join(",")}]::integer[]`)})`);
+    const retiredCount = (retiredResult as unknown as { rowCount?: number }).rowCount ?? 0;
+    if (retiredCount > 0) logger.info({ retiredCount, canonicalIds }, "Startup: purged retired national-team sentinel fixtures not in current seed list");
   } catch (err) {
     logger.warn({ err }, "Startup: Sept/Oct 2026 friendly fixture seed failed (non-fatal)");
   }
