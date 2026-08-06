@@ -1,5 +1,5 @@
-import { db, anonUsersTable, userFollowsTable, recoveryTokensTable } from "@workspace/db";
-import { and, lt, notExists, inArray, eq, sql } from "drizzle-orm";
+import { db, anonUsersTable, userFollowsTable, recoveryTokensTable, adminSessionsTable } from "@workspace/db";
+import { and, lt, notExists, inArray, eq, sql, or, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -88,6 +88,27 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
   return orphanIds.length;
 }
 
+/**
+ * Deletes `admin_sessions` rows that are either:
+ *   - expired (`expires_at < now()`), or
+ *   - explicitly revoked (`revoked_at IS NOT NULL`).
+ *
+ * These rows serve no purpose after expiry/revocation and accumulate over
+ * time as operators log in and out.
+ */
+export async function cleanupExpiredAdminSessions(): Promise<number> {
+  const now = new Date();
+  const deleted = await db
+    .delete(adminSessionsTable)
+    .where(or(lt(adminSessionsTable.expiresAt, now), isNotNull(adminSessionsTable.revokedAt)))
+    .returning({ id: adminSessionsTable.id });
+
+  if (deleted.length > 0) {
+    logger.info({ deleted: deleted.length }, "Admin-session cleanup: purged expired/revoked sessions");
+  }
+  return deleted.length;
+}
+
 let _cleanupIntervalHandle: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -106,6 +127,11 @@ export function startAnonUserCleanupSchedule(intervalMs?: number): void {
       await cleanupOrphanedAnonUsers();
     } catch (err) {
       logger.error({ err }, "Anon-user cleanup: scheduled run failed");
+    }
+    try {
+      await cleanupExpiredAdminSessions();
+    } catch (err) {
+      logger.error({ err }, "Admin-session cleanup: scheduled run failed");
     }
   }
 

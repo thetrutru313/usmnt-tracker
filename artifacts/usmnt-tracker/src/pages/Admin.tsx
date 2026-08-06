@@ -12,6 +12,19 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  STORAGE_KEY,
+  STORAGE_TS_KEY,
+  DEFAULT_SESSION_EXPIRY_MS,
+  getSessionExpiryMs,
+  saveSession,
+  loadSession,
+  clearSession,
+  SessionExpiredError,
+  API_BASE,
+  authHeaders,
+  apiFetch,
+} from "../lib/adminSession";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,53 +61,12 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const STORAGE_KEY = "usmnt_admin_token";
-const STORAGE_TS_KEY = "usmnt_admin_token_ts";
-const STORAGE_EXPIRY_KEY = "usmnt_admin_session_expiry_ms";
-/** Fallback session length used when the server hasn't supplied a value yet. */
-const DEFAULT_SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+// STORAGE_KEY, STORAGE_TS_KEY, STORAGE_EXPIRY_KEY, DEFAULT_SESSION_EXPIRY_MS,
+// getSessionExpiryMs, saveSession, loadSession, clearSession, SessionExpiredError,
+// API_BASE, authHeaders, apiFetch — all imported from ../lib/adminSession above.
+
 /** Show the expiry warning banner when this many milliseconds remain. */
 const WARN_BEFORE_MS = 30 * 60 * 1000; // 30 minutes
-
-/** Returns the session expiry duration stored from the last verify call, or the default. */
-function getSessionExpiryMs(): number {
-  const stored = localStorage.getItem(STORAGE_EXPIRY_KEY);
-  if (stored) {
-    const parsed = parseInt(stored, 10);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_SESSION_EXPIRY_MS;
-}
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-// ─── Session helpers ───────────────────────────────────────────────────────────
-
-function saveSession(token: string, expiryMs?: number): void {
-  localStorage.setItem(STORAGE_KEY, token);
-  localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
-  if (expiryMs !== undefined) {
-    localStorage.setItem(STORAGE_EXPIRY_KEY, String(expiryMs));
-  }
-}
-
-function loadSession(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY);
-  const ts = localStorage.getItem(STORAGE_TS_KEY);
-  if (!token || !ts) return null;
-  if (Date.now() - parseInt(ts, 10) > getSessionExpiryMs()) {
-    clearSession();
-    return null;
-  }
-  return token;
-}
-
-function clearSession(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(STORAGE_TS_KEY);
-  localStorage.removeItem(STORAGE_EXPIRY_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
-}
 
 // ─── Session expiry hook ───────────────────────────────────────────────────────
 
@@ -138,8 +110,8 @@ function ReAuthModal({
     setError("");
     setLoading(true);
     try {
-      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; sessionExpiryMs?: number };
-      saveSession(password, res.sessionExpiryMs);
+      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
+      saveSession(res.token, res.sessionExpiryMs);
       onSuccess();
     } catch {
       setError("Incorrect password.");
@@ -202,35 +174,6 @@ function dollars(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
-
-/** Thrown by apiFetch when the server returns 401 (token no longer valid). */
-class SessionExpiredError extends Error {
-  constructor() {
-    super("Session expired — please log in again.");
-    this.name = "SessionExpiredError";
-  }
-}
-
-function authHeaders(token: string) {
-  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-}
-
-async function apiFetch(path: string, token: string, opts: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), ...authHeaders(token) },
-  });
-  if (res.status === 401) {
-    throw new SessionExpiredError();
-  }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
 function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
@@ -243,9 +186,9 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
     setError("");
     setLoading(true);
     try {
-      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; sessionExpiryMs?: number };
-      saveSession(password, res.sessionExpiryMs);
-      onSuccess(password);
+      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
+      saveSession(res.token, res.sessionExpiryMs);
+      onSuccess(res.token);
     } catch {
       setError("Incorrect password.");
     } finally {
@@ -870,7 +813,7 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
   React.useEffect(() => {
     async function validate() {
       try {
-        await apiFetch("/admin/transparency/verify", token, { method: "POST" });
+        await apiFetch("/admin/session", token);
       } catch (err) {
         if (err instanceof SessionExpiredError) {
           handleUnauthorized();
@@ -981,7 +924,17 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
           <div className="ml-auto flex items-center gap-3">
             <a href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors">← Back to app</a>
             <button
-              onClick={onLogout}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await apiFetch("/admin/logout", token, { method: "POST" });
+                  } catch {
+                    // Server-side revocation is best-effort — always clear local state.
+                  }
+                  clearSession();
+                  onLogout();
+                })();
+              }}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Sign out

@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
+import { requireAdminSession } from "../lib/adminAuth";
 import { eq, desc, isNull, isNotNull, or, inArray, and, count, lt, lte, asc } from "drizzle-orm";
 import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
 import { getMaxCandidateAge, SIGNAL_REGISTRY, getResolvedWeights } from "../lib/eligibilitySignalsConfig";
@@ -29,38 +29,18 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/**
- * Simple token gate for all /admin/* routes.
- * Callers must supply `Authorization: Bearer <ADMIN_PASSWORD>`.
- * If ADMIN_PASSWORD is not configured the routes are disabled entirely.
- *
- * NOTE: must use ADMIN_PASSWORD (not SESSION_SECRET) — the verify endpoint in
- * transparency.ts checks ADMIN_PASSWORD, so both must use the same secret or
- * login succeeds but every subsequent admin API call returns 401.
- */
-function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env["ADMIN_PASSWORD"];
-  if (!secret) {
-    res.status(503).json({ error: "Admin endpoints are not configured on this server" });
-    return;
-  }
-  const auth = req.headers["authorization"] ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  // Use constant-time comparison to prevent timing side-channel attacks where
-  // an attacker could infer the correct token prefix by measuring response times.
-  const tokenBuf = Buffer.from(token);
-  const secretBuf = Buffer.from(secret);
-  const tokenMatch =
-    tokenBuf.length === secretBuf.length && timingSafeEqual(tokenBuf, secretBuf);
-  if (!tokenMatch) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
+// Apply the session gate to every /admin/* route in this router.
+router.use("/admin", requireAdminSession);
 
-// Apply the token gate to every /admin/* route in this router.
-router.use("/admin", requireAdminToken);
+/**
+ * GET /admin/session
+ * Lightweight liveness probe for the client to validate a stored token without
+ * triggering a full data fetch. Used by the AdminPanel on mount and on
+ * visibility-change to detect revoked or expired sessions quickly.
+ */
+router.get("/admin/session", (_req, res): void => {
+  res.json({ ok: true });
+});
 
 /**
  * GET /admin/player-candidates

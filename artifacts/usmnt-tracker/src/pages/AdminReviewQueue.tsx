@@ -1,6 +1,16 @@
 import * as React from "react";
 import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertCircle, Lock, Loader2, ThumbsUp, Clock } from "lucide-react";
 import { toast } from "sonner";
+import {
+  STORAGE_KEY,
+  saveSession,
+  loadSession,
+  clearSession,
+  SessionExpiredError,
+  API_BASE,
+  authHeaders,
+  apiFetch,
+} from "../lib/adminSession";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,75 +60,8 @@ interface RescoreStatus {
   pendingRescore: number;
 }
 
-// ─── Session helpers (mirror of Admin.tsx) ────────────────────────────────────
-
-const STORAGE_KEY = "usmnt_admin_token";
-const STORAGE_TS_KEY = "usmnt_admin_token_ts";
-const STORAGE_EXPIRY_KEY = "usmnt_admin_session_expiry_ms";
-const DEFAULT_SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000;
-
-function getSessionExpiryMs(): number {
-  const stored = localStorage.getItem(STORAGE_EXPIRY_KEY);
-  if (stored) {
-    const parsed = parseInt(stored, 10);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_SESSION_EXPIRY_MS;
-}
-
-function loadSession(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY);
-  const ts = localStorage.getItem(STORAGE_TS_KEY);
-  if (!token || !ts) return null;
-  if (Date.now() - parseInt(ts, 10) > getSessionExpiryMs()) {
-    clearSession();
-    return null;
-  }
-  return token;
-}
-
-function saveSession(token: string, expiryMs?: number): void {
-  localStorage.setItem(STORAGE_KEY, token);
-  localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
-  if (expiryMs !== undefined) {
-    localStorage.setItem(STORAGE_EXPIRY_KEY, String(expiryMs));
-  }
-}
-
-function clearSession(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(STORAGE_TS_KEY);
-  localStorage.removeItem(STORAGE_EXPIRY_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-// ─── API helpers ──────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-class SessionExpiredError extends Error {
-  constructor() {
-    super("Session expired — please log in again.");
-    this.name = "SessionExpiredError";
-  }
-}
-
-function authHeaders(token: string) {
-  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-}
-
-async function apiFetch(path: string, token: string, opts: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api${path}`, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), ...authHeaders(token) },
-  });
-  if (res.status === 401) throw new SessionExpiredError();
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-  return res.json();
-}
+// saveSession, loadSession, clearSession, SessionExpiredError, API_BASE,
+// authHeaders, apiFetch — all imported from ../lib/adminSession above.
 
 // ─── Login form ───────────────────────────────────────────────────────────────
 
@@ -132,9 +75,9 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
     setError("");
     setLoading(true);
     try {
-      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; sessionExpiryMs?: number };
-      saveSession(password, res.sessionExpiryMs);
-      onSuccess(password);
+      const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
+      saveSession(res.token, res.sessionExpiryMs);
+      onSuccess(res.token);
     } catch {
       setError("Incorrect password.");
     } finally {

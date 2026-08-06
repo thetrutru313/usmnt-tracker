@@ -32,19 +32,34 @@ const ADMIN_PASSWORD = "transparency-invoice-validation-test-pw";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Populated by beforeAll after the verify call. */
+let sessionToken = "";
+
 function authHeader() {
-  return { Authorization: `Bearer ${ADMIN_PASSWORD}` };
+  return { Authorization: `Bearer ${sessionToken}` };
 }
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
 
 let createdId: number | undefined;
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env["ADMIN_PASSWORD"] = ADMIN_PASSWORD;
+  // Obtain a server-issued session token. The raw ADMIN_PASSWORD is only
+  // accepted at the verify endpoint — all other admin routes require the token.
+  const verifyRes = await request(app)
+    .post("/api/admin/transparency/verify")
+    .set({ Authorization: `Bearer ${ADMIN_PASSWORD}` });
+  sessionToken = (verifyRes.body as { token: string }).token;
 });
 
 afterAll(async () => {
+  // Revoke the session server-side so the row doesn't linger.
+  if (sessionToken) {
+    await request(app)
+      .post("/api/admin/logout")
+      .set({ Authorization: `Bearer ${sessionToken}` });
+  }
   if (createdId != null) {
     await db
       .delete(transparencyMonthsTable)

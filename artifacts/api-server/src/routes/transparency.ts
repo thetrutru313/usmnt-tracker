@@ -1,15 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import rateLimit from "express-rate-limit";
-import { db, transparencyMonthsTable } from "@workspace/db";
+import { db, transparencyMonthsTable, adminSessionsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { requireAdminSession } from "../lib/adminAuth";
+import { generateToken, hashToken } from "../lib/tokenUtils";
 
 const router: IRouter = Router();
 
 /**
- * Dedicated rate limiter for the admin password-verify endpoint.
+ * Dedicated rate limiter for the admin login endpoint.
  * Tighter than the global limiter (300 req/min) because each request attempts
  * a password comparison — a bot can otherwise try ~18,000 guesses per hour
  * from a single IP. 5 requests per 15 minutes makes brute-force impractical
@@ -22,31 +24,6 @@ const adminVerifyLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many login attempts, please try again later." },
 });
-
-// ── Admin auth ────────────────────────────────────────────────────────────────
-
-/**
- * Middleware that gates write/admin endpoints behind ADMIN_PASSWORD.
- * Callers supply `Authorization: Bearer <ADMIN_PASSWORD>`.
- */
-function requireAdminPassword(req: Request, res: Response, next: NextFunction): void {
-  const password = process.env["ADMIN_PASSWORD"];
-  if (!password) {
-    res.status(503).json({ error: "Admin panel is not configured on this server" });
-    return;
-  }
-  const auth = req.headers["authorization"] ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  const tokenBuf = Buffer.from(token);
-  const passBuf = Buffer.from(password);
-  const match = tokenBuf.length === passBuf.length && timingSafeEqual(tokenBuf, passBuf);
-
-  if (!match) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
 
 // ── Public read endpoints ─────────────────────────────────────────────────────
 
@@ -101,8 +78,6 @@ router.get("/transparency/invoice/*objectPath", async (req: Request, res: Respon
     // Reject paths that are not registered as transparency invoices. Without
     // this check any caller who knows (or guesses) an internal GCS path can
     // obtain a valid signed download URL for arbitrary private objects.
-    // We return the same "Invoice not found" message whether the path is
-    // simply unknown or is a non-invoice object — do not leak the difference.
     const rows = await db
       .select({ id: transparencyMonthsTable.id })
       .from(transparencyMonthsTable)
@@ -114,9 +89,6 @@ router.get("/transparency/invoice/*objectPath", async (req: Request, res: Respon
       return;
     }
 
-    // Redirect to a short-lived signed GET URL rather than proxying through the
-    // GCS SDK. The sidecar's signed-URL API is reliable in this environment;
-    // the SDK's file.exists() / createReadStream() credential flow is not.
     const service = new ObjectStorageService();
     const signedUrl = await service.getObjectEntityDownloadUrl(objectPath, /* ttlSec */ 300);
     res.redirect(302, signedUrl);
@@ -130,27 +102,80 @@ router.get("/transparency/invoice/*objectPath", async (req: Request, res: Respon
   }
 });
 
-// ── Admin write endpoints ─────────────────────────────────────────────────────
-// All routes below require ADMIN_PASSWORD Bearer token.
+// ── Admin session management ──────────────────────────────────────────────────
 
 /**
  * POST /admin/transparency/verify
- * Returns 200 OK if the password is correct, plus the session expiry duration
- * the frontend should enforce. Driven by the ADMIN_SESSION_HOURS env var so
- * the timeout can be changed without a code deploy (default: 24 hours).
+ * Login endpoint. Accepts the raw ADMIN_PASSWORD as a Bearer token,
+ * creates a server-side session, and returns a one-time plaintext token.
+ * The client must store that token and use it for all subsequent admin calls.
+ *
+ * Rate-limited to 5 req / 15 min before the password check to prevent
+ * brute-force enumeration.
+ *
+ * ⚠️  This endpoint logs all existing sessions out on deploy if the server
+ * restarts cleanly — existing tokens survive restarts because they live in the
+ * database, not memory.
  */
-router.post("/admin/transparency/verify", adminVerifyLimiter, requireAdminPassword, (_req, res): void => {
+router.post("/admin/transparency/verify", adminVerifyLimiter, async (req, res): Promise<void> => {
+  const password = process.env["ADMIN_PASSWORD"];
+  if (!password) {
+    res.status(503).json({ error: "Admin panel is not configured on this server" });
+    return;
+  }
+
+  const auth = req.headers["authorization"] ?? "";
+  const supplied = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const suppliedBuf = Buffer.from(supplied);
+  const passwordBuf = Buffer.from(password);
+  const match =
+    suppliedBuf.length === passwordBuf.length && timingSafeEqual(suppliedBuf, passwordBuf);
+
+  if (!match) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const hours = parseFloat(process.env["ADMIN_SESSION_HOURS"] ?? "24");
   const sessionExpiryMs = (Number.isFinite(hours) && hours > 0 ? hours : 24) * 60 * 60 * 1000;
-  res.json({ ok: true, sessionExpiryMs });
+
+  const token = generateToken();
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + sessionExpiryMs);
+
+  await db.insert(adminSessionsTable).values({ tokenHash, expiresAt });
+
+  res.json({ ok: true, token, sessionExpiryMs });
 });
 
 /**
- * POST /admin/transparency
- * Create a new monthly record. Body: { periodYear, periodMonth, expensesCents,
- * donationsCents, goalFoundationCents, invoiceUrl?, notes? }
+ * POST /admin/logout
+ * Revokes the current session immediately. Requires a valid session token.
+ * The frontend should clear its stored token after this call regardless of
+ * the response status.
  */
-router.post("/admin/transparency", requireAdminPassword, async (req, res): Promise<void> => {
+router.post("/admin/logout", requireAdminSession, async (req, res): Promise<void> => {
+  const auth = req.headers["authorization"] ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const hash = hashToken(token);
+
+  await db
+    .update(adminSessionsTable)
+    .set({ revokedAt: new Date() })
+    .where(eq(adminSessionsTable.tokenHash, hash));
+
+  logger.info("Admin: session revoked via logout");
+  res.json({ ok: true });
+});
+
+// ── Admin write endpoints ─────────────────────────────────────────────────────
+// All routes below require a valid session token from POST /admin/transparency/verify.
+
+/**
+ * POST /admin/transparency
+ * Create a new monthly record.
+ */
+router.post("/admin/transparency", requireAdminSession, async (req, res): Promise<void> => {
   const body = req.body as {
     periodYear?: number;
     periodMonth?: number;
@@ -196,7 +221,7 @@ router.post("/admin/transparency", requireAdminPassword, async (req, res): Promi
  * PUT /admin/transparency/:id
  * Update an existing monthly record.
  */
-router.put("/admin/transparency/:id", requireAdminPassword, async (req, res): Promise<void> => {
+router.put("/admin/transparency/:id", requireAdminSession, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (Number.isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
@@ -251,7 +276,7 @@ router.put("/admin/transparency/:id", requireAdminPassword, async (req, res): Pr
  * DELETE /admin/transparency/:id
  * Remove a monthly record.
  */
-router.delete("/admin/transparency/:id", requireAdminPassword, async (req, res): Promise<void> => {
+router.delete("/admin/transparency/:id", requireAdminSession, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (Number.isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
@@ -275,10 +300,8 @@ router.delete("/admin/transparency/:id", requireAdminPassword, async (req, res):
 /**
  * POST /admin/transparency/upload-url
  * Returns a presigned GCS upload URL for invoice file uploads.
- * Body: { name: string, size: number, contentType: string }
- * Returns: { uploadUrl: string, objectPath: string }
  */
-router.post("/admin/transparency/upload-url", requireAdminPassword, async (req, res): Promise<void> => {
+router.post("/admin/transparency/upload-url", requireAdminSession, async (req, res): Promise<void> => {
   const bucketId = process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"];
   if (!bucketId) {
     res.status(503).json({ error: "Object storage is not configured" });
@@ -288,7 +311,6 @@ router.post("/admin/transparency/upload-url", requireAdminPassword, async (req, 
   try {
     const service = new ObjectStorageService();
     const uploadUrl = await service.getObjectEntityUploadURL();
-    // normalizeObjectEntityPath converts the full GCS URL to a local /objects/... path
     const objectPath = service.normalizeObjectEntityPath(uploadUrl);
     res.json({ uploadUrl, objectPath });
   } catch (err) {

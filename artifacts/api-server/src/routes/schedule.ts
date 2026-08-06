@@ -1,28 +1,10 @@
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db, scheduleEventsTable, fixturesTable } from "@workspace/db";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";
+import { requireAdminSession } from "../lib/adminAuth";
 
 const router: IRouter = Router();
-
-// ---------------------------------------------------------------------------
-// Auth guard (same pattern as admin.ts — must use ADMIN_PASSWORD, not
-// SESSION_SECRET, to match the verify endpoint in transparency.ts)
-// ---------------------------------------------------------------------------
-function requireAdminToken(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env["ADMIN_PASSWORD"];
-  if (!secret) {
-    res.status(503).json({ error: "Admin endpoints are not configured on this server" });
-    return;
-  }
-  const auth = req.headers["authorization"] ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (token !== secret) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -115,7 +97,7 @@ router.get("/schedule", async (_req, res): Promise<void> => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/schedule  — list all events (admin)
 // ---------------------------------------------------------------------------
-router.get("/admin/schedule", requireAdminToken, async (_req, res): Promise<void> => {
+router.get("/admin/schedule", requireAdminSession, async (_req, res): Promise<void> => {
   const events = await db
     .select()
     .from(scheduleEventsTable)
@@ -127,7 +109,7 @@ router.get("/admin/schedule", requireAdminToken, async (_req, res): Promise<void
 // ---------------------------------------------------------------------------
 // POST /api/admin/schedule  — create a new event
 // ---------------------------------------------------------------------------
-router.post("/admin/schedule", requireAdminToken, async (req, res): Promise<void> => {
+router.post("/admin/schedule", requireAdminSession, async (req, res): Promise<void> => {
   const parsed = upsertEventBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body", details: parsed.error.issues });
@@ -145,7 +127,7 @@ router.post("/admin/schedule", requireAdminToken, async (req, res): Promise<void
 // ---------------------------------------------------------------------------
 // PUT /api/admin/schedule/:id  — replace an event by numeric id
 // ---------------------------------------------------------------------------
-router.put("/admin/schedule/:id", requireAdminToken, async (req, res): Promise<void> => {
+router.put("/admin/schedule/:id", requireAdminSession, async (req, res): Promise<void> => {
   const idParam = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
   const id = parseInt(idParam ?? "", 10);
   if (Number.isNaN(id)) {
@@ -176,7 +158,7 @@ router.put("/admin/schedule/:id", requireAdminToken, async (req, res): Promise<v
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/schedule/:id  — remove an event
 // ---------------------------------------------------------------------------
-router.delete("/admin/schedule/:id", requireAdminToken, async (req, res): Promise<void> => {
+router.delete("/admin/schedule/:id", requireAdminSession, async (req, res): Promise<void> => {
   const idParam = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
   const id = parseInt(idParam ?? "", 10);
   if (Number.isNaN(id)) {

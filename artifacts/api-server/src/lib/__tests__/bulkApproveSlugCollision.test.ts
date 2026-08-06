@@ -111,6 +111,9 @@ vi.mock("@workspace/db", () => ({
   playersTable: tPlayers,
   clubsTable: tClubs,
   eligibilitySignalsTable: tEligibilitySignals,
+  // requireAdminSession queries this table; the mock DB's select chain returns
+  // a truthy result for any query so the middleware passes through.
+  adminSessionsTable: { _table: "admin_sessions" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -120,6 +123,7 @@ vi.mock("drizzle-orm", () => ({
   isNotNull: (_col: unknown) => ({ _isNotNull: _col }),
   or: (...args: unknown[]) => ({ _or: args }),
   and: (...args: unknown[]) => ({ _and: args }),
+  gt: (_col: unknown, _val: unknown) => ({ _gt: [_col, _val] }),
   gte: (_col: unknown, _val: unknown) => ({ _gte: [_col, _val] }),
   inArray: (_col: unknown, _vals: unknown) => ({ _inArray: [_col, _vals] }),
 }));
@@ -252,10 +256,24 @@ describe("POST /admin/review-queue/bulk-approve — slug collision", () => {
       },
     );
 
-    // db.select returns both candidates from the .where() call
+    // db.select must support two different call patterns in the same request:
+    //   1. requireAdminSession: .select().from(adminSessionsTable).where(...).limit(1)
+    //      — needs .limit() on the where result, returning a truthy session stub.
+    //   2. The bulk-approve route handler: .select().from(candidates).where(...)
+    //      — awaits .where() directly (no .limit()).
+    // We satisfy both by making the where() result both thenable (for pattern 2)
+    // and having a .limit() method (for pattern 1).
+    const BULK_CANDIDATES = [CANDIDATE_1, CANDIDATE_2];
+    const SESSION_STUB = [{ id: 1, tokenHash: "x", expiresAt: new Date(Date.now() + 86_400_000), revokedAt: null, createdAt: new Date() }];
     mockDb.select.mockReturnValue({
       from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([CANDIDATE_1, CANDIDATE_2]),
+        where: vi.fn().mockReturnValue({
+          // Thenable — bulk-approve route awaits .where() directly
+          then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+            Promise.resolve(BULK_CANDIDATES).then(resolve, reject),
+          // Used by requireAdminSession to look up the session row
+          limit: vi.fn().mockResolvedValue(SESSION_STUB),
+        }),
       }),
     });
   });

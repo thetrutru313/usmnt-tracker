@@ -8,6 +8,13 @@
       "when": 1786047746767,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786053157428,
+      "tag": "0001_add_admin_sessions",
+      "breakpoints": true
     }
   ]
 }

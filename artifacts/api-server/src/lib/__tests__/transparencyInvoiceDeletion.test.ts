@@ -34,21 +34,34 @@ const ADMIN_PASSWORD = "transparency-invoice-deletion-test-pw";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Populated by beforeAll after the verify call. */
+let sessionToken = "";
+
 function authHeader() {
-  return { Authorization: `Bearer ${ADMIN_PASSWORD}` };
+  return { Authorization: `Bearer ${sessionToken}` };
 }
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
 
 let createdId: number | undefined;
 
-beforeAll(() => {
-  // The requireAdminPassword middleware reads ADMIN_PASSWORD at request time,
-  // so setting it here (before any request is made) is sufficient.
+beforeAll(async () => {
   process.env["ADMIN_PASSWORD"] = ADMIN_PASSWORD;
+  // Obtain a server-issued session token. The raw ADMIN_PASSWORD is only
+  // accepted at the verify endpoint — all other admin routes require the token.
+  const verifyRes = await request(app)
+    .post("/api/admin/transparency/verify")
+    .set({ Authorization: `Bearer ${ADMIN_PASSWORD}` });
+  sessionToken = (verifyRes.body as { token: string }).token;
 });
 
 afterAll(async () => {
+  // Revoke the session server-side so the row doesn't linger.
+  if (sessionToken) {
+    await request(app)
+      .post("/api/admin/logout")
+      .set({ Authorization: `Bearer ${sessionToken}` });
+  }
   // Clean up the sentinel record so repeated test runs don't conflict.
   if (createdId != null) {
     await db

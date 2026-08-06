@@ -97,6 +97,9 @@ vi.mock("@workspace/db", () => ({
   playersTable: tPlayers,
   clubsTable: tClubs,
   eligibilitySignalsTable: tEligibilitySignals,
+  // requireAdminSession queries this table; the mock DB's select chain returns
+  // a truthy result for any query so the middleware passes through.
+  adminSessionsTable: { _table: "admin_sessions" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -107,6 +110,7 @@ vi.mock("drizzle-orm", () => ({
   isNotNull: (_col: unknown)                          => ({ _isNotNull: _col }),
   asc:       (_col: unknown)                          => ({ _asc: _col }),
   desc:      (_col: unknown)                          => ({ _desc: _col }),
+  gt:        (_col: unknown, _val: unknown)           => ({ _gt:  [_col, _val] }),
   gte:       (_col: unknown, _val: unknown)           => ({ _gte: [_col, _val] }),
   lte:       (_col: unknown, _val: unknown)           => ({ _lte: [_col, _val] }),
   lt:        (_col: unknown, _val: unknown)           => ({ _lt:  [_col, _val] }),
