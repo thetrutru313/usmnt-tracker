@@ -1,0 +1,158 @@
+This is a read-only diagnostic. Do not modify any file, any schema, or any
+database. Its purpose is to establish exactly what state the migration system is
+in before the next task changes it.
+
+WHAT WE ALREADY KNOW — do not re-derive this, but do confirm it:
+
+  - Production and development are SEPARATE Postgres instances.
+      production  → Neon-backed, current_database = "neondb"
+      development → current_database = "heliumdb", local socket
+  - Their DATA already differs. transparency_months row 1 holds a different
+    invoice UUID in each.
+  - lib/db/drizzle/0010_add_missing_indexes.sql is generated but NOT applied.
+  - 11 .sql migration files exist; the journal records 7.
+
+────────────────────────────────────────────────────────────────────────
+0. ESTABLISH ACCESS TO BOTH DATABASES. Do this first.
+────────────────────────────────────────────────────────────────────────
+
+Everything below requires querying production AND development. Before anything
+else, work out how you reach each one and report it:
+
+  - Which environment variable or secret holds each connection string
+  - Whether both are reachable from the shell you are working in, or whether
+    production requires a different route
+  - The HOSTNAME in production's connection string. Do NOT print the password
+    or the full URL — just the host portion.
+
+That hostname matters beyond this task: a public Neon host
+(ep-xxxx.region.aws.neon.tech) is reachable from anywhere, which means a future
+host could connect to it directly. An internal name means every dump must be
+taken from inside Replit. Report which it is.
+
+If you cannot reach both databases, STOP and say so. A schema comparison across
+two instances is the whole point of this task.
+
+────────────────────────────────────────────────────────────────────────
+1. BACK UP BOTH DATABASES. Before any other command.
+────────────────────────────────────────────────────────────────────────
+
+  pg_dump "<production url>"  --no-owner --no-acl -Fc -f backup-prod-<date>.dump
+  pg_dump "<development url>" --no-owner --no-acl -Fc -f backup-dev-<date>.dump
+
+Report the file size and location of each. If pg_dump is unavailable or either
+dump fails, STOP — everything after this depends on having a way back.
+
+Confirm the dumps are non-trivial in size. A 2 KB dump means it captured
+nothing.
+
+────────────────────────────────────────────────────────────────────────
+2. INVENTORY THE MIGRATION SYSTEM
+────────────────────────────────────────────────────────────────────────
+
+Report all four verbatim. Do not summarise.
+
+  a. ls -la lib/db/drizzle/*.sql
+  b. cat lib/db/drizzle/meta/_journal.json
+  c. ls -la lib/db/drizzle/meta/*.json
+  d. The applied-migrations table in EACH database, separately:
+       SELECT * FROM drizzle.__drizzle_migrations ORDER BY created_at;
+     If that table or schema does not exist in one of them, say so — that is
+     itself the finding, and means `migrate` has never run there.
+
+Then state plainly:
+  - How many .sql files exist
+  - How many the journal records
+  - Which files are on disk but absent from the journal
+  - Which are recorded as applied in production, and which in development
+
+────────────────────────────────────────────────────────────────────────
+3. THE DECISIVE TEST — do the migration files reproduce reality?
+────────────────────────────────────────────────────────────────────────
+
+This single question determines which path 4B takes.
+
+You need a throwaway database. In order of preference:
+
+  a. NEON BRANCH. Production is Neon-backed. If you can reach the Neon project
+     directly, branch production — an instant copy-on-write clone. Best option:
+     real schema, real data, disposable, zero risk to the original.
+  b. createdb usmnt_scratch. May fail if Replit's managed Postgres does not
+     grant CREATE DATABASE to the app role. Try it; report the error if so.
+  c. A separate SCHEMA in the development database. Create schema "scratch",
+     set search_path, work there. Fiddlier but equivalent for this purpose.
+
+Report which you used and why. Do NOT skip this test — it decides whether 4B
+needs a baseline at all, and guessing wrong is expensive.
+
+Apply ONLY the existing migration files, in filename order, using raw psql —
+not drizzle-kit push, which would bypass the files and defeat the test:
+
+  for f in lib/db/drizzle/*.sql; do psql "$SCRATCH_URL" -f "$f"; done
+
+Report every error. A file failing to apply IS the answer.
+
+Then compare against PRODUCTION (not development — production is what we are
+baselining for):
+
+  pg_dump "<production url>" --schema-only --no-owner --no-acl | sort > /tmp/prod.sql
+  pg_dump "$SCRATCH_URL"     --schema-only --no-owner --no-acl | sort > /tmp/scratch.sql
+  diff /tmp/prod.sql /tmp/scratch.sql
+
+Report the diff in full, then state which case applies:
+
+  CASE A — the files reproduce production exactly.
+    Good outcome. 4B only needs to reconcile the journal and the applied-
+    migrations table. No baseline required.
+
+  CASE B — they do not.
+    Expected, since `push` has been the real deployment mechanism. List every
+    difference: missing tables, columns, indexes, type mismatches. This is what
+    a baseline has to capture.
+
+────────────────────────────────────────────────────────────────────────
+4. PRODUCTION VERSUS DEVELOPMENT SCHEMA
+────────────────────────────────────────────────────────────────────────
+
+We know the two instances hold different DATA. The question is whether they
+hold different SCHEMA — because if so, one baseline cannot be correct for both,
+and 4B has to treat them separately.
+
+  pg_dump "<development url>" --schema-only --no-owner --no-acl | sort > /tmp/dev.sql
+  diff /tmp/prod.sql /tmp/dev.sql
+
+Report the diff in full. If they differ, list every difference explicitly. This
+directly changes 4B's plan, so do not summarise it as "minor differences".
+
+────────────────────────────────────────────────────────────────────────
+5. THE STAGED INDEX MIGRATION
+────────────────────────────────────────────────────────────────────────
+
+Run this against BOTH databases and report each result separately:
+
+  SELECT indexname, tablename FROM pg_indexes
+  WHERE schemaname = 'public'
+    AND indexname IN (
+      'player_stats_player_id_idx','injuries_player_id_idx',
+      'fixtures_kickoff_idx','players_club_id_idx',
+      'news_article_players_article_id_idx','news_article_players_player_id_idx'
+    );
+
+This matters more than it looks. Those six indexes are in the schema FILES, so
+any baseline generated from the schema will include them — and if that baseline
+is then marked already-applied, the indexes would never actually be created.
+4B applies them first for exactly this reason, but it needs to know the true
+starting state in each database.
+
+────────────────────────────────────────────────────────────────────────
+
+Then STOP. Change nothing. Report:
+  - How you reach each database, and production's hostname (host only)
+  - Backup locations and sizes
+  - The four inventories from section 2
+  - Which scratch method you used
+  - Case A or Case B, with the full diff
+  - The production-vs-development schema diff, in full
+  - Which of the six indexes exist in each database
+
+Drop the scratch database or branch only after reporting, and confirm you did.

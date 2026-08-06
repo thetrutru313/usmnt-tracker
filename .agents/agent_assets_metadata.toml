@@ -84,3 +84,10 @@ uri = "file://reports/checkpoint-verification-2026-08-06.md"
 type = "text"
 title = "Checkpoint Verification — 2026-08-06"
 description = "Working tree status, last 20 commits, per-file history for 7 key files, and HEAD typecheck + test results."
+
+[[outputs]]
+id = "RjnPwDtJW1u85ATjMdpPt"
+uri = "file://reports/migration-diagnostic-2026-08-06.md"
+type = "text"
+title = "Migration Diagnostic — 2026-08-06"
+description = "Read-only audit of the Drizzle migration system: access paths, backup status, inventory, scratch-DB apply results, prod/dev schema diff, and six staged index check."
