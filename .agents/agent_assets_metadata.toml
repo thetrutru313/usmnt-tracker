@@ -140,3 +140,10 @@ uri = "file://reports/pre-publish-cleanup.md"
 type = "text"
 title = "Pre-Publish Cleanup Report"
 description = "adminSession.test.ts rewrite, lint fixes, expiry alignment check, transparency test row cleanup, and production verification."
+
+[[outputs]]
+id = "yLjjUBHp7dvtgrVk_tuzs"
+uri = "file://admin-login-diagnostic-2026-08-06.md"
+type = "text"
+title = "Admin Login Diagnostic — 2026-08-06"
+description = "Full diagnostic report: root cause analysis, verbatim log excerpts, code evidence, and recommended fix sequence for the production admin login loop."
