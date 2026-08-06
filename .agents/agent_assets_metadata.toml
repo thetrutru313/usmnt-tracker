@@ -49,3 +49,10 @@ uri = "file://reports/ci-lint-tasks-results.md"
 type = "text"
 title = "CI / Lint Task Results"
 description = "Full results for all four tasks: canary verification, Decision 2 & 3 documentation, self-contained fixtures, and CI workflow corrections."
+
+[[outputs]]
+id = "ewjagPlnL7yLloZdmpPDF"
+uri = "file://reports/six-fixes-results.md"
+type = "text"
+title = "Six Independent Fixes — Results"
+description = "Full results for all six fixes: static import, list rate limits, DB indexes, RSS https, loud WebKit skip, unused deps."

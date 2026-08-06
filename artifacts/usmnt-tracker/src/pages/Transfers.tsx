@@ -7,7 +7,7 @@ import { RefreshCw, ArrowRight, ExternalLink, Newspaper } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Transfers() {
-  const { data: transfers, isLoading: transfersLoading } = useListTransfers();
+  const { data: transfers, isLoading: transfersLoading } = useListTransfers({ limit: 200 });
   const { data: rumorArticles, isLoading: rumorsLoading } = useListNews(
     { category: "Transfer Rumors", limit: 15 },
   );

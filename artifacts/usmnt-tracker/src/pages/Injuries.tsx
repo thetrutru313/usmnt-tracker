@@ -7,7 +7,7 @@ import { Activity, Clock, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Injuries() {
-  const { data: injuries, isLoading } = useListInjuries();
+  const { data: injuries, isLoading } = useListInjuries({ limit: 200 });
 
   if (isLoading) {
     return (
