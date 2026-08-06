@@ -20,6 +20,7 @@ import {
   loadSession,
   clearSession,
   SessionExpiredError,
+  RateLimitError,
   API_BASE,
   apiFetch,
 } from "../lib/adminSession";
@@ -92,16 +93,28 @@ function useSessionExpiry(): number | null {
 
 // ─── Re-auth modal ─────────────────────────────────────────────────────────────
 
-function ReAuthModal({
+export function ReAuthModal({
   onSuccess,
   onCancel,
 }: {
-  onSuccess: () => void;
+  /** Fix A: receives the newly issued token so root state can be updated. */
+  onSuccess: (token: string) => void;
   onCancel: () => void;
 }) {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = React.useState<number | null>(null);
+
+  // Auto-clear the rate-limit block when its window expires so the button
+  // re-enables without requiring a page reload.
+  React.useEffect(() => {
+    if (!rateLimitUntil) return;
+    const ms = rateLimitUntil - Date.now();
+    if (ms <= 0) { setRateLimitUntil(null); return; }
+    const id = setTimeout(() => setRateLimitUntil(null), ms);
+    return () => clearTimeout(id);
+  }, [rateLimitUntil]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,13 +123,24 @@ function ReAuthModal({
     try {
       const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
       saveSession(res.token, res.sessionExpiryMs);
-      onSuccess();
-    } catch {
-      setError("Incorrect password.");
+      onSuccess(res.token); // Fix A: pass the new token to root state
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        const until = err.secsRemaining != null
+          ? Date.now() + err.secsRemaining * 1000
+          : Date.now() + 15 * 60 * 1000;
+        setRateLimitUntil(until);
+      } else {
+        setError("Incorrect password.");
+      }
     } finally {
       setLoading(false);
     }
   }
+
+  const rateLimitMinsLeft = rateLimitUntil
+    ? Math.max(1, Math.ceil((rateLimitUntil - Date.now()) / 60_000))
+    : 0;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -142,11 +166,17 @@ function ReAuthModal({
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {rateLimitUntil ? (
+            <p className="text-sm text-destructive">
+              Too many attempts — please wait {rateLimitMinsLeft} minute{rateLimitMinsLeft !== 1 ? "s" : ""} before trying again.
+            </p>
+          ) : (
+            error && <p className="text-sm text-destructive">{error}</p>
+          )}
           <div className="flex gap-2">
             <button
               type="submit"
-              disabled={loading || !password}
+              disabled={loading || !password || !!rateLimitUntil}
               className="flex-1 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? "Checking…" : "Extend Session"}
@@ -178,6 +208,16 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = React.useState<number | null>(null);
+
+  // Auto-clear the rate-limit block when its window expires.
+  React.useEffect(() => {
+    if (!rateLimitUntil) return;
+    const ms = rateLimitUntil - Date.now();
+    if (ms <= 0) { setRateLimitUntil(null); return; }
+    const id = setTimeout(() => setRateLimitUntil(null), ms);
+    return () => clearTimeout(id);
+  }, [rateLimitUntil]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -187,12 +227,23 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
       const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
       saveSession(res.token, res.sessionExpiryMs);
       onSuccess(res.token);
-    } catch {
-      setError("Incorrect password.");
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        const until = err.secsRemaining != null
+          ? Date.now() + err.secsRemaining * 1000
+          : Date.now() + 15 * 60 * 1000;
+        setRateLimitUntil(until);
+      } else {
+        setError("Incorrect password.");
+      }
     } finally {
       setLoading(false);
     }
   }
+
+  const rateLimitMinsLeft = rateLimitUntil
+    ? Math.max(1, Math.ceil((rateLimitUntil - Date.now()) / 60_000))
+    : 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -213,10 +264,16 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {rateLimitUntil ? (
+            <p className="text-sm text-destructive">
+              Too many attempts — please wait {rateLimitMinsLeft} minute{rateLimitMinsLeft !== 1 ? "s" : ""} before trying again.
+            </p>
+          ) : (
+            error && <p className="text-sm text-destructive">{error}</p>
+          )}
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={loading || !password || !!rateLimitUntil}
             className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {loading ? "Checking…" : "Sign In"}
@@ -771,7 +828,7 @@ function ClubOverrideSection({ token, onUnauthorized }: { token: string; onUnaut
 
 // ─── Main admin panel ─────────────────────────────────────────────────────────
 
-function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
+function AdminPanel({ token, onLogout, onReauth }: { token: string; onLogout: () => void; onReauth: (token: string) => void }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<number | null>(null);
@@ -814,7 +871,14 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
         await apiFetch("/admin/session", token);
       } catch (err) {
         if (err instanceof SessionExpiredError) {
-          handleUnauthorized();
+          // Fix B: guard against the race where a stale in-flight validate
+          // resolves 401 after a new login has already saved a fresh token.
+          // If localStorage now holds a different token, a newer session is
+          // active — ignore this 401 rather than wiping the new token.
+          const stored = loadSession();
+          if (!stored || stored === token) {
+            handleUnauthorized();
+          }
         }
         // Any other error (network offline, server down) — leave the session
         // intact so the admin isn't unexpectedly logged out by a blip.
@@ -904,9 +968,10 @@ function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }
       {/* Re-auth modal */}
       {showReAuth && (
         <ReAuthModal
-          onSuccess={() => {
+          onSuccess={(newToken) => {
             setShowReAuth(false);
-            setBannerDismissed(false); // banner will hide naturally since minutesLeft resets
+            setBannerDismissed(false);
+            onReauth(newToken); // Fix A: propagate the new token to root state
           }}
           onCancel={() => setShowReAuth(false)}
         />
@@ -1160,5 +1225,5 @@ export default function Admin() {
     return <LoginForm onSuccess={setToken} />;
   }
 
-  return <AdminPanel token={token} onLogout={handleLogout} />;
+  return <AdminPanel token={token} onLogout={handleLogout} onReauth={setToken} />;
 }

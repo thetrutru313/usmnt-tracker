@@ -7,6 +7,7 @@ import {
   loadSession,
   clearSession,
   SessionExpiredError,
+  RateLimitError,
   apiFetch,
 } from "../lib/adminSession";
 
@@ -67,6 +68,16 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [rateLimitUntil, setRateLimitUntil] = React.useState<number | null>(null);
+
+  // Auto-clear the rate-limit block when its window expires.
+  React.useEffect(() => {
+    if (!rateLimitUntil) return;
+    const ms = rateLimitUntil - Date.now();
+    if (ms <= 0) { setRateLimitUntil(null); return; }
+    const id = setTimeout(() => setRateLimitUntil(null), ms);
+    return () => clearTimeout(id);
+  }, [rateLimitUntil]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,12 +87,23 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
       const res = await apiFetch("/admin/transparency/verify", password, { method: "POST" }) as { ok: boolean; token: string; sessionExpiryMs?: number };
       saveSession(res.token, res.sessionExpiryMs);
       onSuccess(res.token);
-    } catch {
-      setError("Incorrect password.");
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        const until = err.secsRemaining != null
+          ? Date.now() + err.secsRemaining * 1000
+          : Date.now() + 15 * 60 * 1000;
+        setRateLimitUntil(until);
+      } else {
+        setError("Incorrect password.");
+      }
     } finally {
       setLoading(false);
     }
   }
+
+  const rateLimitMinsLeft = rateLimitUntil
+    ? Math.max(1, Math.ceil((rateLimitUntil - Date.now()) / 60_000))
+    : 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -102,10 +124,16 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string) => void }) {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {rateLimitUntil ? (
+            <p className="text-sm text-destructive">
+              Too many attempts — please wait {rateLimitMinsLeft} minute{rateLimitMinsLeft !== 1 ? "s" : ""} before trying again.
+            </p>
+          ) : (
+            error && <p className="text-sm text-destructive">{error}</p>
+          )}
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={loading || !password || !!rateLimitUntil}
             className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {loading ? "Checking…" : "Sign In"}

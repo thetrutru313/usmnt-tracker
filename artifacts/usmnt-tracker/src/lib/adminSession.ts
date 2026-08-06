@@ -62,6 +62,20 @@ export class SessionExpiredError extends Error {
   }
 }
 
+/**
+ * Thrown by apiFetch when the server returns 429 (rate limited).
+ * `secsRemaining` is derived from the RateLimit-Reset or Retry-After header;
+ * it is null when neither header is present.
+ */
+export class RateLimitError extends Error {
+  secsRemaining: number | null;
+  constructor(secsRemaining: number | null) {
+    super("Too many attempts — please wait before trying again.");
+    this.name = "RateLimitError";
+    this.secsRemaining = secsRemaining;
+  }
+}
+
 export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function authHeaders(token: string) {
@@ -74,6 +88,21 @@ export async function apiFetch(path: string, token: string, opts: RequestInit = 
     headers: { ...(opts.headers ?? {}), ...authHeaders(token) },
   });
   if (res.status === 401) throw new SessionExpiredError();
+  if (res.status === 429) {
+    // RateLimit-Reset is a Unix epoch timestamp (seconds); Retry-After is seconds
+    // remaining. Values > 1 billion are epochs; smaller values are durations.
+    const raw = res.headers.get("RateLimit-Reset") ?? res.headers.get("Retry-After");
+    let secsRemaining: number | null = null;
+    if (raw) {
+      const n = parseInt(raw, 10);
+      if (Number.isFinite(n)) {
+        secsRemaining = n > 1_000_000_000
+          ? Math.max(0, n - Math.floor(Date.now() / 1000))
+          : n;
+      }
+    }
+    throw new RateLimitError(secsRemaining);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? `HTTP ${res.status}`);
