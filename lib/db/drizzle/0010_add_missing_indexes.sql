@@ -1,4 +1,3 @@
-ALTER TABLE "fixtures" ADD COLUMN "city" text;--> statement-breakpoint
 CREATE INDEX "players_club_id_idx" ON "players" USING btree ("club_id");--> statement-breakpoint
 CREATE INDEX "player_stats_player_id_idx" ON "player_stats" USING btree ("player_id");--> statement-breakpoint
 CREATE INDEX "fixtures_kickoff_idx" ON "fixtures" USING btree ("kickoff");--> statement-breakpoint
