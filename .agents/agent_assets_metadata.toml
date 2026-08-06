@@ -91,3 +91,31 @@ uri = "file://reports/migration-diagnostic-2026-08-06.md"
 type = "text"
 title = "Migration Diagnostic — 2026-08-06"
 description = "Read-only audit of the Drizzle migration system: access paths, backup status, inventory, scratch-DB apply results, prod/dev schema diff, and six staged index check."
+
+[[outputs]]
+id = "jzBvwDtTLfjXli1pIW67m"
+uri = "file://reports/step-0-backup-report-2026-08-06.md"
+type = "text"
+title = "Step 0 — Backup Report — 2026-08-06"
+description = "Dev backup status, all three production backup options (a/b/c), PITR findings, and disclosure of unauthorized Step 1 actions."
+
+[[outputs]]
+id = "J1ikhGOXnxkcywnKWkWxY"
+uri = "file://reports/step-1-index-report-2026-08-06.md"
+type = "text"
+title = "Step 1 — Index Application Report — 2026-08-06"
+description = "CSV backup verification (all 21 tables), 0010 fix, scratch/dev apply results, exact production SQL, and the production blocker with options."
+
+[[outputs]]
+id = "XgZvOlOXgVWQ4I3pQsaxp"
+uri = "file://reports/step-2-3-baseline-report-2026-08-06.md"
+type = "text"
+title = "Steps 2–3.5a — Baseline Migration Report — 2026-08-06"
+description = "Archive, baseline generation, full scratch-vs-production comparison, dev migration table setup, hash derivation, and Publish evidence. Stopped at Step 3.5b."
+
+[[outputs]]
+id = "xtDAm0qh1romIc7qRJhTB"
+uri = "file://reports/step-4-5-completion-report-2026-08-06.md"
+type = "text"
+title = "Steps 3.5b–5 — Completion Report — 2026-08-06"
+description = "Publish index verification, migrate proof (scratch + dev + throwaway round-trip), documentation (lib/db/README.md + replit.md), and final verification suite results."

@@ -1,5 +1,5 @@
 {
-  "id": "501af7c4-d467-420a-a1fd-d922650c334c",
+  "id": "f2cb11d6-dff5-4faa-8c12-4df451d03c30",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -225,63 +225,9 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "squad_last_checked_at": {
-          "name": "squad_last_checked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "usmnt_status": {
-          "name": "usmnt_status",
-          "type": "player_usmnt_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "eligibility_confidence": {
-          "name": "eligibility_confidence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "needs_review": {
-          "name": "needs_review",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "club_override_id": {
-          "name": "club_override_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "club_override_set_at": {
-          "name": "club_override_set_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
-      "indexes": {
-        "players_club_id_idx": {
-          "name": "players_club_id_idx",
-          "columns": [
-            {
-              "expression": "club_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "players_club_id_clubs_id_fk": {
           "name": "players_club_id_clubs_id_fk",
@@ -289,19 +235,6 @@
           "tableTo": "clubs",
           "columnsFrom": [
             "club_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "players_club_override_id_clubs_id_fk": {
-          "name": "players_club_override_id_clubs_id_fk",
-          "tableFrom": "players",
-          "tableTo": "clubs",
-          "columnsFrom": [
-            "club_override_id"
           ],
           "columnsTo": [
             "id"
@@ -621,23 +554,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "player_stats_player_id_idx": {
-          "name": "player_stats_player_id_idx",
-          "columns": [
-            {
-              "expression": "player_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "player_stats_player_id_players_id_fk": {
           "name": "player_stats_player_id_players_id_fk",
@@ -862,12 +779,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -876,23 +787,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "fixtures_kickoff_idx": {
-          "name": "fixtures_kickoff_idx",
-          "columns": [
-            {
-              "expression": "kickoff",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
@@ -931,38 +826,7 @@
           "notNull": true
         }
       },
-      "indexes": {
-        "news_article_players_article_id_idx": {
-          "name": "news_article_players_article_id_idx",
-          "columns": [
-            {
-              "expression": "article_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "news_article_players_player_id_idx": {
-          "name": "news_article_players_player_id_idx",
-          "columns": [
-            {
-              "expression": "player_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "news_article_players_article_id_news_articles_id_fk": {
           "name": "news_article_players_article_id_news_articles_id_fk",
@@ -1135,23 +999,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "injuries_player_id_idx": {
-          "name": "injuries_player_id_idx",
-          "columns": [
-            {
-              "expression": "player_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "injuries_player_id_players_id_fk": {
           "name": "injuries_player_id_players_id_fk",
@@ -1453,12 +1301,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "first_name": {
-          "name": "first_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "position": {
           "name": "position",
           "type": "text",
@@ -1540,69 +1382,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "last_scored_at": {
-          "name": "last_scored_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "usmnt_status": {
-          "name": "usmnt_status",
-          "type": "usmnt_candidate_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "eligibility_confidence": {
-          "name": "eligibility_confidence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "secondary_nationalities": {
-          "name": "secondary_nationalities",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "birthplace": {
-          "name": "birthplace",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "data_sources": {
-          "name": "data_sources",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "needs_review": {
-          "name": "needs_review",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        },
-        "is_manual_override": {
-          "name": "is_manual_override",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        },
-        "status_notes": {
-          "name": "status_notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duplicate_of_id": {
-          "name": "duplicate_of_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1631,104 +1410,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.eligibility_signals": {
-      "name": "eligibility_signals",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "candidate_id": {
-          "name": "candidate_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "signal_type": {
-          "name": "signal_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "signal_value": {
-          "name": "signal_value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "weight": {
-          "name": "weight",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "detected_at": {
-          "name": "detected_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "eligibility_signals_candidate_type_source_idx": {
-          "name": "eligibility_signals_candidate_type_source_idx",
-          "columns": [
-            {
-              "expression": "candidate_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "signal_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "eligibility_signals_candidate_id_player_candidates_id_fk": {
-          "name": "eligibility_signals_candidate_id_player_candidates_id_fk",
-          "tableFrom": "eligibility_signals",
-          "tableTo": "player_candidates",
-          "columnsFrom": [
-            "candidate_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1845,324 +1526,9 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.anon_users": {
-      "name": "anon_users",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "anon_users_token_hash_unique": {
-          "name": "anon_users_token_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "token_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_follows": {
-      "name": "user_follows",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "anon_user_id": {
-          "name": "anon_user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "player_id": {
-          "name": "player_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "followed_at": {
-          "name": "followed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_follows_anon_user_id_anon_users_id_fk": {
-          "name": "user_follows_anon_user_id_anon_users_id_fk",
-          "tableFrom": "user_follows",
-          "tableTo": "anon_users",
-          "columnsFrom": [
-            "anon_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "user_follows_player_id_players_id_fk": {
-          "name": "user_follows_player_id_players_id_fk",
-          "tableFrom": "user_follows",
-          "tableTo": "players",
-          "columnsFrom": [
-            "player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "user_follows_anon_user_player_unique": {
-          "name": "user_follows_anon_user_player_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "anon_user_id",
-            "player_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.recovery_tokens": {
-      "name": "recovery_tokens",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "anon_user_id": {
-          "name": "anon_user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "superseded_at": {
-          "name": "superseded_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "recovery_tokens_anon_user_id_anon_users_id_fk": {
-          "name": "recovery_tokens_anon_user_id_anon_users_id_fk",
-          "tableFrom": "recovery_tokens",
-          "tableTo": "anon_users",
-          "columnsFrom": [
-            "anon_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "recovery_tokens_token_hash_unique": {
-          "name": "recovery_tokens_token_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "token_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.player_status_history": {
-      "name": "player_status_history",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "player_id": {
-          "name": "player_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "prev_status": {
-          "name": "prev_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_status": {
-          "name": "new_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "changed_by": {
-          "name": "changed_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "player_status_history_player_id_players_id_fk": {
-          "name": "player_status_history_player_id_players_id_fk",
-          "tableFrom": "player_status_history",
-          "tableTo": "players",
-          "columnsFrom": [
-            "player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.server_config": {
-      "name": "server_config",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
-  "enums": {
-    "public.player_usmnt_status": {
-      "name": "player_usmnt_status",
-      "schema": "public",
-      "values": [
-        "US_ELIGIBLE_PROSPECT",
-        "DUAL_NATIONAL",
-        "CAP_TIED_OTHER",
-        "DECLARED_OTHER",
-        "UNKNOWN"
-      ]
-    },
-    "public.usmnt_candidate_status": {
-      "name": "usmnt_candidate_status",
-      "schema": "public",
-      "values": [
-        "US_ELIGIBLE_PROSPECT",
-        "DUAL_NATIONAL",
-        "DECLARED_OTHER",
-        "UNKNOWN"
-      ]
-    }
-  },
+  "enums": {},
   "schemas": {},
   "sequences": {},
   "roles": {},

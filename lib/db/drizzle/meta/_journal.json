@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1784332198693,
-      "tag": "0000_late_invaders",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1753660800000,
-      "tag": "0001_recovery_tokens_superseded_at",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1785343991409,
-      "tag": "0002_groovy_korath",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1785350539627,
-      "tag": "0003_players_eligibility_confidence",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1785794112473,
-      "tag": "0008_player_club_override",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1754352000000,
-      "tag": "0009_fixtures_city",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1786038853036,
-      "tag": "0010_add_missing_indexes",
+      "when": 1786047746767,
+      "tag": "0000_baseline",
       "breakpoints": true
     }
   ]

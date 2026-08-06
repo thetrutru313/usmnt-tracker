@@ -8,8 +8,30 @@ Tracks US Men's National Team players worldwide — news, fixtures, stats, injur
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+
+### Database migrations
+
+Migrations live in `lib/db/drizzle/`. **See `lib/db/README.md` for the full
+workflow** — including how to add a migration, why `push` must not be used,
+and the production situation.
+
+Quick reference:
+```sh
+# Add a migration after editing src/schema/
+cd lib/db
+node_modules/.bin/drizzle-kit generate --name=<description> --config=./drizzle.config.ts
+node_modules/.bin/drizzle-kit migrate --config=./drizzle.config.ts   # apply to dev
+```
+
+**Production:** `drizzle-kit migrate` must NOT be pointed at production — the
+`__drizzle_migrations` table does not exist there and migrate would try to
+recreate all 21 existing tables. Production receives schema changes via
+Replit's Publish flow. See `lib/db/README.md` for the full explanation and
+resolution path.
+
+**`drizzle-kit push` must never be used** against dev or production — it
+bypasses migration history.
 
 ## Stack
 
