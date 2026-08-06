@@ -17,8 +17,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
-import { db, transparencyMonthsTable } from "@workspace/db";
+import { db, transparencyMonthsTable, adminSessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { hashToken } from "../../lib/tokenUtils.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -54,11 +55,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Revoke the session server-side so the row doesn't linger.
+  // Delete the session row directly — logout only sets revoked_at, which
+  // leaves a dead row until the daily sweep. A hard delete is cleaner for tests.
   if (sessionToken) {
-    await request(app)
-      .post("/api/admin/logout")
-      .set({ Authorization: `Bearer ${sessionToken}` });
+    await db
+      .delete(adminSessionsTable)
+      .where(eq(adminSessionsTable.tokenHash, hashToken(sessionToken)));
   }
   if (createdId != null) {
     await db

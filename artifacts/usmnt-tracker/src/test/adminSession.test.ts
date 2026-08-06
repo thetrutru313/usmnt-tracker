@@ -1,10 +1,12 @@
 /**
- * Tests for admin session helpers in Admin.tsx.
+ * Tests for admin session helpers in src/lib/adminSession.ts.
  *
  * These are pure unit tests — no React rendering required.
- * They exercise the three session invariants called out in the task:
+ * They import the real shared module so any bug in the implementation is caught
+ * here, not silently hidden behind a local re-implementation.
  *
- *   1. clearSession() removes BOTH localStorage keys.
+ * Three session invariants are covered:
+ *   1. clearSession() removes all localStorage keys.
  *   2. loadSession() clears and returns null when the stored timestamp is expired.
  *   3. A StorageEvent fired from another tab causes the current tab to log out.
  *
@@ -13,34 +15,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-
-// ─── Re-implement the session helpers verbatim so we can test them in isolation
-// without importing the full React component (which pulls in Vite env globals).
-const STORAGE_KEY = "usmnt_admin_token";
-const STORAGE_TS_KEY = "usmnt_admin_token_ts";
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours — must match Admin.tsx
-
-function saveSession(token: string): void {
-  localStorage.setItem(STORAGE_KEY, token);
-  localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
-}
-
-function clearSession(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(STORAGE_TS_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-function loadSession(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY);
-  const ts = localStorage.getItem(STORAGE_TS_KEY);
-  if (!token || !ts) return null;
-  if (Date.now() - parseInt(ts, 10) > SESSION_EXPIRY_MS) {
-    clearSession();
-    return null;
-  }
-  return token;
-}
+import {
+  STORAGE_KEY,
+  STORAGE_TS_KEY,
+  STORAGE_EXPIRY_KEY,
+  DEFAULT_SESSION_EXPIRY_MS,
+  saveSession,
+  loadSession,
+  clearSession,
+} from "../lib/adminSession";
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +63,15 @@ describe("clearSession()", () => {
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
+  it("removes usmnt_admin_session_expiry_ms from localStorage", () => {
+    saveSession("secret123", 3_600_000);
+    expect(localStorage.getItem(STORAGE_EXPIRY_KEY)).not.toBeNull();
+
+    clearSession();
+
+    expect(localStorage.getItem(STORAGE_EXPIRY_KEY)).toBeNull();
+  });
+
   it("is idempotent — calling it twice leaves storage empty", () => {
     saveSession("secret123");
     clearSession();
@@ -87,6 +79,7 @@ describe("clearSession()", () => {
 
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(STORAGE_TS_KEY)).toBeNull();
+    expect(localStorage.getItem(STORAGE_EXPIRY_KEY)).toBeNull();
   });
 });
 
@@ -106,7 +99,7 @@ describe("loadSession()", () => {
     saveSession("old-token");
 
     // Advance time past the 24-hour expiry
-    vi.advanceTimersByTime(SESSION_EXPIRY_MS + 1);
+    vi.advanceTimersByTime(DEFAULT_SESSION_EXPIRY_MS + 1);
 
     const result = loadSession();
 

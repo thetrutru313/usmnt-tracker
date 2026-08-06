@@ -7,8 +7,6 @@ import {
   loadSession,
   clearSession,
   SessionExpiredError,
-  API_BASE,
-  authHeaders,
   apiFetch,
 } from "../lib/adminSession";
 

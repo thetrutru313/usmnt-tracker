@@ -15,14 +15,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   STORAGE_KEY,
   STORAGE_TS_KEY,
-  DEFAULT_SESSION_EXPIRY_MS,
   getSessionExpiryMs,
   saveSession,
   loadSession,
   clearSession,
   SessionExpiredError,
   API_BASE,
-  authHeaders,
   apiFetch,
 } from "../lib/adminSession";
 

@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter } from "express";
 import { db, scheduleEventsTable, fixturesTable } from "@workspace/db";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";

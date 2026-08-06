@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
 import { requireAdminSession } from "../lib/adminAuth";
 import { eq, desc, isNull, isNotNull, or, inArray, and, count, lt, lte, asc } from "drizzle-orm";
