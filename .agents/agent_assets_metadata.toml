@@ -119,3 +119,10 @@ uri = "file://reports/step-4-5-completion-report-2026-08-06.md"
 type = "text"
 title = "Steps 3.5b–5 — Completion Report — 2026-08-06"
 description = "Publish index verification, migrate proof (scratch + dev + throwaway round-trip), documentation (lib/db/README.md + replit.md), and final verification suite results."
+
+[[outputs]]
+id = "U1SxtlbyORt-6DJ8IFpH_"
+uri = "file://reports/index-ts-startup-cleanup-2026-08-06.md"
+type = "text"
+title = "index.ts startup block cleanup — 2026-08-06"
+description = "Inventory, recurrence analysis, classification table, and verification results for the api-server startup block audit."
