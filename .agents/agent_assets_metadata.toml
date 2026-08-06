@@ -77,3 +77,10 @@ uri = "file://reports/full-suite-runs-and-upper-bound-check.md"
 type = "text"
 title = "Full-Suite Runs & Upper-Bound Check"
 description = "Three consecutive full-suite results (712/712 each) and a precise analysis of why the +30d–+50d date constants in Suites A/B are safe indefinitely."
+
+[[outputs]]
+id = "DXo2B5QJe7cElFFL2cUJd"
+uri = "file://reports/checkpoint-verification-2026-08-06.md"
+type = "text"
+title = "Checkpoint Verification — 2026-08-06"
+description = "Working tree status, last 20 commits, per-file history for 7 key files, and HEAD typecheck + test results."
