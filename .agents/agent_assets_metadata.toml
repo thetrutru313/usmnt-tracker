@@ -126,3 +126,10 @@ uri = "file://reports/index-ts-startup-cleanup-2026-08-06.md"
 type = "text"
 title = "index.ts startup block cleanup — 2026-08-06"
 description = "Inventory, recurrence analysis, classification table, and verification results for the api-server startup block audit."
+
+[[outputs]]
+id = "e-LCS_zCqijx-uhsvQbcH"
+uri = "file://reports/admin-session-auth-migration.md"
+type = "text"
+title = "Admin Session Auth Migration Report"
+description = "Full writeup of the password-as-token → server-side session token change: schema, backend, frontend, tests, security properties, and operational notes."
