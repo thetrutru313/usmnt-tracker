@@ -147,3 +147,10 @@ uri = "file://admin-login-diagnostic-2026-08-06.md"
 type = "text"
 title = "Admin Login Diagnostic — 2026-08-06"
 description = "Full diagnostic report: root cause analysis, verbatim log excerpts, code evidence, and recommended fix sequence for the production admin login loop."
+
+[[outputs]]
+id = "F_CoW_DUF5ci2DbuH_aXm"
+uri = "file://reports/admin-auth-fix-report.md"
+type = "text"
+title = "Admin Auth Fix — Implementation Report"
+description = "Covers Fix A (token propagation), Fix B (race guard), rate-limit UX, regression tests, verification results, and the healthcheck 500 investigation."
