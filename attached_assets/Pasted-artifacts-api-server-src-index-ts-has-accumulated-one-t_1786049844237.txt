@@ -1,0 +1,115 @@
+artifacts/api-server/src/index.ts has accumulated one-time data repairs that
+execute on every server boot. This task works out which can go.
+
+DO NOT TRUST LINE NUMBERS FROM THE ORIGINAL AUDIT. That snapshot is from
+5 August and the repository has moved since. Inventory the file yourself.
+
+TWO CONSTRAINTS THAT SHAPE THIS TASK — read before planning:
+
+1. These are DATA repairs, not schema changes. Drizzle migrations are for
+   schema. Do NOT relocate them into lib/db/drizzle/.
+2. `drizzle-kit migrate` never runs against production — production has no
+   drizzle schema at all (see lib/db/README.md). A data repair placed in a
+   migration would never execute there. Relocating is not an option.
+
+So each block has exactly three possible outcomes: DELETE, KEEP with a stated
+reason, or FIX THE CAUSE so the repair becomes unnecessary. Nothing gets moved.
+
+────────────────────────────────────────────────────────────────────────
+STEP 1 — Inventory the file as it exists now.
+────────────────────────────────────────────────────────────────────────
+
+List every one-shot block in index.ts with its current line range and a
+one-line description of what it does. Report the file's total line count.
+
+From the original audit these were roughly: an eligibility weight-drift check,
+a backfill of api_football_fixture_id on seeded NT fixtures, deletion of a
+specific player (Obed Vargas) who committed to Mexico, removal of two
+speculative CONCACAF Nations League fixtures, a flag-fixing pass setting
+is_national_team, two streaming-info backfills (Fox One, FIFA+), and a seed of
+six hardcoded youth fixtures. Confirm which still exist and whether any have
+been added since.
+
+The weight-drift check is genuinely recurring and STAYS. So do all the
+start*Schedule() calls. Do not touch those.
+
+────────────────────────────────────────────────────────────────────────
+STEP 2 — For each block, answer TWO questions. Both matter.
+────────────────────────────────────────────────────────────────────────
+
+Query BOTH databases read-only — dev and production are separate instances and
+a repair may have landed in one and not the other.
+
+  Q1. HAS IT TAKEN EFFECT? In dev? In production? Show the query and result
+      for each.
+
+  Q2. CAN THE CONDITION RECUR? This is the question the original plan missed.
+      Trace what created the bad data in the first place and determine whether
+      that code path can create it again.
+
+      For example: the Obed Vargas block deletes a player who committed to
+      Mexico. Can the discovery or sync pipeline re-add him? If yes, deleting
+      the block means he reappears — the block is not a one-time repair, it is
+      the only thing holding the line. The commitment-tracking pipeline may
+      already handle this; check rather than assume.
+
+      Same reasoning for the phantom Nations League fixtures. The code comment
+      claims "the syncNationalTeamFixtures() guard prevents recurrence." Verify
+      that guard actually exists and covers the case. A comment is not evidence.
+
+      Same for the is_national_team flag pass. The comment says the upsert path
+      "is now fixed." Confirm it.
+
+Report a table: block, taken effect in dev, taken effect in production, can it
+recur, and what the guard is if one exists.
+
+────────────────────────────────────────────────────────────────────────
+STEP 3 — Classify, then act only on the safe ones.
+────────────────────────------------------------------------------------
+
+  DELETE — taken effect in BOTH databases AND the condition cannot recur
+    because a real guard exists in the sync path. Remove the block.
+
+  KEEP — the condition can still recur and the block is the only thing
+    preventing it. Leave it, but add a comment naming what would have to be
+    fixed for it to become removable. Report these to me.
+
+  FIX THE CAUSE — the condition can recur and the proper fix belongs in the
+    sync code rather than at startup. Describe the fix. DO NOT implement it in
+    this task; that is a separate change with its own testing.
+
+  BLOCKED — has NOT taken effect in one or both databases. Report it and STOP
+    on that block. Do not delete it. Note that with production read-only via
+    the executeSql proxy, there may be no way to apply the repair other than
+    leaving the startup block in place until the deploy-step path exists.
+
+────────────────────────────────────────────────────────────────────────
+STEP 4 — The six hardcoded youth fixtures need a separate decision.
+────────────────────────────────────────────────────────────────────────
+
+That block is seed data, not a repair. Two things to establish:
+
+  a. Does the fixture sync now create these automatically? If it does, the
+     block is redundant and can go.
+  b. If it does not: deleting it means a database rebuilt from
+     0000_baseline.sql would be missing them. Where should that seed data
+     live? Note that scripts/src/seedUsmnt.ts is not an answer — it opens with
+     TRUNCATE ... RESTART IDENTITY CASCADE and destroys everything.
+
+Recommend an approach. Do not implement it in this task.
+
+────────────────────────────────────────────────────────────────────────
+
+TARGET: index.ts containing the server bootstrap, the weight-drift check, the
+schedule starts, and any block classified KEEP with its justification. If that
+lands near 120 lines, good — but do not delete a block to hit a line count.
+
+DO NOT run scripts/src/seedUsmnt.ts anywhere. DO NOT write to production.
+
+VERIFY:
+  pnpm run lint && pnpm run typecheck && pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Report the Step 2 table in full before showing any diff. I want to see the
+recurrence analysis before the deletions.

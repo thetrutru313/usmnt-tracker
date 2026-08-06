@@ -9,7 +9,7 @@ import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
 import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
-import { db, fixturesTable, fixturePlayersTable, matchLogsTable, playerStatsTable, injuriesTable, transfersTable, playersTable } from "@workspace/db";
+import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
 import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
 const rawPort = process.env["PORT"];
@@ -37,33 +37,6 @@ if (Number.isNaN(port) || port <= 0) {
 // schedule-event corrections and friendly fixture seeding require this ordering
 // guarantee.
 async function runCriticalStartupSeeds(): Promise<void> {
-  // One-time correction: update Sept and Oct 2026 schedule event date windows
-  // to match the officially announced dates. Idempotent — no-ops once correct.
-  try {
-    await db.execute(sql`
-      UPDATE schedule_events
-      SET start_date = '2026-09-26',
-          end_date   = '2026-09-29',
-          date_label = 'Sept 26 & 29, 2026',
-          status     = 'confirmed',
-          updated_at = NOW()
-      WHERE slug = 'friendlies-sept-2026'
-        AND (start_date != '2026-09-26' OR end_date != '2026-09-29')
-    `);
-    await db.execute(sql`
-      UPDATE schedule_events
-      SET start_date = '2026-10-03',
-          end_date   = '2026-10-06',
-          date_label = 'Oct 3 & 6, 2026',
-          status     = 'confirmed',
-          updated_at = NOW()
-      WHERE slug = 'friendlies-oct-2026'
-        AND (start_date != '2026-10-03' OR end_date != '2026-10-06')
-    `);
-  } catch (err) {
-    logger.warn({ err }, "Startup: schedule event date correction failed (non-fatal)");
-  }
-
   // Seed the 4 announced Sept/Oct 2026 USMNT friendlies. Idempotency is keyed
   // on (home_team, away_team, competition, is_national_team, kickoff ±2 days) —
   // NOT on api_football_fixture_id — so the seed is safe across the full
@@ -304,124 +277,6 @@ app.listen(port, async (err) => {
       }
     } catch (err) {
       logger.warn({ err }, "Startup: NT fixture ID backfill failed (non-fatal)");
-    }
-  })();
-
-  // One-shot startup: remove Obed Vargas from all tables. He committed to the
-  // Mexican national team and is no longer a USMNT prospect. Safe to re-run —
-  // no-ops once the player row is gone.
-  (async () => {
-    try {
-      const rows = await db
-        .select({ id: playersTable.id })
-        .from(playersTable)
-        .where(eq(playersTable.slug, "obed-vargas"));
-      if (rows.length === 0) return; // Already removed
-      const playerId = rows[0]!.id;
-      await db.delete(matchLogsTable).where(eq(matchLogsTable.playerId, playerId));
-      await db.delete(playerStatsTable).where(eq(playerStatsTable.playerId, playerId));
-      await db.delete(injuriesTable).where(eq(injuriesTable.playerId, playerId));
-      await db.delete(transfersTable).where(eq(transfersTable.playerId, playerId));
-      await db.delete(fixturePlayersTable).where(eq(fixturePlayersTable.playerId, playerId));
-      await db.delete(playersTable).where(eq(playersTable.id, playerId));
-      logger.info({ playerId }, "Startup: removed Obed Vargas (committed to Mexico)");
-    } catch (err) {
-      logger.warn({ err }, "Startup: Obed Vargas removal failed (non-fatal)");
-    }
-  })();
-
-  // One-time startup: remove phantom CONCACAF Nations League fixtures (USA vs
-  // Jamaica, USA vs Trinidad and Tobago) that were seeded as speculative entries.
-  // They don't correspond to real, announced matches. Idempotent — no-ops once
-  // the rows are gone. The syncNationalTeamFixtures() guard prevents recurrence.
-  (async () => {
-    try {
-      const phantomRows = await db
-        .select({ id: fixturesTable.id })
-        .from(fixturesTable)
-        .where(
-          and(
-            eq(fixturesTable.homeTeam, "USA"),
-            eq(fixturesTable.competition, "CONCACAF Nations League"),
-            eq(fixturesTable.status, "scheduled"),
-            isNull(fixturesTable.apiFootballFixtureId),
-            inArray(fixturesTable.awayTeam, ["Jamaica", "Trinidad and Tobago"]),
-          ),
-        );
-      if (phantomRows.length === 0) return;
-      const ids = phantomRows.map((r) => r.id);
-      await db.delete(fixturePlayersTable).where(inArray(fixturePlayersTable.fixtureId, ids));
-      await db.delete(fixturesTable).where(inArray(fixturesTable.id, ids));
-      logger.info({ removedIds: ids }, "Startup: removed phantom CONCACAF Nations League fixtures (Jamaica / T&T)");
-    } catch (err) {
-      logger.warn({ err }, "Startup: phantom Nations League fixture cleanup failed (non-fatal)");
-    }
-  })();
-
-  // One-time startup: flag US men's national team fixtures (youth and senior)
-  // as is_national_team = true. These rows arrive via the club fixture sync
-  // with is_national_team = false because the upsert path hardcodes false;
-  // that path is now fixed, but existing rows need a one-time correction.
-  // Idempotent — no-ops once all rows are already flagged.
-  (async () => {
-    try {
-      const result = await db.execute(sql`
-        UPDATE fixtures
-        SET is_national_team = true
-        WHERE is_national_team = false
-          AND (
-            home_team = 'USA'
-            OR home_team ~ '^(USA|United States) U[0-9]+'
-            OR away_team = 'USA'
-            OR away_team ~ '^(USA|United States) U[0-9]+'
-          )
-      `);
-      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
-      if (rowCount > 0) {
-        logger.info({ rowCount }, "Startup: flagged US men's national team fixtures as is_national_team=true");
-      }
-    } catch (err) {
-      logger.warn({ err }, "Startup: US national team fixture flag backfill failed (non-fatal)");
-    }
-  })();
-
-  // One-time startup: backfill Fox One streaming info on existing CONCACAF U20
-  // fixtures. New fixtures will get the value from BROADCAST_BY_LEAGUE during
-  // sync; this covers the rows already in the DB. Idempotent.
-  (async () => {
-    try {
-      const result = await db.execute(sql`
-        UPDATE fixtures
-        SET streaming_service = 'Fox One', tv_network = 'FOX Sports'
-        WHERE competition = 'CONCACAF U20'
-          AND (streaming_service IS NULL OR streaming_service != 'Fox One')
-      `);
-      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
-      if (rowCount > 0) {
-        logger.info({ rowCount }, "Startup: backfilled Fox One streaming info on CONCACAF U20 fixtures");
-      }
-    } catch (err) {
-      logger.warn({ err }, "Startup: CONCACAF U20 streaming backfill failed (non-fatal)");
-    }
-  })();
-
-  // One-time startup: backfill FIFA+ streaming info on existing U17 World Cup
-  // fixtures. New fixtures will get the value from BROADCAST_BY_LEAGUE during
-  // sync; this covers rows already in the DB. Idempotent.
-  (async () => {
-    try {
-      const result = await db.execute(sql`
-        UPDATE fixtures
-        SET streaming_service = 'FIFA+'
-        WHERE competition = 'World Cup - U17'
-          AND (streaming_service IS NULL OR streaming_service != 'FIFA+')
-      `);
-      const rowCount = (result as unknown as { rowCount?: number }).rowCount ?? 0;
-      if (rowCount > 0) {
-        logger.info({ rowCount }, "Startup: backfilled FIFA+ streaming info on U17 World Cup fixtures");
-      }
-    } catch (err) {
-      logger.warn({ err }, "Startup: U17 World Cup streaming backfill failed (non-fatal)");
     }
   })();
 
