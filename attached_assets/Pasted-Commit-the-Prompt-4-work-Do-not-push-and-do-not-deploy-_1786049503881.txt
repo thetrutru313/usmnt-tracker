@@ -1,0 +1,59 @@
+Commit the Prompt 4 work. Do not push and do not deploy.
+
+FIRST — show me what is about to be committed:
+  git status --short
+  git diff --stat
+  git status --ignored --short -- backups/
+
+CRITICAL CHECK BEFORE COMMITTING:
+
+The backups/ directory must NOT be committed. It contains a full row-level
+export of the production database, including anon_users.csv with 96 auth token
+hashes. Confirm all three:
+
+  a. backups/ appears in .gitignore
+  b. git status --ignored shows backups/ as ignored, not untracked
+  c. git ls-files backups/ returns NOTHING
+
+If any file under backups/ is staged or tracked, stop and tell me before
+committing anything.
+
+ALSO CONFIRM:
+
+  d. lib/db/drizzle/_archive/ IS included — the archived files are a historical
+     record and belong in version control, unlike the backups.
+  e. lib/db/drizzle/ contains exactly one .sql file (0000_baseline.sql) and one
+     journal entry.
+  f. lib/db/README.md and the replit.md changes are both staged.
+
+Then commit with this message:
+
+  chore(db): establish verified schema baseline, archive broken migrations
+
+  The migration files could not reproduce production. Three tables
+  (anon_users, recovery_tokens, user_follows) existed in production but in
+  no migration file — created via drizzle-kit push and never recorded.
+  Two files were structurally broken: 0001 altered recovery_tokens before
+  any migration created it, and 0010 duplicated a column added by 0009,
+  aborting before any of its six CREATE INDEX statements ran.
+
+  - Replace 11 legacy migrations with a single verified baseline generated
+    from lib/db/src/schema/. A fresh drizzle-kit migrate against an empty
+    database now reproduces production exactly: 21 tables, 2 enums, 15
+    foreign keys, 43 indexes. The database can be rebuilt from the repo.
+  - Archive the 11 legacy files and old journal to _archive/ as a historical
+    record. They must never be re-applied.
+  - Fix 0010 by removing the duplicate ADD COLUMN, landing the six missing
+    indexes in dev and, via Publish, in production.
+  - Record the baseline in drizzle.__drizzle_migrations in development.
+    Production is NOT recorded: Replit's executeSql proxy is read-only for
+    production, there is no Neon console, and no shell in the production
+    container. migrate must not be pointed at production until it can run
+    from inside the deploy step.
+  - Add lib/db/README.md documenting the migration workflow, why the archive
+    exists, the production limitation and its resolution path.
+  - Update replit.md Run & Operate with migration commands and warnings.
+  - Add backups/ to .gitignore.
+
+Report the commit hash, the final file count, and confirm again that
+git ls-files backups/ is empty.
