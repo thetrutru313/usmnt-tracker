@@ -56,3 +56,10 @@ uri = "file://reports/six-fixes-results.md"
 type = "text"
 title = "Six Independent Fixes — Results"
 description = "Full results for all six fixes: static import, list rate limits, DB indexes, RSS https, loud WebKit skip, unused deps."
+
+[[outputs]]
+id = "jgQ9yKUWaQrh5HI-_i0n7"
+uri = "file://reports/three-followup-fixes-results.md"
+type = "text"
+title = "Three Follow-Up Fixes — Results"
+description = "Migration collision rename (0010_add_missing_indexes), explicit limits on Injuries/Transfers pages, lint + frontend test results."

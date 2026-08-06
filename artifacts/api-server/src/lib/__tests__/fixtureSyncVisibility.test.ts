@@ -30,7 +30,7 @@
  * - afterAll cleans up all inserted rows in reverse dependency order.
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
 import {
@@ -1444,6 +1444,18 @@ describe("GET /fixtures — live national-team fixture keeps player in featuredP
   let liveNtPlayerId: number | null = null;
   let liveNtFixtureId: number | null = null;
 
+  // Pin the Date clock so the inserted kickoff is always unambiguously in the
+  // past relative to "now" seen by the fixtures route, regardless of how long
+  // earlier tests take to run.  Only Date is faked; setTimeout remains real.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   afterAll(async () => {
     if (liveNtFixtureId !== null) {
       await db
@@ -1509,7 +1521,7 @@ describe("GET /fixtures — live national-team fixture keeps player in featuredP
       // Insert a national-team fixture with status="live" and a kickoff in the
       // recent past (match started ~1 h ago). No scope filter is needed to
       // retrieve it from GET /fixtures.
-      const kickoff = new Date(Date.now() - 60 * 60 * 1000); // 1 h ago
+      const kickoff = new Date("2026-06-01T11:00:00.000Z"); // 1 h before pinned clock
       const [fixture] = await db
         .insert(fixturesTable)
         .values({

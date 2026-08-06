@@ -35,7 +35,7 @@
  * - afterAll removes only the rows this test inserted, keyed by the fake IDs.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { vi } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
@@ -538,8 +538,20 @@ describe("syncYouthNtFixtures — fresh-DB startup seed + first sync cycle produ
 /** Fake api_football_fixture_id used exclusively by Suite C. */
 const FAKE_LIVE_AF_ID = 9_996_001;
 
-/** Kickoff 1 hour in the past — simulates a match that has already started. */
-const FAKE_LIVE_KICKOFF = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+/**
+ * Fixed wall-clock instant used as "now" for Suite C.  Only the Date clock is
+ * faked (toFake: ["Date"]) so setTimeout/setInterval in afFetch remain real
+ * and the throttle resolves without manual timer advancement.
+ */
+const SUITE_C_NOW = new Date("2026-06-01T12:00:00.000Z");
+
+/**
+ * Kickoff pinned to exactly 1 h before SUITE_C_NOW.  Using a fixed ISO string
+ * rather than Date.now() arithmetic prevents drift: the phantom-purge guard
+ * ("kickoff must be future to be a phantom") always sees this as a past kickoff
+ * regardless of how long earlier tests take to run.
+ */
+const FAKE_LIVE_KICKOFF = "2026-06-01T11:00:00.000Z";
 
 afterAll(async () => {
   await db
@@ -593,6 +605,18 @@ function makeLiveSyncMock(
 }
 
 describe("syncYouthNtFixtures — live-update path: scheduled → live → finished", () => {
+  // Freeze the Date clock for every test in this suite so syncYouthNtFixtures
+  // sees SUITE_C_NOW as "now".  setTimeout/setInterval are left real (toFake:
+  // ["Date"]) so the afFetch throttle resolves without manual advancement.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(SUITE_C_NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /**
    * Pre-seed the fixture with status="scheduled" before both tests run.
    * Each test then drives a single sync pass and asserts the new state.
