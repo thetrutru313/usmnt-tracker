@@ -571,15 +571,26 @@ export const ListFixturesScope = {
 export type ListNewsParams = {
 category?: string;
 playerId?: number;
+/**
+ * @maximum 200
+ */
 limit?: number;
 };
 
 export type ListInjuriesParams = {
 status?: InjuryStatus;
+/**
+ * @maximum 200
+ */
+limit?: number;
 };
 
 export type ListTransfersParams = {
 status?: TransferStatus;
+/**
+ * @maximum 200
+ */
+limit?: number;
 };
 
 export type SearchParams = {

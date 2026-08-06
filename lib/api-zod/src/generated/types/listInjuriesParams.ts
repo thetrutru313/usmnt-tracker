@@ -9,4 +9,8 @@ import type { InjuryStatus } from './injuryStatus';
 
 export type ListInjuriesParams = {
 status?: InjuryStatus;
+/**
+ * @maximum 200
+ */
+limit?: number;
 };

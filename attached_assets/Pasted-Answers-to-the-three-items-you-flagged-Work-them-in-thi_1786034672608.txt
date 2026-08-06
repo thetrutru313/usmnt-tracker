@@ -1,0 +1,107 @@
+Answers to the three items you flagged. Work them in this order, then continue
+to Tasks B and C.
+
+────────────────────────────────────────────────────────────────────────
+DECISION 1 — CI Postgres: Option A, the service container.
+────────────────────────────────────────────────────────────────────────
+
+Run the full suite in CI with a Postgres service container. Option B would
+exclude 33 files and ~280 tests, and those are the sync and data-integrity
+tests — precisely where this codebase's bug history lives. Excluding them
+replaces "tests only run on Replit" with "60% of tests only run on Replit."
+
+ONE QUESTION FIRST, before you build the workflow:
+
+Do those 33 integration tests need only TABLES, or do they need SEED DATA?
+
+Determine it empirically. Create a scratch database, push the schema into it
+with `pnpm --filter @workspace/db run push`, and run the integration tier
+against that empty-but-structured database:
+
+  DATABASE_URL="<scratch db url>" pnpm --filter @workspace/api-server run test
+
+  - ALL PASS → CI needs postgres service + schema push. Straightforward.
+    Build it.
+  - SOME FAIL → list which files, and what data each expects to already exist.
+    STOP AND TELL ME before building any seeding step. A CI job that depends on
+    seeded fixture data is a maintenance burden I want to weigh first.
+
+Use postgres:16 to match .replit line 1. Include a health check so the test
+step waits for readiness rather than racing it.
+
+────────────────────────────────────────────────────────────────────────
+DECISION 2 — Date-drift tests 1–15: approved, plus one addition.
+────────────────────────────────────────────────────────────────────────
+
+Fix them as you proposed: fake timers in beforeEach, real timers in afterEach,
+for the three describe blocks at lines 142, 264 and 559.
+
+THE ADDITION — these 15 tests passed in July and failed in August purely
+because time moved forward. They compared hardcoded fixture dates against a
+live `new Date()`. Any other test with that shape is a time bomb that simply
+has not aged enough to break yet.
+
+Search both suites for tests that use real dates without pinning the clock:
+  - fixtures with hardcoded date literals, in files with no vi.useFakeTimers
+  - assertions on relative windows ("last 7 days", "upcoming", "recent")
+
+Report what you find as a list. Do NOT fix them all in this task — I want to
+see the scope first. If it is only two or three, say so and fix them.
+
+────────────────────────────────────────────────────────────────────────
+DECISION 3 — UTC vs local: the implementation is correct. Fix the tests.
+────────────────────────────────────────────────────────────────────────
+
+Keep `toLocalDateStr` and `localDateLabel` exactly as they are. Rewrite tests
+16–19 to match local-timezone behaviour.
+
+The evidence that local is deliberate, not accidental:
+
+1. vitest.config.ts line 15 pins TZ to "America/New_York" with a comment
+   explaining it was chosen as a UTC-NEGATIVE zone specifically so date-label
+   tests can catch the UTC-midnight off-by-one-day bug. That configuration only
+   makes sense if local semantics are intended.
+2. dateLabels.ts is consistently local in both naming and doc comments —
+   "in the viewer's local timezone", "based on the viewer's local calendar date".
+3. replit.md line 40 records a user preference for MST match times. Local zone,
+   explicitly not UTC.
+4. The audience is US-based. Under UTC, an 8pm Denver kickoff files under the
+   NEXT day. That is a user-facing regression for the primary use case.
+
+Tests 16–19 reference `utcDateLabel` and a "UTC date bucketing" concept that do
+not exist in the code. They were written against a design the implementation
+moved away from, and never ran, so the drift went unnoticed.
+
+WHAT TO CHANGE:
+  - Rewrite tests 16–19 with kickoff times that land on the intended LOCAL
+    (Eastern, under the pinned TZ) calendar day. Preserve each test's intent —
+    they should still verify bucketing, Today/Tomorrow labelling, and the
+    midnight flip, just against local dates.
+  - Rename the describe blocks: "UTC date bucketing" is now wrong.
+  - DELETE the section-header comment at lines 626-631. It documents UTC
+    behaviour the code does not implement and is actively misleading.
+  - Apply your proposed clock fix for test 16 (pin to 02:30 rather than 10:00
+    so the fixture sits inside the 2-hour grace window).
+
+Do NOT change dateLabels.ts or Fixtures.tsx.
+
+FLAG FOR LATER, do not act on it: the implementation uses the VIEWER's local
+timezone, while replit.md asks for MST specifically. Those differ for anyone
+outside Mountain Time. Tell me if you see evidence either way in the code; it
+is a separate product question and not in scope here.
+
+────────────────────────────────────────────────────────────────────────
+
+Then continue with Task B (ESLint/Prettier) and Task C (CI workflow) from the
+previous prompt.
+
+VERIFY:
+  pnpm run lint
+  pnpm run typecheck
+  pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test   ← expect 212/212
+
+Report: the scratch-database result from Decision 1, the time-bomb test list
+from Decision 2, the rewritten tests from Decision 3, lint counts by rule, and
+the CI workflow diff.

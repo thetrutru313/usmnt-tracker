@@ -4,7 +4,7 @@ import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, c
 import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "../lib/pickBestNtFixtureId.js";
 import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
-import { z } from "zod/v4";
+
 
 const router: IRouter = Router();
 
@@ -62,7 +62,7 @@ router.get("/fixtures/:id", async (req, res): Promise<void> => {
       .where(inArray(playersTable.id, playerIds));
 
     // Load match logs for these players for this fixture (match by apiFootballFixtureId)
-    let matchLogMap = new Map<number, { minutes: number; goals: number; assists: number; rating: number | null; conceded: number | null }>();
+    const matchLogMap = new Map<number, { minutes: number; goals: number; assists: number; rating: number | null; conceded: number | null }>();
 
     if (fixture.apiFootballFixtureId != null) {
       const logs = await db

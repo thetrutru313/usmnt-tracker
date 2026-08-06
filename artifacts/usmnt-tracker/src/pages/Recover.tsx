@@ -64,7 +64,7 @@ export default function Recover() {
         setErrorMessage(msg);
         setStatus("error");
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []); // intentionally runs once on mount
 
   return (

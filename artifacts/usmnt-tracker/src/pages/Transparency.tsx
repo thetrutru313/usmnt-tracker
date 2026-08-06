@@ -413,7 +413,6 @@ export default function Transparency() {
               <TableBody>
                 {sorted.map((m) => {
                   const label = `${MONTH_NAMES[(m.periodMonth - 1) % 12]} ${m.periodYear}`;
-                  const net = m.donationsCents - m.expensesCents;
                   return (
                     <TableRow key={m.id} className="border-border hover:bg-muted/30">
                       <TableCell className="font-medium text-sm py-3">

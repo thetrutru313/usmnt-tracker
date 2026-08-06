@@ -140,6 +140,14 @@ beforeEach(() => {
 });
 
 describe("Fixtures page — scheduled → finished status transition", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date("2026-07-17T12:00:00Z") });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("removes the fixture from the upcoming list as soon as its status becomes finished", () => {
     mockUseListFixtures.mockReturnValue({
       data: [makeFixture("scheduled")],
@@ -262,6 +270,14 @@ describe("Fixtures page — scheduled → finished status transition", () => {
 });
 
 describe("Fixtures page — pool-tier filter and Recent Results count badge", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date("2026-07-17T12:00:00Z") });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /**
    * Fixtures used across these tests:
    *
@@ -557,6 +573,14 @@ describe("Fixtures page — pool-tier filter and Recent Results count badge", ()
 });
 
 describe("Fixtures page — Recent Results collapsible stays open across poll updates", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date("2026-07-17T12:00:00Z") });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("keeps the collapsible open and shows both fixtures when a second fixture finishes mid-poll", () => {
     const firstFinished = makeFixture("finished", {
       id: 1,
@@ -620,33 +644,38 @@ describe("Fixtures page — loading and empty states", () => {
   });
 });
 
-// ─── Timezone / UTC-date bucketing tests ─────────────────────────────────────
+// ─── Local-date bucketing tests ───────────────────────────────────────────────
 //
-// groupByDate uses `.toISOString().substring(0, 10)` to derive the bucket key,
-// so a kickoff at 02:00 UTC on July 17 must land in the July 17 group — not
-// July 16 — even when the local system clock is set to a US timezone offset
-// where that same instant falls on the previous calendar day.
-//
-// utcDateLabel compares dateStr against `new Date().toISOString().substring(0,10)`
-// (UTC date), so "Today" / "Tomorrow" labels must be timezone-stable.
+// groupByDate uses toLocalDateStr() — getFullYear/getMonth/getDate in the
+// viewer's local timezone — to derive the bucket key.  The test process runs
+// under America/New_York (UTC-4 in summer) so that timezone-edge cases are
+// exercised with a realistic non-UTC offset.
 
-describe("Fixtures page — UTC date bucketing (groupByDate timezone fix)", () => {
+describe("Fixtures page — local-date bucketing (groupByDate)", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("places a 02:00 UTC kickoff in the July 17 bucket (not July 16)", () => {
-    // Pin the clock to 2026-07-17T10:00:00Z so "today" in UTC is 2026-07-17.
-    // In US/Eastern (UTC-5) this wall-clock moment is still July 17 during the day,
-    // but the kickoff (02:00 UTC) would be July 16 in Eastern time — the fix
-    // must prevent that off-by-one from affecting the bucket key.
-    vi.useFakeTimers({ now: new Date("2026-07-17T10:00:00Z") });
+  it("places a 02:00 UTC kickoff on July 17 in the local July 16 bucket — the viewer's Eastern date, not the UTC date", () => {
+    // Pin the clock to 2026-07-17T02:30:00Z (July 16 22:30 Eastern).
+    // The fixture's kickoff is 2026-07-17T02:00:00Z = July 16 22:00 Eastern.
+    //
+    // toLocalDateStr uses getDate() in the viewer's local timezone, so the
+    // bucket key is "2026-07-16" (Eastern July 16), which equals today —
+    // the heading is "Today".
+    //
+    // A UTC-date implementation would derive bucket "2026-07-17" and label
+    // this fixture "Tomorrow" — the wrong answer for an Eastern viewer.
+    //
+    // The clock is set to 02:30 rather than 10:00 so the kickoff (02:00, 30
+    // minutes ago) stays inside the 2-hour upcoming grace window.
+    vi.useFakeTimers({ now: new Date("2026-07-17T02:30:00Z") });
 
     const fixture = makeFixture("scheduled", {
       id: 99,
       kickoff: new Date("2026-07-17T02:00:00Z"),
       homeTeam: "Midnight Test FC",
-      awayTeam: "UTC Rovers",
+      awayTeam: "Eastern Rovers",
     });
 
     mockUseListFixtures.mockReturnValue({
@@ -656,46 +685,48 @@ describe("Fixtures page — UTC date bucketing (groupByDate timezone fix)", () =
 
     renderFixtures();
 
-    // The date heading for this fixture must say "Today" (UTC July 17 === today UTC)
-    // and must NOT say "July 16" — that would indicate the local-timezone bug.
+    // Local today is July 16 (Eastern) — heading must be "Today", not "Tomorrow"
     expect(screen.getByText(/Today/i)).toBeInTheDocument();
-    expect(screen.queryByText(/July 16/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Tomorrow/i)).not.toBeInTheDocument();
   });
 
-  it("assigns two fixtures with kickoffs on different UTC dates to separate buckets", () => {
-    // Pin clock so 2026-07-17 is "today" UTC and 2026-07-18 is "tomorrow".
+  it("assigns two fixtures with kickoffs on different local calendar days to separate buckets", () => {
+    // Pin clock to July 17 10:00 UTC (July 17 06:00 Eastern) so today Eastern
+    // is "2026-07-17" and tomorrow Eastern is "2026-07-18".
     vi.useFakeTimers({ now: new Date("2026-07-17T10:00:00Z") });
 
-    // Kickoff just before midnight UTC — still July 17
-    const fixtureTodayUtc = makeFixture("scheduled", {
+    // Kickoff at 23:30 UTC on July 17 = July 17 19:30 Eastern → local "2026-07-17"
+    const fixtureTodayLocal = makeFixture("scheduled", {
       id: 100,
       kickoff: new Date("2026-07-17T23:30:00Z"),
       homeTeam: "Late Night FC",
       awayTeam: "Midnight FC",
     });
 
-    // Kickoff just after midnight UTC — now July 18
-    const fixtureTomorrowUtc = makeFixture("scheduled", {
+    // Kickoff at 10:00 UTC on July 18 = July 18 06:00 Eastern → local "2026-07-18".
+    // (00:30 UTC on July 18 = July 17 20:30 Eastern — still the same local day as
+    // fixtureTodayLocal; this kickoff crosses the local midnight instead.)
+    const fixtureTomorrowLocal = makeFixture("scheduled", {
       id: 101,
-      kickoff: new Date("2026-07-18T00:30:00Z"),
+      kickoff: new Date("2026-07-18T10:00:00Z"),
       homeTeam: "Early Morning FC",
       awayTeam: "Dawn FC",
     });
 
     mockUseListFixtures.mockReturnValue({
-      data: [fixtureTodayUtc, fixtureTomorrowUtc],
+      data: [fixtureTodayLocal, fixtureTomorrowLocal],
       isLoading: false,
     });
 
     renderFixtures();
 
-    // Both "Today" and "Tomorrow" headings must be present (two separate buckets)
+    // Two distinct local calendar days → two separate headed buckets
     expect(screen.getByText(/Today/i)).toBeInTheDocument();
     expect(screen.getByText(/Tomorrow/i)).toBeInTheDocument();
   });
 });
 
-describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () => {
+describe("Fixtures page — localDateLabel Today/Tomorrow string comparison", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -885,17 +916,20 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.queryByText(/Monday|Tuesday|Wednesday|Thursday|Saturday|Sunday/i)).not.toBeInTheDocument();
   });
 
-  it('renders "Tomorrow" in the Recent Results date heading when the finished fixture\'s UTC date equals tomorrow\'s UTC date', () => {
-    // Pin the clock to 2026-07-17T15:00:00Z so that today's UTC date is "2026-07-17"
-    // and tomorrow's UTC date is "2026-07-18".  The finished fixture has a kickoff
-    // on 2026-07-18 UTC, so utcDateLabel must return "Tomorrow" when called from
-    // inside the RecentResults {open && ...} block.
+  it('renders "Tomorrow" in the Recent Results date heading when the finished fixture\'s local calendar date is tomorrow', () => {
+    // Pin the clock to 2026-07-17T15:00:00Z (July 17 11:00 Eastern).
+    // Today Eastern = "2026-07-17", tomorrow Eastern = "2026-07-18".
+    // The fixture's kickoff is at 10:00 UTC on July 18 = July 18 06:00 Eastern,
+    // so toLocalDateStr returns "2026-07-18" — localDateLabel must return "Tomorrow".
+    //
+    // (02:00 UTC on July 18 = July 17 22:00 Eastern, which is still today locally —
+    // that kickoff would produce "Today", not "Tomorrow".)
     vi.useFakeTimers({ now: new Date("2026-07-17T15:00:00Z") });
 
-    // Kickoff at 02:00 UTC on July 18 — tomorrow's UTC calendar day.
+    // Kickoff at 10:00 UTC on July 18 = July 18 06:00 Eastern → local "2026-07-18"
     const finishedFixture = makeFixture("finished", {
       id: 320,
-      kickoff: new Date("2026-07-18T02:00:00Z"),
+      kickoff: new Date("2026-07-18T10:00:00Z"),
       homeTeam: "Tomorrow Home FC",
       awayTeam: "Tomorrow Away FC",
     });
@@ -907,7 +941,7 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
 
     // Expand the Recent Results collapsible — mounts the {open && ...} block
-    // that contains its own utcDateLabel call for finished fixtures
+    // that contains its own localDateLabel call for finished fixtures
     fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
 
     // The date heading inside the collapsible must read "Tomorrow".
@@ -916,21 +950,23 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     // instance assertions throughout this test file.
     expect(screen.getAllByText(/\bTomorrow\b/i).length).toBeGreaterThan(0);
 
-    // "Today" must be absent — the fixture is not on today's UTC date
+    // "Today" must be absent — the fixture is on tomorrow's local date
     expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
     // No weekday string should appear — the "Tomorrow" fast-path must have fired
     expect(screen.queryByText(/Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday/i)).not.toBeInTheDocument();
   });
 
-  it('flips "Tomorrow" to "Today" in Recent Results when UTC midnight passes without a page reload', () => {
-    // Pin the clock to 23:59:50 UTC on 2026-07-17 — today UTC is "2026-07-17",
-    // tomorrow UTC is "2026-07-18".  The finished fixture's kickoff is on July 18
-    // UTC, so utcDateLabel must initially return "Tomorrow".
-    vi.useFakeTimers({ now: new Date("2026-07-17T23:59:50Z") });
+  it('flips "Tomorrow" to "Today" in Recent Results when local midnight passes without a page reload', () => {
+    // Pin the clock to 2026-07-18T03:59:50Z (July 17 23:59:50 Eastern, 10 seconds
+    // before local midnight).  Today Eastern = "2026-07-17", tomorrow = "2026-07-18".
+    // The fixture's kickoff is 2026-07-18T10:00:00Z = July 18 06:00 Eastern,
+    // so localDateLabel must initially return "Tomorrow".
+    vi.useFakeTimers({ now: new Date("2026-07-18T03:59:50Z") });
 
+    // Kickoff at 10:00 UTC on July 18 = July 18 06:00 Eastern → local "2026-07-18"
     const fixture = makeFixture("finished", {
       id: 330,
-      kickoff: new Date("2026-07-18T02:00:00Z"),
+      kickoff: new Date("2026-07-18T10:00:00Z"),
       homeTeam: "Midnight Flip Home",
       awayTeam: "Midnight Flip Away",
     });
@@ -942,21 +978,21 @@ describe("Fixtures page — utcDateLabel Today/Tomorrow string comparison", () =
     expect(screen.getByText(/Recent Results \(1\)/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Recent Results/i }));
 
-    // Before midnight: fixture is "Tomorrow"
+    // Before local midnight (July 17 23:59:50 Eastern): fixture is "Tomorrow"
     expect(screen.getAllByText(/\bTomorrow\b/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\bToday\b/i)).not.toBeInTheDocument();
 
-    // Advance the fake clock past UTC midnight by 15 seconds (to 2026-07-18T00:00:05Z).
-    // Now today UTC is "2026-07-18" — the fixture's kickoff date — so utcDateLabel
-    // must return "Today" on the next render.
+    // Advance 15 seconds past local midnight (→ 2026-07-18T04:00:05Z = July 18
+    // 00:00:05 Eastern).  Now today Eastern is "2026-07-18" — the fixture's local
+    // date — so localDateLabel must return "Today" on the next render.
     vi.advanceTimersByTime(15_000);
 
     // Simulate the 60-second poll cycle delivering updated fixture data.
-    // This re-renders the component, causing utcDateLabel to be called again with
-    // the new system time, flipping the label from "Tomorrow" to "Today".
+    // This re-renders the component, causing localDateLabel to be called again
+    // with the new system time, flipping the label from "Tomorrow" to "Today".
     updateFixtures([fixture]);
 
-    // After midnight: the date heading must now read "Today"
+    // After local midnight: the date heading must now read "Today"
     expect(screen.getAllByText(/\bToday\b/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\bTomorrow\b/i)).not.toBeInTheDocument();
   });

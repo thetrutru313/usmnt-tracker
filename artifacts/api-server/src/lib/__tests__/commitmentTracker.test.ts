@@ -39,7 +39,6 @@ vi.mock("../apiFootballSync.js", () => ({
 import {
   detectNonUsCommitment,
   fetchPlayerNationalTeams,
-  evaluateFlagConditions,
   type CommitmentDetectionResult,
 } from "../commitmentTracker.js";
 

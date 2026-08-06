@@ -222,7 +222,11 @@ export function MyPlayersProvider({ children }: { children: React.ReactNode }) {
     async (playerId: number): Promise<"added" | "removed"> => {
       const wasFollowing = optimisticIds.has(playerId);
       const next = new Set(optimisticIds);
-      wasFollowing ? next.delete(playerId) : next.add(playerId);
+      if (wasFollowing) {
+        next.delete(playerId);
+      } else {
+        next.add(playerId);
+      }
 
       // Optimistic update — all components re-render immediately via context.
       setOptimisticIds(next);

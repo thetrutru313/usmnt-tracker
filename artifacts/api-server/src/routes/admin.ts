@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
-import { eq, desc, isNull, isNotNull, or, gte, inArray, and, count, lt, lte, asc } from "drizzle-orm";
+import { eq, desc, isNull, isNotNull, or, inArray, and, count, lt, lte, asc } from "drizzle-orm";
 import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
 import { getMaxCandidateAge, SIGNAL_REGISTRY, getResolvedWeights } from "../lib/eligibilitySignalsConfig";
 import { logger } from "../lib/logger";

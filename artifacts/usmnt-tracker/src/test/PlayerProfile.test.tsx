@@ -32,7 +32,7 @@ vi.mock("sonner", () => ({ toast: vi.fn() }));
 // ─── Mock My Players hook ─────────────────────────────────────────────────────
 
 const mockIsFollowing = vi.fn(() => false);
-const mockToggle = vi.fn(async () => "added" as const);
+const mockToggle = vi.fn(async () => "added" as "added" | "removed");
 
 vi.mock("@/hooks/useMyPlayers", () => ({
   useMyPlayers: () => ({

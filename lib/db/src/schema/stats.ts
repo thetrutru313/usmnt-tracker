@@ -41,7 +41,10 @@ export const playerStatsTable = pgTable("player_stats", {
   savePct: doublePrecision("save_pct"),
   avgRating: doublePrecision("avg_rating"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+(table) => [
+  index("player_stats_player_id_idx").on(table.playerId),
+]);
 
 export const insertPlayerStatsSchema = createInsertSchema(playerStatsTable).omit({ id: true, createdAt: true });
 export type InsertPlayerStats = z.infer<typeof insertPlayerStatsSchema>;

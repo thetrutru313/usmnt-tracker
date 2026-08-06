@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable, serverConfigTable } from "@workspace/db";
-import { eq, asc, sql, isNull, isNotNull, and, or, ne } from "drizzle-orm";
+import { eq, sql, isNull, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
@@ -223,7 +223,7 @@ export async function discoverUSProspects(): Promise<{
   let inserted = 0;
   let skippedQuality = 0;
   let skippedAge = 0;
-  let skippedEligibility = 0;
+  const skippedEligibility = 0;
   let skippedScore = 0;
 
   for (const club of trackedClubs) {

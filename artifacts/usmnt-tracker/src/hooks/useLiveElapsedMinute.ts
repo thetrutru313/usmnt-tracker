@@ -38,7 +38,7 @@ export function useLiveElapsedMinute(
     return () => clearInterval(id);
     // Re-create the interval whenever the server sends a fresh minute so the
     // offset calculation resets from the right base.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isLive, elapsedMinute]);
 
   if (!isLive || elapsedMinute == null) {

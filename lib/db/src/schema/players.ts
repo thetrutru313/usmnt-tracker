@@ -1,4 +1,4 @@
-import { date, integer, pgTable, serial, text, timestamp, doublePrecision, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { date, index, integer, pgTable, serial, text, timestamp, doublePrecision, boolean, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clubsTable } from "./clubs";
@@ -84,7 +84,10 @@ export const playersTable = pgTable("players", {
   // syncs until an admin explicitly clears it.
   clubOverrideId: integer("club_override_id").references(() => clubsTable.id),
   clubOverrideSetAt: timestamp("club_override_set_at", { withTimezone: true }),
-});
+},
+(table) => [
+  index("players_club_id_idx").on(table.clubId),
+]);
 
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true });
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;

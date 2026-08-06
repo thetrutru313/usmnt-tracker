@@ -1,7 +1,6 @@
 packages:
   - artifacts/*
   - lib/*
-  - lib/integrations/*
   - scripts
   - e2e
 
@@ -44,6 +43,13 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # Security: force non-vulnerable transitive deps (production server)
+  ip-address: '>=10.2.1'
+  fast-xml-parser: '>=5.10.1'
+  # uuid NOT overridden: advisory GHSA-w5hq-g745-h8pq affects only v3/v5/v6 when
+  # an output buffer is passed. gaxios calls only v4() (gaxios.js:417). The
+  # vulnerable code path is never reached. Forcing uuid 9→11 would also break
+  # gaxios, which uses CJS require("uuid") incompatible with uuid@11 ESM-only.
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'

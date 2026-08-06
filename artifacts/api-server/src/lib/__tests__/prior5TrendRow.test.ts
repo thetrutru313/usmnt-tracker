@@ -306,7 +306,7 @@ describe("sync path — previous5 DB row written when player has 10 match logs",
     await syncPlayerStatsAndInjuries(10);
 
     // Collect all .values() calls on inserts to playerStatsTable
-    const statsInserts: Array<{ periodType: string; avgRating: number | null }> = [];
+    const _statsInserts: Array<{ periodType: string; avgRating: number | null }> = [];
     for (const [tableArg, ...rest] of mockDb.insert.mock.calls) {
       if (tableArg !== tPlayerStats) continue;
       // The chained .values() call stores its arg; retrieve it from the mock

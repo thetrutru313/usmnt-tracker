@@ -296,6 +296,7 @@ let intervalHandle: NodeJS.Timeout | null = null;
 
 /** Runs the sync immediately, then daily — no API key needed, Wikipedia's API is public. */
 export function startNationalTeamSyncSchedule(intervalMs = 24 * 60 * 60 * 1000): void {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
   const COOLDOWN = 23 * 60 * 60 * 1000;
   const run = async () => {

@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, transfersTable } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, ensureClubForTeam } from "./apiFootballSync";
 
@@ -925,6 +925,7 @@ export function startPlayerClubSyncSchedule(intervalMs = 24 * 60 * 60 * 1000): v
     logger.warn("API_FOOTBALL_KEY not set — skipping player-club sync, using seeded club assignments only");
     return;
   }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
   const COOLDOWN = 23 * 60 * 60 * 1000;
   const run = async () => {

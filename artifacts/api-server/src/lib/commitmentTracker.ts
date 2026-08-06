@@ -389,7 +389,7 @@ export async function runCommitmentSweep(): Promise<{
           isNull(playersTable.usmntStatus),
           ne(
             playersTable.usmntStatus as typeof playersTable.usmntStatus,
-            "CAP_TIED_OTHER" as "CAP_TIED_OTHER",
+            "CAP_TIED_OTHER" as const,
           ),
         ),
       ),

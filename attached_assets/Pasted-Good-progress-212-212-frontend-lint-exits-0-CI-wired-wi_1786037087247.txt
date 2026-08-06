@@ -1,0 +1,109 @@
+Good progress — 212/212 frontend, lint exits 0, CI wired with Postgres. Four
+things before we move on. Start with the first; it may invalidate the second.
+
+────────────────────────────────────────────────────────────────────────
+1. PROVE THE LINTER ACTUALLY LINTS. Do this first.
+────────────────────────────────────────────────────────────────────────
+
+`pnpm run lint` exits 0, and 5 react-hooks/exhaustive-deps warnings were
+resolved by deleting stale disable directives. But there were 7
+`eslint-disable ... react-hooks/exhaustive-deps` comments in the source —
+Admin.tsx (3), AdminReviewQueue.tsx (2), useLiveElapsedMinute.ts, Recover.tsx.
+If those had been suppressing real warnings, removing the directives would
+SURFACE warnings, not eliminate them.
+
+That makes me suspect eslint-plugin-react-hooks is not actually wired into the
+flat config for .tsx files, so the rule never runs. A linter passing because it
+is not checking is worse than no linter.
+
+Run a canary test for each rule family. Temporarily introduce one violation,
+confirm ESLint reports it, then revert:
+
+  a. react-hooks/exhaustive-deps — add a useEffect in a .tsx file that
+     references a prop but has an empty dependency array.
+  b. @typescript-eslint/no-unused-vars — add an unused local in a .ts file.
+  c. @typescript-eslint/no-explicit-any — add an `any` annotation.
+
+For each: report whether ESLint flagged it, and at what severity.
+
+If any rule does NOT fire, the config is wrong. Fix it, re-run `pnpm run lint`,
+and report the REAL error and warning counts. Do not fix the newly-surfaced
+issues yet — I want to see the true scope first.
+
+Also: `pnpm run lint` runs `eslint artifacts lib`, which excludes `scripts/`
+and `e2e/`. Add them.
+
+────────────────────────────────────────────────────────────────────────
+2. DOCUMENT WHAT HAPPENED TO DECISIONS 2 AND 3.
+────────────────────────────────────────────────────────────────────────
+
+The report covers Tasks B and C but not the frontend test fixes. The suite
+passes 212/212, so something was done. I need to know what.
+
+  a. Show the diff for tests 16-19 in Fixtures.test.tsx.
+  b. Confirm dateLabels.ts and Fixtures.tsx were NOT modified. If either was
+     changed to UTC semantics, say so plainly — that reverses the decision and
+     changes what every user sees. `git diff` on both files is the check.
+  c. Confirm the misleading section-header comment at lines 626-631 was deleted
+     and the "UTC date bucketing" describe blocks renamed.
+  d. Report the time-bomb test list from Decision 2 — tests comparing hardcoded
+     dates against a live `new Date()` with no fake timers. This was requested
+     and does not appear in the report. If the search was not run, run it now
+     and list what you find. Do not fix them yet.
+
+────────────────────────────────────────────────────────────────────────
+3. SEEDING: Option A — self-contained fixtures.
+────────────────────────────────────────────────────────────────────────
+
+Convert all three files to insert and clean up their own rows:
+  coleCampbellNoStatsGraceful.test.ts
+  recoveryRoundTrip.test.ts
+  rescoreCapOrderingIntegration.test.ts
+
+Not a shared seed script. These tests currently depend on the DEV DATABASE
+containing specific rows — a particular named player, a club with id=1. That
+coupling is already fragile: index.ts line 105 contains a startup block that
+deletes Obed Vargas because he committed to Mexico. If Cole Campbell ever does
+the same, coleCampbellNoStatsGraceful dies with him. A shared seed script keeps
+that coupling alive and adds a file to maintain.
+
+Each test should create what it needs in beforeEach and remove it in afterEach,
+using values that cannot collide with real data. Do not use hardcoded ids that
+might exist in a real database.
+
+Then confirm all three pass against a scratch database containing only the
+schema and no rows.
+
+────────────────────────────────────────────────────────────────────────
+4. TWO SMALL CORRECTIONS TO THE CI WORKFLOW.
+────────────────────────────────────────────────────────────────────────
+
+  a. Remove SESSION_SECRET from the workflow env entirely, along with the
+     comment suggesting a real secret be wired to it. NO CODE READS THIS
+     VARIABLE. It appears only in threat_model.md, which is out of date — the
+     admin credential is ADMIN_PASSWORD, and routes/admin.ts lines 37-39 carry
+     a comment warning about exactly this confusion. Adding it to CI
+     perpetuates the error.
+
+  b. Step 10 runs `pnpm --filter @workspace/db run push`, which is
+     `drizzle-kit push` WITHOUT --force. That command prompts interactively on
+     destructive changes. On an empty CI database there should be nothing to
+     destroy, so it should not prompt — but confirm it completes
+     non-interactively rather than hanging. If it needs a TTY, the CI job will
+     hang until the 6-hour timeout rather than failing fast. Test it and
+     report. Do NOT switch to push-force as the fix without telling me.
+
+────────────────────────────────────────────────────────────────────────
+
+Also, for the record: MatchDetail.tsx received an inline disable for an unused
+`PlayerRow` component. Why is that component defined but never rendered? An
+unused component in a page file is usually either dead code or an unfinished
+feature. Tell me which — do not delete it yet.
+
+VERIFY:
+  pnpm run lint
+  pnpm run typecheck
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Report the canary results first — they matter most.

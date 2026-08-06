@@ -113,6 +113,7 @@ function RatingBadge({ rating }: { rating: number | null }) {
   return <span className={cls}>{rating.toFixed(1)}</span>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function PlayerRow({
   player,
   showConceded,

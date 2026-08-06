@@ -280,7 +280,7 @@ describe("discoverUSProspects — manual override guard in onConflictDoUpdate", 
     wireSelectMocks();
     wireAfFetch();
 
-    await discoverUSProspects({ clubIds: [TEST_CLUB.id] });
+    await discoverUSProspects();
 
     expect(capturedConflictSets.length).toBeGreaterThan(0);
 
@@ -295,7 +295,7 @@ describe("discoverUSProspects — manual override guard in onConflictDoUpdate", 
     wireSelectMocks();
     wireAfFetch();
 
-    await discoverUSProspects({ clubIds: [TEST_CLUB.id] });
+    await discoverUSProspects();
 
     expect(capturedConflictSets.length).toBeGreaterThan(0);
 
@@ -310,7 +310,7 @@ describe("discoverUSProspects — manual override guard in onConflictDoUpdate", 
     wireSelectMocks();
     wireAfFetch();
 
-    await discoverUSProspects({ clubIds: [TEST_CLUB.id] });
+    await discoverUSProspects();
 
     expect(capturedConflictSets.length).toBeGreaterThan(0);
 
@@ -328,7 +328,7 @@ describe("discoverUSProspects — manual override guard in onConflictDoUpdate", 
     wireSelectMocks();
     wireAfFetch();
 
-    await discoverUSProspects({ clubIds: [TEST_CLUB.id] });
+    await discoverUSProspects();
 
     expect(capturedInsertValues.length).toBeGreaterThan(0);
 
@@ -344,7 +344,7 @@ describe("discoverUSProspects — manual override guard in onConflictDoUpdate", 
     wireSelectMocks();
     wireAfFetch();
 
-    await discoverUSProspects({ clubIds: [TEST_CLUB.id] });
+    await discoverUSProspects();
 
     expect(capturedConflictSets.length).toBe(1);
   });

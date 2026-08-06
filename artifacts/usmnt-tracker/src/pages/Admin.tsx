@@ -1202,7 +1202,7 @@ export default function Admin() {
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   if (!token) {

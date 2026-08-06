@@ -1,11 +1,27 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import rateLimit from "express-rate-limit";
 import { db, transparencyMonthsTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+
+/**
+ * Dedicated rate limiter for the admin password-verify endpoint.
+ * Tighter than the global limiter (300 req/min) because each request attempts
+ * a password comparison — a bot can otherwise try ~18,000 guesses per hour
+ * from a single IP. 5 requests per 15 minutes makes brute-force impractical
+ * while keeping the UX instant for legitimate operators.
+ */
+const adminVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts, please try again later." },
+});
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 
@@ -77,14 +93,31 @@ router.get("/transparency/totals", async (_req, res): Promise<void> => {
  * visitors can verify the transparency records.
  */
 router.get("/transparency/invoice/*objectPath", async (req: Request, res: Response): Promise<void> => {
-  const service = new ObjectStorageService();
   try {
     const raw = (req.params as Record<string, string | string[]>)["objectPath"] ?? "";
     const suffix = Array.isArray(raw) ? raw.join('/') : String(raw);
     const objectPath = `/objects/${suffix}`;
+
+    // Reject paths that are not registered as transparency invoices. Without
+    // this check any caller who knows (or guesses) an internal GCS path can
+    // obtain a valid signed download URL for arbitrary private objects.
+    // We return the same "Invoice not found" message whether the path is
+    // simply unknown or is a non-invoice object — do not leak the difference.
+    const rows = await db
+      .select({ id: transparencyMonthsTable.id })
+      .from(transparencyMonthsTable)
+      .where(sql`${transparencyMonthsTable.invoiceUrls} @> ${JSON.stringify([{ url: objectPath }])}::jsonb`)
+      .limit(1);
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+
     // Redirect to a short-lived signed GET URL rather than proxying through the
     // GCS SDK. The sidecar's signed-URL API is reliable in this environment;
     // the SDK's file.exists() / createReadStream() credential flow is not.
+    const service = new ObjectStorageService();
     const signedUrl = await service.getObjectEntityDownloadUrl(objectPath, /* ttlSec */ 300);
     res.redirect(302, signedUrl);
   } catch (err) {
@@ -106,7 +139,7 @@ router.get("/transparency/invoice/*objectPath", async (req: Request, res: Respon
  * the frontend should enforce. Driven by the ADMIN_SESSION_HOURS env var so
  * the timeout can be changed without a code deploy (default: 24 hours).
  */
-router.post("/admin/transparency/verify", requireAdminPassword, (_req, res): void => {
+router.post("/admin/transparency/verify", adminVerifyLimiter, requireAdminPassword, (_req, res): void => {
   const hours = parseFloat(process.env["ADMIN_SESSION_HOURS"] ?? "24");
   const sessionExpiryMs = (Number.isFinite(hours) && hours > 0 ? hours : 24) * 60 * 60 * 1000;
   res.json({ ok: true, sessionExpiryMs });

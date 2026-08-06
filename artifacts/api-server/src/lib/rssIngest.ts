@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import { db, playersTable, newsArticlesTable, newsArticlePlayersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+
 import { logger } from "./logger";
 
 const parser = new Parser({ timeout: 10_000 });
@@ -9,7 +9,7 @@ const parser = new Parser({ timeout: 10_000 });
 // search feeds cover U.S. Soccer / MLS / club sites that don't publish their
 // own reliable feeds.
 const FEEDS: { url: string; source: string }[] = [
-  { url: "http://feeds.bbci.co.uk/sport/football/rss.xml", source: "BBC Sport" },
+  { url: "https://feeds.bbci.co.uk/sport/football/rss.xml", source: "BBC Sport" },
   {
     url: "https://news.google.com/rss/search?q=USMNT+OR+%22US+men%27s+national+team%22+OR+%22USA+men%27s+national+team%22&hl=en-US&gl=US&ceid=US:en",
     source: "Google News",

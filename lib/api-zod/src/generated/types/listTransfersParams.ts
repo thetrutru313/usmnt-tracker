@@ -9,4 +9,8 @@ import type { TransferStatus } from './transferStatus';
 
 export type ListTransfersParams = {
 status?: TransferStatus;
+/**
+ * @maximum 200
+ */
+limit?: number;
 };

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, avg, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, notIlike, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, avg, desc, eq, gte, inArray, isNotNull, isNull, lt, notIlike, notInArray, or, sql } from "drizzle-orm";
 import {
   fixturesTable,
   matchLogsTable,

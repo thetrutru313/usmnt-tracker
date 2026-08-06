@@ -109,7 +109,7 @@ async function linkPlayerToFixture(fixtureId: number, playerId: number, clubId: 
   await db.insert(fixturePlayersTable).values({ fixtureId, playerId, clubId });
 }
 
-async function linkExists(fixtureId: number, playerId: number): Promise<boolean> {
+async function _linkExists(fixtureId: number, _playerId: number): Promise<boolean> {
   const rows = await db
     .select({ id: fixturePlayersTable.id })
     .from(fixturePlayersTable)

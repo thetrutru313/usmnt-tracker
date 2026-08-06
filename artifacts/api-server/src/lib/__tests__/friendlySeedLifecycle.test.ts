@@ -31,7 +31,7 @@
 
 import { describe, it, expect, afterAll } from "vitest";
 import { db, fixturesTable } from "@workspace/db";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 // ─── test parameters ──────────────────────────────────────────────────────────

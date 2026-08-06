@@ -9,5 +9,8 @@
 export type ListNewsParams = {
 category?: string;
 playerId?: number;
+/**
+ * @maximum 200
+ */
 limit?: number;
 };

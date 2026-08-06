@@ -1,0 +1,86 @@
+Six small independent fixes. Each is self-contained. Apply all six, then run
+the verification at the bottom once.
+
+FIX 1 — require() inside an ES module.
+File: artifacts/api-server/src/lib/apiFootballSync.ts line 2205
+  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
+This package is "type": "module"; require does not exist there. It works in
+production only because build.mjs injects a compatibility shim. It breaks
+anywhere the source runs directly, including Vitest.
+Replace with a normal static import at the top of the file. Check first
+whether this was done to avoid a circular import between apiFootballSync.ts
+and syncGuard.ts — if a cycle exists, say so and stop rather than forcing it.
+
+FIX 2 — Unbounded list endpoints.
+- artifacts/api-server/src/routes/news.ts line 44: the limit is applied only
+  when the caller supplies one. Default it to 50 and cap it at 200.
+- artifacts/api-server/src/routes/injuries.ts line 16: no limit at all. Add
+  the same default and cap.
+- artifacts/api-server/src/routes/transfers.ts line 16: same.
+These tables grow forever — news gains up to 25 rows every 15 minutes and
+nothing ever deletes them.
+Update lib/api-spec/openapi.yaml to reflect the new limit parameters, then
+run `pnpm --filter @workspace/api-spec run codegen` and commit the
+regenerated output in lib/api-zod and lib/api-client-react. The CI
+codegen-drift check will fail if you skip this.
+
+FIX 3 — Missing database indexes.
+PostgreSQL does not index foreign keys automatically. Add indexes in
+lib/db/src/schema/ for:
+- player_stats.player_id           (stats.ts) — read on every player page
+- injuries.player_id              (injuries.ts)
+- fixtures.kickoff                (fixtures.ts) — every list sorts by it
+- players.club_id                 (players.ts) — joined on every player list
+- news_article_players.article_id and .player_id (news.ts)
+Follow the existing index style in fixtures.ts lines 49-50.
+Generate the migration but DO NOT apply it to the database in this task —
+schema deployment is handled separately in Prompt 4.
+
+FIX 4 — Insecure RSS feed URL.
+File: artifacts/api-server/src/lib/rssIngest.ts line 12
+The BBC feed is fetched over plain http://. Change to https:// and confirm
+the feed still parses.
+
+FIX 5 — Silently skipped WebKit tests.
+File: e2e/playwright.config.ts lines 148-160
+When no WebKit binary is found the entire WebKit project is dropped from the
+config, so star-toggle-private-mode.spec.ts never runs and the suite still
+reports success. Make the skip loud: log a clear warning at config load
+naming the spec that will not run, so it is visible in CI output.
+
+FIX 7 — Make the frontend build work outside a Replit service.
+
+Files: artifacts/usmnt-tracker/vite.config.ts lines 9-30
+       artifacts/mockup-sandbox/vite.config.ts lines 8-22
+
+Both configs throw if PORT or BASE_PATH is unset. This happens at
+config-load time, during `vite build`, which starts no server and has no use
+for a port. The result is that `pnpm run build` fails from any plain shell —
+confirmed by execution. It works only inside a Replit service, where
+artifact.toml injects the variables.
+
+Replace the throws with defaults: PORT falls back to 5173 (usmnt-tracker) and
+8081 (mockup-sandbox), BASE_PATH falls back to '/' and '/__mockup'
+respectively. Keep reading the env vars when they ARE set — Replit must
+continue to control them in the service context. Log which value was used at
+config load so a surprising port is visible rather than silent.
+
+Confirm `pnpm run build` now succeeds from a shell with no env vars set, and
+that the Replit dev workflow still binds the injected port.
+
+FIX 6 — Unused dependencies and a phantom workspace path.
+- Remove "@replit/connectors-sdk" from the root package.json — it is declared
+  but imported nowhere in the source.
+- Remove "cookie-parser" and "@types/cookie-parser" from
+  artifacts/api-server/package.json — declared, never imported.
+- Remove the "lib/integrations/*" line from pnpm-workspace.yaml — that
+  directory does not exist.
+Confirm each is genuinely unused with a repo-wide search before removing.
+
+VERIFY:
+  pnpm run typecheck && pnpm run build
+  pnpm --filter @workspace/api-server run test
+  bash scripts/check-codegen-drift.sh
+
+Report the diff, the test results, and any of the six you chose not to do
+and why.

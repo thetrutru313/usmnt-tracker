@@ -10,10 +10,10 @@ router.get("/injuries", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { status } = parsed.data;
+  const { status, limit } = parsed.data;
 
-  const query = injuriesWithPlayerQuery().orderBy(desc(injuriesTable.startDate));
-  const raw = status ? await query.where(eq(injuriesTable.status, status)) : await query;
+  const base = injuriesWithPlayerQuery().orderBy(desc(injuriesTable.startDate)).limit(limit);
+  const raw = status ? await base.where(eq(injuriesTable.status, status)) : await base;
   const rows = await withInjuryBadges(raw);
 
   res.json(ListInjuriesResponse.parse(rows));

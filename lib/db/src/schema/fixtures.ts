@@ -29,7 +29,10 @@ export const fixturesTable = pgTable("fixtures", {
   // Populated for seeded NT fixtures; null for club fixtures synced from API-Football.
   city: text("city"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+(table) => [
+  index("fixtures_kickoff_idx").on(table.kickoff),
+]);
 
 export const insertFixtureSchema = createInsertSchema(fixturesTable).omit({ id: true, createdAt: true });
 export type InsertFixture = z.infer<typeof insertFixtureSchema>;

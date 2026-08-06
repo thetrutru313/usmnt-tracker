@@ -1,4 +1,4 @@
-import { date, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { date, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { playersTable } from "./players";
@@ -14,7 +14,10 @@ export const injuriesTable = pgTable("injuries", {
   latestUpdate: text("latest_update").notNull(),
   startDate: date("start_date", { mode: "string" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+(table) => [
+  index("injuries_player_id_idx").on(table.playerId),
+]);
 
 export const insertInjurySchema = createInsertSchema(injuriesTable).omit({ id: true, createdAt: true });
 export type InsertInjury = z.infer<typeof insertInjurySchema>;

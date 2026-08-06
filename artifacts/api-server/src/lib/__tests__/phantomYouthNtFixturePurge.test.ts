@@ -68,7 +68,6 @@ function makeU20TeamResult(seenAfIds: Set<number>): YouthTeamFetchResult {
  * purged because their IDs would be missing from our controlled set.
  */
 async function loadExistingYouthNtAfIds(): Promise<Set<number>> {
-  const now = new Date();
   const rows = await db
     .select({ afId: fixturesTable.apiFootballFixtureId })
     .from(fixturesTable)

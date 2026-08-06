@@ -332,7 +332,7 @@ async function main() {
     )
     .returning();
 
-  const playerIdBySlug = new Map(insertedPlayers.map((p) => [p.slug, p.id]));
+  const _playerIdBySlug = new Map(insertedPlayers.map((p) => [p.slug, p.id])); // reserved for future FK wiring
   const playerByName = new Map(playerDefs.map((p, i) => [p.name, insertedPlayers[i]]));
 
   // ---- Player Stats, match logs, and injuries are NOT seeded here. ----

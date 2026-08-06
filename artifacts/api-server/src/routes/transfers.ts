@@ -10,10 +10,10 @@ router.get("/transfers", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { status } = parsed.data;
+  const { status, limit } = parsed.data;
 
-  const query = transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt));
-  const raw = status ? await query.where(eq(transfersTable.status, status)) : await query;
+  const base = transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt)).limit(limit);
+  const raw = status ? await base.where(eq(transfersTable.status, status)) : await base;
   const rows = await withTransferBadges(raw);
 
   res.json(ListTransfersResponse.parse(rows));

@@ -1,0 +1,45 @@
+scripts/post-merge.sh line 47 runs `pnpm --filter db push-force`, which
+resolves to `drizzle-kit push --force`. The --force flag suppresses the
+confirmation prompt that normally appears when a schema change would drop a
+column or table. This hook is wired to [postMerge] in .replit lines 56-58 and
+runs unattended against the database on every merge.
+
+I previously guessed the `--filter db` might match nothing and be harmlessly
+broken. Verification confirmed it resolves correctly to @workspace/db, so this
+is genuinely executing.
+
+The same file also contains hardcoded one-off data repairs — player ID 47,
+club IDs 41 and 1883, api_football_player_id 328617 — permanently embedded in
+a script that runs forever.
+
+WHAT TO DO
+
+1. FIRST, check whether each data repair in post-merge.sh lines 22-45 has
+   already taken effect in production. Read-only SELECTs only. Specifically:
+   - Does players.id = 47 currently have api_football_player_id = 328617 and
+     club_id = 41?
+   - Are there any fixture_players rows for player 47 with club_id = 1883 on
+     scheduled or live fixtures?
+   - Is player 47 linked to upcoming SV Elversberg fixtures?
+   - Does transparency_months still have an invoice_url column, or only
+     invoice_urls?
+   Report what you find before changing anything.
+
+2. If any repair has NOT taken effect, tell me. We will apply it once,
+   deliberately, as a reviewed migration — not leave it in a hook.
+
+3. Once confirmed, delete scripts/post-merge.sh and remove the [postMerge]
+   block from .replit lines 56-58.
+
+4. Confirm nothing else in the repo references post-merge.sh.
+
+DO NOT run drizzle-kit push or push-force in this task. DO NOT run
+scripts/src/seedUsmnt.ts — line 18 is a TRUNCATE CASCADE.
+
+Note that schema deployment currently DEPENDS on this hook. After deleting it,
+schema changes must be applied deliberately. That is the intended outcome, and
+Prompt 4 establishes the replacement. Between now and then, no schema changes
+should be merged.
+
+VERIFY: confirm .replit parses and the repo has no dangling reference.
+Report your step-1 findings, then the diff.

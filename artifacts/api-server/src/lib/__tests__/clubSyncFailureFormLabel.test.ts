@@ -142,7 +142,7 @@ const PLAYER = {
  * score = 50*(7.18−6.89) + 30*(7.18−6.64) = 14.5 + 16.2 = 30.7 ≥ 25 → on_fire
  * trajectory: 7.18 > 6.64 → gate inactive → on_fire confirmed
  */
-const ON_FIRE_STATS_ROWS = [
+const _ON_FIRE_STATS_ROWS = [
   { playerId: PLAYER.id, periodType: "last5",     minutes: 393,  avgRating: 7.18 },
   { playerId: PLAYER.id, periodType: "previous5", minutes: 457,  avgRating: 6.64 },
   { playerId: PLAYER.id, periodType: "season",    minutes: 1298, avgRating: 6.89 },

@@ -165,8 +165,9 @@ export default defineConfig({
     // Playwright's own webkit bundle cannot resolve its shared-lib deps (e.g.
     // the Replit / NixOS container).  The star-toggle private-mode spec runs
     // here to validate the SecurityError handling path under Safari's engine.
-    ...(webkitExecutable
-      ? [
+    ...(() => {
+      if (webkitExecutable) {
+        return [
           {
             name: "webkit",
             use: {
@@ -176,7 +177,14 @@ export default defineConfig({
               },
             },
           },
-        ]
-      : []),
+        ];
+      }
+      console.warn(
+        "[playwright.config] WebKit binary not found — " +
+          "star-toggle-private-mode.spec.ts will NOT run in this environment. " +
+          "Set PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH to a headless WebKit binary to activate.",
+      );
+      return [];
+    })(),
   ],
 });

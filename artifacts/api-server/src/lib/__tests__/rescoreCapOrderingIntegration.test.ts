@@ -87,7 +87,7 @@ vi.mock("../eligibilitySignalsConfig.js", () => ({
 // Real DB imports — NOT mocked
 // ---------------------------------------------------------------------------
 
-import { db, playerCandidatesTable, eligibilitySignalsTable } from "@workspace/db";
+import { db, playerCandidatesTable, eligibilitySignalsTable, clubsTable } from "@workspace/db";
 import { or, eq, isNull, sql } from "drizzle-orm";
 import { rescoreAllCandidates } from "../playerDiscovery.js";
 
@@ -106,8 +106,11 @@ class RollbackSignal extends Error {
 // Test-candidate definitions
 // ---------------------------------------------------------------------------
 
-/** An existing club id that satisfies the NOT NULL FK constraint. */
-const TEST_CLUB_ID = 1; // AC Milan (always present in seed data)
+/**
+ * Club id used for the FK constraint on player_candidates.club_id.
+ * Resolved inside the rolled-back transaction — no seed row required.
+ */
+let testClubId: number;
 
 /**
  * Seven candidates seeded inside the transaction (apiFootballPlayerId values
@@ -219,6 +222,15 @@ beforeAll(async () => {
 
   try {
     await db.transaction(async (tx) => {
+      // 0. Insert a sentinel club row to satisfy player_candidates.club_id FK.
+      //    The transaction rollback removes it automatically — no afterAll needed.
+      const [sentinelClub] = await tx
+        .insert(clubsTable)
+        .values({ name: "CI Sentinel Club [rescore-ordering-test]", league: "MLS", country: "USA" })
+        .returning({ id: clubsTable.id });
+      if (!sentinelClub) throw new Error("Failed to insert sentinel club for rescore ordering test");
+      testClubId = sentinelClub.id;
+
       // 1. Delete eligibility_signals first (FK → player_candidates).
       //    These are production rows, but the rollback will restore them.
       await tx.delete(eligibilitySignalsTable);
@@ -244,7 +256,7 @@ beforeAll(async () => {
           eligibilityBasis: "nationality",
           status: "pending" as const,
           apiFootballPlayerId: row.apiFootballPlayerId,
-          clubId: TEST_CLUB_ID,
+          clubId: testClubId,
           isManualOverride: row.isManualOverride,
           ...(row.lastScoredAt != null ? { lastScoredAt: row.lastScoredAt } : {}),
         });

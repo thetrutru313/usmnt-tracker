@@ -364,6 +364,7 @@ export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
     logger.warn("API_FOOTBALL_KEY not set — skipping USMNT stats sync, no national-team match logs/cycle stats will be available");
     return;
   }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
   const COOLDOWN = 50 * 60 * 1000;
   const run = async () => {

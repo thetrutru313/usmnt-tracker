@@ -35,7 +35,7 @@ const {
   mockEqFn,
 } = vi.hoisted(() => {
   // Minimal chainable DB mock
-  const whereResult = { then: undefined as unknown };
+  const _whereResult = { then: undefined as unknown };
   const updateWhereMock = vi.fn().mockResolvedValue(undefined);
   const updateSetMock = vi.fn().mockReturnValue({ where: updateWhereMock });
   const insertValuesMock = vi.fn().mockResolvedValue([{ id: 1 }]);

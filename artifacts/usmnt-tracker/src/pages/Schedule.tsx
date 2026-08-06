@@ -1,4 +1,4 @@
-import { CalendarRange, ChevronRight, Loader2 } from "lucide-react";
+import { CalendarRange, Loader2 } from "lucide-react";
 import { useListScheduleEvents } from "@workspace/api-client-react";
 import type { ScheduleEvent } from "@workspace/api-client-react";
 import {

@@ -1,0 +1,47 @@
+Revert one of the three overrides added in the previous dependency task, and
+verify the other two properly.
+
+REVERT — the uuid override.
+
+Remove `uuid: '>=11.1.1'` from the overrides block in pnpm-workspace.yaml.
+
+Reasoning, which I want you to check rather than take on faith:
+
+The advisory (GHSA-w5hq-g745-h8pq) describes a missing buffer bounds check in
+uuid's v3(), v5() and v6() functions, and only when an output buffer is passed
+in. Your own compatibility note stated that gaxios calls only v4(). If that is
+correct, this dependency path was never exploitable, and we forced a two-major
+version jump (9.0.1 → 11.1.1) onto a package that declares ^9.0.1 in order to
+silence a finding that did not apply.
+
+Confirm by searching the installed gaxios source for uuid usage. If gaxios
+calls only v4(), revert the override and note in a comment why the remaining
+audit finding is accepted rather than fixed. If gaxios DOES call v3/v5/v6 with
+an output buffer, tell me — then the override is justified and we keep it.
+
+VERIFY THE OTHER TWO PROPERLY.
+
+The previous task cited "all 707 backend tests pass" as evidence that the
+overrides are safe. That evidence does not apply: there are no tests covering
+the object-storage code path, and @google-cloud/storage is marked external in
+build.mjs line 66, so it loads from node_modules at runtime rather than being
+bundled. The test suite never exercises gaxios or uuid.
+
+Verify by actually loading and exercising the code:
+
+1. node -e "import('@google-cloud/storage').then(()=>console.log('import ok')).catch(e=>console.error(e.code, e.message))"
+   This catches an ERR_REQUIRE_ESM if a CJS dependency can no longer require a
+   now-ESM-only package.
+
+2. Exercise a real object-storage round trip against the running server:
+   request an invoice upload URL via the admin endpoint, and fetch an existing
+   invoice via GET /api/transparency/invoice/. Both go through
+   @google-cloud/storage. Report the actual HTTP responses.
+
+3. Confirm express-rate-limit still functions after the ip-address bump: send
+   enough requests to /api/search to trip its 60-per-minute limiter and
+   confirm you get a 429.
+
+Report the gaxios finding, the three verification results, and the final
+pnpm audit counts. Do not claim a code path is safe on the basis of tests that
+do not execute it.

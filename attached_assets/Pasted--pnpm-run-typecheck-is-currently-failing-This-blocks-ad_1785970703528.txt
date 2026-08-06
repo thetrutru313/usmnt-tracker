@@ -1,0 +1,43 @@
+`pnpm run typecheck` is currently failing. This blocks adding type checking to
+CI, so it needs fixing before that work.
+
+Two pre-existing TypeScript errors were reported in:
+  artifacts/api-server/src/lib/__tests__/discoveryUpsertManualOverrideGuard.test.ts
+  artifacts/api-server/src/lib/__tests__/rescoreSkipsManualOverride.test.ts
+
+Note that this failure has been invisible because the api-server's own build
+script (`node ./build.mjs`) never type-checks — only the root
+`pnpm run build` does, via the chain in package.json line 7. So the deployed
+bundle builds fine while the type check has been broken.
+
+WHAT TO DO
+
+1. Run `pnpm run typecheck` outside plan mode and paste the complete error
+   output verbatim. I want to see the actual errors, not a summary.
+
+2. Fix them. These are test files, so the fix is almost certainly a type
+   annotation or a mock shape that drifted from the code it mocks.
+
+   IMPORTANT: if a test's types no longer match the function it tests, that
+   may indicate the test is asserting against an outdated signature — which
+   would mean the test is passing while checking the wrong thing. Investigate
+   before patching the type. Do not silence these with `any`, `@ts-ignore`, or
+   `@ts-expect-error`. If the only way to make one compile is to suppress it,
+   stop and explain why.
+
+3. Check whether the same class of error exists elsewhere by running the type
+   check across all packages, including the frontend:
+     pnpm run typecheck
+     pnpm --filter @workspace/usmnt-tracker run typecheck
+     pnpm --filter @workspace/api-server run typecheck
+
+4. Consider whether `artifacts/api-server`'s build script should run the type
+   check before bundling, so this cannot go unnoticed again. Recommend, do not
+   implement — I want to decide whether that slows the dev loop too much.
+
+VERIFY:
+  pnpm run typecheck && pnpm run build
+  pnpm --filter @workspace/api-server run test
+
+Report the original errors, what caused them, your fix, and whether any test
+was found to be asserting against an outdated signature.

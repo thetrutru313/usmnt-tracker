@@ -3,7 +3,7 @@ import { useParams } from "wouter";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUpRight, ChevronRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper, Star } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper, Star } from "lucide-react";
 import { FormBadge } from "@/components/FormBadge";
 import { PoolTierIcon } from "@/components/FixtureCard";
 import { type PoolTier, POOL_TIER_STYLES } from "@/lib/poolTiers";
@@ -54,7 +54,7 @@ export default function PlayerProfile() {
   // `{ enabled }` object doesn't structurally satisfy it even though the
   // underlying react-query call accepts it fine (queryKey/queryFn are filled
   // in by the generated `getGetPlayerQueryOptions` merge).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const { data: player, isLoading, isFetching, error } = useGetPlayer(playerId, {
     ...(selectedSeason ? { season: selectedSeason } : {}),
     ...(selectedCycle ? { cycle: selectedCycle } : {}),

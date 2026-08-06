@@ -187,6 +187,8 @@ paths:
           required: false
           schema:
             type: integer
+            default: 50
+            maximum: 200
       responses:
         "200":
           description: List of news articles
@@ -208,6 +210,13 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/InjuryStatus"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
       responses:
         "200":
           description: List of injuries
@@ -229,6 +238,13 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/TransferStatus"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
       responses:
         "200":
           description: List of transfers

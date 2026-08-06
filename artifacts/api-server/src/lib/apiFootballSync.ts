@@ -1,6 +1,7 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, transfersTable } from "@workspace/db";
 import { eq, and, inArray, isNotNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
+import { claimSyncRun } from "./syncGuard.js";
 import {
   type AfFixture,
   FINISHED_STATUSES,
@@ -1512,6 +1513,7 @@ export async function syncApiFootballFixtures(
   // the trigger misses (API outage, server restart mid-sync, etc.).
   if (allNewlyFinished.size > 0) {
     // Lazy require avoids circular import: playerStatsSync → apiFootballSync.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
     dispatchPostMatchTriggers(allNewlyFinished, syncStatsForFinishedFixture);
   }
@@ -2193,6 +2195,7 @@ export async function pollLiveFixtures(): Promise<{ polled: number; updated: num
           .where(eq(fixturePlayersTable.fixtureId, row.id));
         const playerIds = links.map((l) => l.playerId);
         if (playerIds.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { syncStatsForFinishedFixture } = require("./playerStatsSync") as typeof import("./playerStatsSync");
           logger.info(
             { fixtureId: row.id, playerCount: playerIds.length, delayMinutes: POST_MATCH_STATS_DELAY_MINUTES },
@@ -2216,7 +2219,6 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
     logger.warn("API_FOOTBALL_KEY not set — skipping live fixtures sync, using seeded fixtures only");
     return;
   }
-  const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
   const COOLDOWN = 50 * 60 * 1000; // 50 min — skip startup re-run if already ran this hour
   const run = async () => {
     if (!(await claimSyncRun("fixtures", COOLDOWN))) return;

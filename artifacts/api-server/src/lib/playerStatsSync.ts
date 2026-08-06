@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, playerStatsTable, matchLogsTable, injuriesTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import { ensurePlayerApiFootballIds, ageFromBirthDate } from "./playerClubSync";
@@ -1038,6 +1038,7 @@ export function startPlayerStatsSyncSchedule(
     logger.warn("API_FOOTBALL_KEY not set — skipping live player-stats sync, no season stats/match logs/injuries will be available");
     return;
   }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { claimSyncRun } = require("./syncGuard") as typeof import("./syncGuard");
   const COOLDOWN = 23 * 60 * 60 * 1000; // 23 h — skip startup re-run if already ran today
   const run = async () => {

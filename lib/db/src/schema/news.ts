@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -24,7 +24,11 @@ export const newsArticlePlayersTable = pgTable("news_article_players", {
   id: serial("id").primaryKey(),
   articleId: integer("article_id").notNull().references(() => newsArticlesTable.id),
   playerId: integer("player_id").notNull(),
-});
+},
+(table) => [
+  index("news_article_players_article_id_idx").on(table.articleId),
+  index("news_article_players_player_id_idx").on(table.playerId),
+]);
 
 export const insertNewsArticlePlayerSchema = createInsertSchema(newsArticlePlayersTable).omit({ id: true });
 export type InsertNewsArticlePlayer = z.infer<typeof insertNewsArticlePlayerSchema>;

@@ -56,7 +56,7 @@ router.get("/schedule", async (_req, res): Promise<void> => {
   const windowedEvents = events.filter((e) => e.startDate != null && e.endDate != null);
 
   type NtFixtureRow = typeof fixturesTable.$inferSelect;
-  let fixturesByEvent = new Map<number, NtFixtureRow[]>();
+  const fixturesByEvent = new Map<number, NtFixtureRow[]>();
   if (windowedEvents.length > 0) {
     // Compute the global bounding box and do a single batch query.
     const minStart = windowedEvents

@@ -147,7 +147,7 @@ describe("resolvePlayerIdBySearch — age-tolerance gate (±3 years)", () => {
   it("rejects a candidate whose age is 5 years off from on-file age", async () => {
     // Prospect: "Cruz Medina", age 20 (born ~2006), at a USA-domestic club.
     // Interloper: "C. Medina" from Chile, born ~2001 (age 25) — 5 years off.
-    const player = { id: 99, name: "Cruz Medina", clubId: 1, apiFootballPlayerId: null, age: 20 };
+    const _player = { id: 99, name: "Cruz Medina", clubId: 1, apiFootballPlayerId: null, age: 20 };
     // Ensure we exercise the search path, not the KNOWN_PLAYER_IDS null-pin.
     // (Cruz Medina IS currently pinned to null; we test the logic with a
     // stand-in name that is NOT in KNOWN_PLAYER_IDS.)

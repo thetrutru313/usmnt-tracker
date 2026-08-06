@@ -361,10 +361,15 @@ export const GetFixtureResponse = zod.object({
 /**
  * @summary List news articles
  */
+export const listNewsQueryLimitDefault = 50;
+export const listNewsQueryLimitMax = 200;
+
+
+
 export const ListNewsQueryParams = zod.object({
   "category": zod.coerce.string().optional(),
   "playerId": zod.coerce.number().optional(),
-  "limit": zod.coerce.number().optional()
+  "limit": zod.coerce.number().max(listNewsQueryLimitMax).default(listNewsQueryLimitDefault)
 })
 
 export const ListNewsResponseItem = zod.object({
@@ -392,8 +397,14 @@ export const ListNewsResponse = zod.array(ListNewsResponseItem)
 /**
  * @summary List injuries
  */
+export const listInjuriesQueryLimitDefault = 50;
+export const listInjuriesQueryLimitMax = 200;
+
+
+
 export const ListInjuriesQueryParams = zod.object({
-  "status": zod.enum(['active', 'recovering', 'returned']).optional()
+  "status": zod.enum(['active', 'recovering', 'returned']).optional(),
+  "limit": zod.coerce.number().max(listInjuriesQueryLimitMax).default(listInjuriesQueryLimitDefault)
 })
 
 export const ListInjuriesResponseItem = zod.object({
@@ -421,8 +432,14 @@ export const ListInjuriesResponse = zod.array(ListInjuriesResponseItem)
 /**
  * @summary List transfers and rumors
  */
+export const listTransfersQueryLimitDefault = 50;
+export const listTransfersQueryLimitMax = 200;
+
+
+
 export const ListTransfersQueryParams = zod.object({
-  "status": zod.enum(['confirmed', 'rumor']).optional()
+  "status": zod.enum(['confirmed', 'rumor']).optional(),
+  "limit": zod.coerce.number().max(listTransfersQueryLimitMax).default(listTransfersQueryLimitDefault)
 })
 
 export const ListTransfersResponseItem = zod.object({

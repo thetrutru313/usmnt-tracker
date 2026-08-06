@@ -27,6 +27,7 @@ import {
   userFollowsTable,
   recoveryTokensTable,
   playersTable,
+  clubsTable,
 } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { generateToken, hashToken } from "../tokenUtils.js";
@@ -52,9 +53,9 @@ function bearer(token: string) {
 
 // ─── Shared state ──────────────────────────────────────────────────────────────
 
-/** A handful of real player IDs fetched from the DB once at setup time.
- *  Follows require an FK to players, so we borrow existing rows rather than
- *  inserting disposable ones. */
+/** Player IDs used as FK targets for user_follows rows.
+ *  Populated by beforeAll with sentinel rows so the test works on a
+ *  schema-only CI database with no seed data. */
 let realPlayerIds: number[] = [];
 
 // Anon user IDs inserted by this suite — cleaned up in afterAll.
@@ -63,21 +64,35 @@ let realPlayerIds: number[] = [];
 // not need to track individual recovery-token row IDs separately.
 const insertedAnonUserIds: number[] = [];
 
+// Sentinel club + player rows inserted by beforeAll — removed in afterAll
+// after all anon_users/follows/recovery-token rows are already gone.
+let sentinelClubId: number | undefined;
+const sentinelPlayerIds: number[] = [];
+
 // ─── Setup / teardown ─────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  // Borrow up to 3 existing player IDs to satisfy the user_follows FK.
-  const rows = await db
-    .select({ id: playersTable.id })
-    .from(playersTable)
-    .limit(3);
-  realPlayerIds = rows.map((r) => r.id);
-  if (realPlayerIds.length === 0) {
-    throw new Error(
-      "No players found in the database — recovery-round-trip test requires at " +
-        "least one seeded player row.",
-    );
-  }
+  // Insert a disposable club + 3 disposable players to satisfy the
+  // user_follows FK without depending on seed data being present.
+  const [club] = await db
+    .insert(clubsTable)
+    .values({ name: "CI Test Club [recovery-rt-sentinel]", league: "MLS", country: "USA" })
+    .returning({ id: clubsTable.id });
+  if (!club) throw new Error("Failed to insert sentinel club for recovery round-trip test");
+  sentinelClubId = club.id;
+
+  const inserted = await db
+    .insert(playersTable)
+    .values([
+      { name: "CI Sentinel Player 1", slug: "ci-recovery-rt-sentinel-1", position: "MF", category: "prospect", clubId: sentinelClubId, age: 22 },
+      { name: "CI Sentinel Player 2", slug: "ci-recovery-rt-sentinel-2", position: "FW", category: "prospect", clubId: sentinelClubId, age: 23 },
+      { name: "CI Sentinel Player 3", slug: "ci-recovery-rt-sentinel-3", position: "DF", category: "prospect", clubId: sentinelClubId, age: 24 },
+    ])
+    .returning({ id: playersTable.id });
+  if (inserted.length === 0) throw new Error("Failed to insert sentinel players for recovery round-trip test");
+
+  inserted.forEach((r) => sentinelPlayerIds.push(r.id));
+  realPlayerIds = sentinelPlayerIds.slice();
 });
 
 afterAll(async () => {
@@ -100,6 +115,15 @@ afterAll(async () => {
   await db
     .delete(anonUsersTable)
     .where(inArray(anonUsersTable.id, insertedAnonUserIds));
+
+  // Clean up sentinel players and club inserted in beforeAll.
+  // Follows referencing them were already removed above (via anonUserId).
+  if (sentinelPlayerIds.length > 0) {
+    await db.delete(playersTable).where(inArray(playersTable.id, sentinelPlayerIds));
+  }
+  if (sentinelClubId !== undefined) {
+    await db.delete(clubsTable).where(eq(clubsTable.id, sentinelClubId));
+  }
 });
 
 // ─── Suite ────────────────────────────────────────────────────────────────────

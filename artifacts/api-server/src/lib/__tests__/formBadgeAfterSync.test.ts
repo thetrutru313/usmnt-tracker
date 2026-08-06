@@ -24,7 +24,7 @@
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
-import { db, playersTable, injuriesTable, transfersTable, playerStatsTable, clubsTable } from "@workspace/db";
+import { db, playersTable, playerStatsTable, clubsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { ListInjuriesResponse, ListTransfersResponse } from "@workspace/api-zod";
 

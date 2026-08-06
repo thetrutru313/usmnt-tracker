@@ -3,7 +3,7 @@
  * Safe to run multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
  */
 import { db, scheduleEventsTable } from "../index";
-import { sql } from "drizzle-orm";
+
 
 const events = [
   {

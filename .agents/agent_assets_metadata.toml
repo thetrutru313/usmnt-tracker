@@ -1,0 +1,51 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BU28K9QnDX4lDoMaNgpo2"
+uri = "file://verification-report-2026-08-05.md"
+type = "text"
+title = "Verification Report — Aug 5 2026"
+description = "Read-only audit: install, typecheck, build, tests, db filter, sync_metadata, and pnpm audit results."
+
+[[outputs]]
+id = "ElsInmI86L9wkCawP5qLD"
+uri = "file://audit-fix-report-2026-08-05.md"
+type = "text"
+title = "Audit Fix Report — 2026-08-05"
+description = "Before/after vulnerability counts, overrides applied, remaining 15 out-of-scope findings, and test results."
+
+[[outputs]]
+id = "BreXf8YOYVbWF0MjSpR4a"
+uri = "file://audit-uuid-revert-report-2026-08-05.md"
+type = "text"
+title = "uuid Revert & Verification Report — 2026-08-05"
+description = "gaxios uuid analysis, three runtime verification tests, and final pnpm audit counts."
+
+[[outputs]]
+id = "AeJHp2tMYH0qdKtHf517Y"
+uri = "file://security-fix-report-2026-08-06.md"
+type = "text"
+title = "Security Fix Report — 2026-08-06"
+description = "Brute-force rate limit on admin login + invoice path authorisation fix. Diffs, test results, and file inventory."
+
+[[outputs]]
+id = "p0kZ3NSUtIZLXj9hkX-I1"
+uri = "file://task-a-findings.md"
+type = "text"
+title = "Task A Findings — Test Suite Analysis"
+description = "API-server mocked vs. integration split, frontend date-drift failures, and UTC vs. local timezone mismatch in Fixtures.test.tsx. Includes CI decisions needed before Task C."
+
+[[outputs]]
+id = "czyGG2_QQULZVxDiXKZX-"
+uri = "file://reports/ci-lint-report.md"
+type = "text"
+title = "CI & Lint Setup Report"
+description = "Full report covering ESLint/Prettier setup, lint counts by rule, CI workflow changes, and the 3 api-server test files that need seed data before CI goes fully green."
+
+[[outputs]]
+id = "stHq6ltD62Q1exuHxP3X_"
+uri = "file://reports/ci-lint-tasks-results.md"
+type = "text"
+title = "CI / Lint Task Results"
+description = "Full results for all four tasks: canary verification, Decision 2 & 3 documentation, self-contained fixtures, and CI workflow corrections."

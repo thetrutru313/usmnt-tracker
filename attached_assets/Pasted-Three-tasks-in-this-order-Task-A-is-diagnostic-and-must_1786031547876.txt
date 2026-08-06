@@ -1,0 +1,120 @@
+Three tasks, in this order. Task A is diagnostic and must come first — its
+answer determines how Task C is built.
+
+────────────────────────────────────────────────────────────────────────
+TASK A — Establish what CI actually has to provision. DO THIS FIRST.
+────────────────────────────────────────────────────────────────────────
+
+The backend suite has two tiers. Some tests mock @workspace/db and need
+nothing. Others import `app` and fail when DATABASE_URL is unset — including
+transparencyVerifyRateLimit, transparencyInvoiceDeletion,
+transparencyInvoiceLabelEdit, transparencyInvoiceValidation, and
+chiplessFixtureFilter. This is pre-existing, not caused by recent work; it has
+simply never surfaced because the suite only ever ran inside Replit, where
+DATABASE_URL is always set.
+
+One distinction decides how much CI has to build:
+
+  lib/db/src/index.ts line 7 THROWS when DATABASE_URL is unset.
+  Line 13 creates a pg Pool, which is LAZY — it opens no connection until a
+  query actually runs.
+
+So a test that imports `app` but never queries needs the variable to EXIST,
+not a reachable database. Find out which is true:
+
+  DATABASE_URL="postgres://u:p@127.0.0.1:1/nodb" \
+    pnpm --filter @workspace/api-server run test
+
+That URL points at a closed port. Anything attempting a real connection fails
+loudly; anything that only needed the variable set passes.
+
+Report before continuing:
+  - ALL PASS → CI needs one dummy DATABASE_URL env var and no service
+    container. Much simpler. Prefer this and proceed to Task B.
+  - SOME FAIL → list exactly which files fail and what query each attempts.
+    STOP AND TELL ME. A Postgres service container plus schema provisioning is
+    a significantly larger CI change and I want to approve it before you build
+    it.
+
+Do not provision Postgres speculatively.
+
+Also run the frontend suite now, before any CI work:
+
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Those 11 test files appear never to have been executed by anything — no
+workflow, no CI step, no cached output. Report the pass/fail count. If tests
+fail from drift, fix them in this task and describe what was wrong. Do NOT
+disable, skip, or delete a failing test to make CI green. If one is genuinely
+obsolete, say so and ask before removing it.
+
+────────────────────────────────────────────────────────────────────────
+TASK B — Add a linter and formatter.
+────────────────────────────────────────────────────────────────────────
+
+There is no ESLint configuration anywhere in this repo — no .eslintrc, no
+eslint.config.js, no eslint dependency — yet the source contains fourteen
+`eslint-disable` comments across ten files. Those suppressions currently
+suppress nothing. Prettier is installed at the root but has no config file and
+no format script.
+
+Add a flat ESLint config (eslint.config.js) at the repo root covering the whole
+workspace, with typescript-eslint and the React hooks plugin, matching the
+rules the existing disable-comments reference:
+  @typescript-eslint/no-explicit-any
+  @typescript-eslint/no-namespace
+  react-hooks/exhaustive-deps
+Add a .prettierrc matching the style already in the codebase — read several
+files first and infer it rather than imposing defaults.
+Add root scripts: "lint", "lint:fix", "format", "format:check".
+
+Then run the linter and report error and warning counts by rule.
+
+FIX ONLY errors that are unambiguous and mechanical. Do NOT bulk-fix
+react-hooks/exhaustive-deps warnings — several existing disables look
+deliberate, and changing a dependency array changes behaviour. List those
+separately for human review.
+
+Do NOT run `prettier --write` across the whole repo. That would produce a diff
+of thousands of lines and bury every real change. Only format files you have
+already modified.
+
+────────────────────────────────────────────────────────────────────────
+TASK C — Make CI meaningful.
+────────────────────────────────────────────────────────────────────────
+
+File: .github/workflows/codegen-drift.yml
+Today CI checks only that generated API client code matches the OpenAPI spec.
+It never runs the type check, the build, or any of the 95 test files.
+
+Extend the workflow (or add a second one — your call, explain which and why)
+to also run, on every push and pull request:
+  pnpm run lint
+  pnpm run typecheck
+  pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Configure DATABASE_URL according to what Task A established. Do not guess.
+
+Change node-version from "20" to "24" at line 21. Production runs Node 24 per
+.replit line 1 and the project depends on @types/node v25; testing on a
+different major version is a latent source of surprises.
+
+The build step needs PORT and BASE_PATH set — vite.config.ts throws without
+them even during a build that starts no server. Set PORT=5173 and BASE_PATH=/
+in the workflow env as a stopgap. If Prompt 2 FIX 7 has already landed, the
+defaults make this unnecessary — check before adding it.
+
+────────────────────────────────────────────────────────────────────────
+
+VERIFY:
+  pnpm run lint
+  pnpm run typecheck
+  pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Report, in order: the Task A result and what you concluded from it, the
+frontend suite pass/fail count, lint counts by rule, the exhaustive-deps
+warnings you deliberately left alone, and the CI workflow diff.

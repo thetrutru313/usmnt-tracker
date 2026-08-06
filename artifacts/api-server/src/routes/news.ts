@@ -37,7 +37,7 @@ router.get("/news", async (req, res): Promise<void> => {
     .$dynamic();
 
   if (conditions.length) query = query.where(and(...conditions));
-  if (limit) query = query.limit(limit);
+  query = query.limit(limit);
 
   const rows = await query;
   const withPlayers = await attachPlayersToNews(rows);

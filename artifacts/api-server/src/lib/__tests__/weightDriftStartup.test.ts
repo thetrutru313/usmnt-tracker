@@ -124,7 +124,7 @@ vi.mock("../eligibilitySignalsConfig.js", async (importOriginal) => {
 // ---------------------------------------------------------------------------
 
 import { checkAndApplyWeightDrift, rescoreCandidatesFromStoredSignals } from "../playerDiscovery.js";
-import { getMinEligibilityScore } from "../eligibilitySignalsConfig.js";
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,7 +134,7 @@ import { getMinEligibilityScore } from "../eligibilitySignalsConfig.js";
  * Wire mockDb.select to return different values on successive calls.
  * Each element of `returnValues` is what one .select() chain resolves to.
  */
-function setupSelectSequence(returnValues: unknown[]) {
+function _setupSelectSequence(returnValues: unknown[]) {
   let callIndex = 0;
   mockDb.select.mockImplementation(() => {
     const value = returnValues[callIndex++] ?? [];

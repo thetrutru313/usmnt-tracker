@@ -190,7 +190,7 @@ const MOCK_STATS_RESPONSE = [
 // App setup
 // ---------------------------------------------------------------------------
 
-function setupSelectMock(candidates: typeof OVERRIDDEN_CANDIDATE[]) {
+function setupSelectMock(candidates: Array<typeof OVERRIDDEN_CANDIDATE | typeof NORMAL_CANDIDATE>) {
   mockDb.select.mockReturnValue({
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
