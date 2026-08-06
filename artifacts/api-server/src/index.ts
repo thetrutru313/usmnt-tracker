@@ -32,11 +32,21 @@ if (Number.isNaN(port) || port <= 0) {
 // `/api/dashboard` to return stale data (e.g. wrong date windows or missing
 // fixture rows) during the first few seconds of each deployment/restart.
 //
-// Non-critical background tasks (NT backfill, Obed Vargas cleanup, etc.) are
-// still launched as fire-and-forget blocks inside the listen callback; only the
-// schedule-event corrections and friendly fixture seeding require this ordering
-// guarantee.
+// Non-critical background tasks (NT fixture ID backfill, youth fixture seed,
+// etc.) are launched as fire-and-forget blocks inside the listen callback; only
+// the friendly fixture seeding requires this ordering guarantee.
 async function runCriticalStartupSeeds(): Promise<void> {
+  // KEEP: Active duty — the Sept/Oct 2026 matches have not been played yet.
+  // Sentinel IDs (−2001 to −2004) are the live fixture rows until API-Football
+  // match logs arrive and the NT fixture ID backfill (Block D, inside the listen
+  // callback) promotes them to real IDs.
+  // Removable when: all 4 sentinels have been replaced by positive
+  // api_football_fixture_id values and the NT sync takes over management.
+  //
+  // AUTOSCALE NOTE: sentinel seeding runs only at server startup. A schedule
+  // change announced between restarts won't be reflected until the next boot.
+  // This logic belongs in the sync schedule — moving it is a separate change.
+  //
   // Seed the 4 announced Sept/Oct 2026 USMNT friendlies. Idempotency is keyed
   // on (home_team, away_team, competition, is_national_team, kickoff ±2 days) —
   // NOT on api_football_fixture_id — so the seed is safe across the full
@@ -210,11 +220,23 @@ app.listen(port, async (err) => {
     await checkAndApplyWeightDrift();
   })();
 
-  // One-shot startup: backfill api_football_fixture_id on seeded national-team
-  // fixtures that were created without one. Finds the correct ID from existing
-  // national-team match logs within a ±7-day window of the fixture kickoff —
-  // seeded dates can differ from API-Football's recorded date by a day or two.
-  // Runs silently on every restart; no-ops when fixtures already have an ID.
+  // KEEP: Active duty — this is the ONLY mechanism that promotes sentinel
+  // fixture IDs (negative values, e.g. −2001) to real api_football_fixture_id
+  // values once API-Football match logs arrive after a game is played.
+  // Deleting this block leaves all sentinel rows stuck at their negative IDs.
+  // Removable when: all sentinel rows seeded above have positive
+  // api_football_fixture_id values (i.e. all 4 Sept/Oct friendlies have been
+  // played and their match logs processed).
+  //
+  // AUTOSCALE NOTE: promotion runs only at server startup. A match played while
+  // all instances are running will not be promoted until the next restart. This
+  // logic belongs in startUsmntStatsSyncSchedule() — moving it is a separate
+  // change.
+  //
+  // Finds the correct ID from existing national-team match logs within a ±7-day
+  // window of the fixture kickoff — seeded dates can differ from API-Football's
+  // recorded date by a day or two.
+  // Runs silently on every restart; no-ops when fixtures already have a real ID.
   (async () => {
     try {
       // Include both NULL-id rows (legacy seeded fixtures) and negative-id
@@ -280,11 +302,14 @@ app.listen(port, async (err) => {
     }
   })();
 
-  // Startup seed: insert the 6 US U20 / US U17 fixtures if they are not already
-  // present in this environment's database.  Dev and production use separate
-  // Postgres instances; fixtures added to dev after the last production publish
-  // won't exist in production until this block runs.  Idempotent — the
-  // ON CONFLICT DO NOTHING clause makes repeated startups a no-op.
+  // KEEP (pending): insert the 6 US U20 / US U17 youth NT fixtures if not
+  // already present. syncYouthNtFixtures() will eventually own these rows, but
+  // a freshly rebuilt database has a bootstrap gap until the first sync run.
+  // Removable when: a standalone scripts/src/seedYouthNtFixtures.ts exists
+  // (ON CONFLICT DO NOTHING, no TRUNCATE) and is documented in lib/db/README.md
+  // as the bootstrap step for a fresh environment after drizzle-kit migrate.
+  // Dev and production are separate Postgres instances; ON CONFLICT DO NOTHING
+  // makes repeated startups a no-op.
   (async () => {
     try {
       const result = await db.execute(sql`
