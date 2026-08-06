@@ -63,3 +63,17 @@ uri = "file://reports/three-followup-fixes-results.md"
 type = "text"
 title = "Three Follow-Up Fixes — Results"
 description = "Migration collision rename (0010_add_missing_indexes), explicit limits on Injuries/Transfers pages, lint + frontend test results."
+
+[[outputs]]
+id = "mkfl63_MnT7AGOuz7eJy7"
+uri = "file://reports/time-bomb-scan-results.md"
+type = "text"
+title = "Time-Bomb Scan Results"
+description = "Full classification of every Date.now() hit across both test suites, root-cause write-up for both time bombs, and 5-run verification data."
+
+[[outputs]]
+id = "QQYTyS9BmAnEr4_D2PD6Z"
+uri = "file://reports/full-suite-runs-and-upper-bound-check.md"
+type = "text"
+title = "Full-Suite Runs & Upper-Bound Check"
+description = "Three consecutive full-suite results (712/712 each) and a precise analysis of why the +30d–+50d date constants in Suites A/B are safe indefinitely."
