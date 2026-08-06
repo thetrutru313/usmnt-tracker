@@ -133,3 +133,10 @@ uri = "file://reports/admin-session-auth-migration.md"
 type = "text"
 title = "Admin Session Auth Migration Report"
 description = "Full writeup of the password-as-token → server-side session token change: schema, backend, frontend, tests, security properties, and operational notes."
+
+[[outputs]]
+id = "NQEk84grguVDXukMheGMl"
+uri = "file://reports/pre-publish-cleanup.md"
+type = "text"
+title = "Pre-Publish Cleanup Report"
+description = "adminSession.test.ts rewrite, lint fixes, expiry alignment check, transparency test row cleanup, and production verification."
