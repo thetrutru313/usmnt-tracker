@@ -1,0 +1,156 @@
+Final task in the sequence. The documentation in this repo has drifted far
+enough from the code to actively mislead, and a great deal has changed in the
+last few days. Fix it.
+
+DECISION TO REFLECT: 7C IS NOT PROCEEDING.
+
+We evaluated switching deploymentTarget from "autoscale" to "vm" (Reserved VM)
+and decided against it for now. Document the CURRENT state — autoscale — and
+the reasoning, so nobody re-litigates it from scratch:
+
+  - The correct value would be "vm", not "reserved_vm". Worth recording; the
+    first guess was wrong.
+  - Cost is roughly $15.18/month flat versus usage-based autoscale.
+  - What it would buy: syncs on real schedules rather than at process wake-ups,
+    a single-process API-Football rate-limit budget, and reliable live-score
+    polling during matches.
+  - Why we declined: every sync runs immediately on cold start, gated by
+    syncGuard's cooldown, so opening the app refreshes stale data — the refresh
+    lands a view later, which is fine for schedule and streaming information.
+    Live scoring is a secondary feature here, not the app's purpose.
+  - And the migration plan targets a host with persistent processes anyway, so
+    paying for always-on twice makes no sense.
+
+Do NOT change deploymentTarget. Do NOT treat this as unfinished work.
+
+────────────────────────────────────────────────────────────────────────
+FILE 1 — threat_model.md
+────────────────────────────────────────────────────────────────────────
+
+First: it was moved into reports/ during a cleanup. Move it back to the repo
+root. It is a living project document, not a dated task artifact.
+
+Then rewrite it. Every one of these statements is now wrong:
+
+  - names SESSION_SECRET as the admin credential — no code reads that variable
+  - says the password comparison uses plain string equality — it uses
+    timingSafeEqual, and schedule.ts's === was fixed during Prompt 6
+  - says no rate limiting exists — there are four limiters
+  - says CORS allows any origin — there is an allowlist
+
+The current security architecture, which the rewrite must describe accurately:
+
+  - Admin auth is server-side sessions. ADMIN_PASSWORD is the LOGIN credential
+    only, checked once at POST /admin/transparency/verify. Success issues a
+    UUID token; only its SHA-256 hash is stored, in admin_sessions. Sessions
+    expire and can be revoked. requireAdminSession gates every admin surface.
+  - Rate limiters: global 300/min, search 60/min, anonymous-user provisioning
+    5/15min, admin verify 5/15min.
+  - CORS: allowlist from ALLOWED_ORIGINS plus Replit's domain variables.
+    http://localhost:* is additionally permitted when NODE_ENV is not
+    production, so dev exercises CORS rather than bypassing it.
+  - CSP: connect-src is 'self' plus one scoped exception — the object-storage
+    bucket path, because invoice uploads PUT directly from the browser.
+    Document that this exception disappears if uploads are ever proxied
+    through the API server.
+  - Invoice downloads validate the requested path against
+    transparency_months.invoice_urls before signing. Before that check existed,
+    an unauthenticated request could obtain a signed URL for any object in the
+    private bucket — record that, it is the sort of thing worth remembering.
+  - Anonymous user tokens and recovery tokens are stored hashed, never in
+    plaintext.
+
+Keep the existing structure — Assets, Trust Boundaries, Scan Anchors, Threat
+Categories. Add a "Last verified" date so the next reader knows how much to
+trust it.
+
+────────────────────────────────────────────────────────────────────────
+FILE 2 — replit.md
+────────────────────────────────────────────────────────────────────────
+
+Corrections:
+  - States the API server runs on port 5000. It is 8080
+    (artifacts/api-server/.replit-artifact/artifact.toml).
+  - Describes a sportmonksSync.ts module and a SPORTMONKS_API_TOKEN variable.
+    That file does not exist and no code reads that variable. Remove both, or
+    move to a clearly-labelled "Considered, not implemented" section.
+  - The "Where things live" section is still placeholder text. Fill it in:
+    a real repo map plus pointers to the source of truth for the DB schema,
+    the API contract, and the theme files.
+
+Additions — this is the material that is genuinely hard to reconstruct from
+the code, and therefore the most valuable thing in this task:
+
+  a. LOCAL SETUP. This is three processes, not one, and that is documented
+     nowhere. API server, frontend, and the database. Include the fact that
+     the frontend dev proxy expects the API on port 8080.
+
+  b. THE SENTINEL FIXTURE SYSTEM. Explain it properly:
+       - Announced fixtures are seeded with NEGATIVE api_football_fixture_id
+         values before API-Football publishes them, so they appear in the app
+         immediately.
+       - syncNationalTeamFixtures() binds them to real IDs pre-match, hourly,
+         on a ±1-day date match.
+       - promoteNtSentinelIds() is the post-match fallback, ±2 days, ordered by
+         kickoff ascending.
+       - Why BOTH of those constraints exist: a wider window or unordered
+         processing lets one fixture claim another's ID, silently, with the
+         correct fixture left unbound. Two distinct corruption paths were found
+         and fixed here. Say so, or someone will widen the window again.
+
+  c. DEPLOYMENT. Currently autoscale. Include the 7C reasoning above so the
+     decision is recorded rather than rediscovered.
+
+  d. DEFERRED WORK, with enough context to pick each one up:
+       - seedYouthNtFixtures.ts to replace the inline youth-fixture seed
+       - CI runs `drizzle-kit push`; switching it to `migrate` would exercise
+         migration files before production sees them
+       - the upload e2e test is not in CI — it needs GCS credentials and a
+         pre-seeded admin session, NOT a rate-limit bypass header
+       - promoteNtSentinelIds is removable once all four Sept/Oct 2026
+         friendlies have been played and carry positive IDs
+       - upload file type and size validation is still missing; best closed by
+         proxying uploads through the API server, which also removes the CSP
+         exception and the frontend's knowledge of GCS
+
+  e. Keep the existing Gotchas section and add anything learned recently.
+
+────────────────────────────────────────────────────────────────────────
+FILE 3 — .env.example
+────────────────────────────────────────────────────────────────────────
+
+This already exists — it was created during the upload fix. Do not recreate it.
+Verify instead:
+
+  - Every variable the code actually reads is present. Cross-check by grepping
+    for process.env across the repo.
+  - No real values. Names and comments only. Confirm no line has content after
+    the "=".
+  - SESSION_SECRET should NOT be listed as required — nothing reads it.
+
+Separately, report: SESSION_SECRET still exists as a Replit secret. Recommend
+deleting it so nobody assumes it is load-bearing. Do not delete it yourself.
+
+────────────────────────────────────────────────────────────────────────
+FILE 4 — reports/
+────────────────────────────────────────────────────────────────────────
+
+That directory has accumulated task reports from this whole sequence. Add a
+short reports/README.md saying what it is: point-in-time records of completed
+work, useful as history, not authoritative about current state. Anyone wanting
+current state should read replit.md, lib/db/README.md and threat_model.md.
+
+────────────────────────────────────────────────────────────────────────
+
+DO NOT change any application code in this task. Documentation only.
+
+VERIFY:
+  pnpm run lint && pnpm run typecheck && pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Nothing should change, since this is documentation — but run them, because
+"documentation only" tasks have a habit of touching a file they should not.
+
+Report what you corrected in each file, and anything you found that was wrong
+in a way I did not anticipate.
