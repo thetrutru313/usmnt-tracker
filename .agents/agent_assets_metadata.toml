@@ -217,3 +217,10 @@ uri = "file://reports/ci-first-run-2026-08-07.md"
 type = "text"
 title = "CI First Run Report — 2026-08-07"
 description = "Verbatim failure output, root cause, and step-by-step results from the first GitHub Actions run."
+
+[[outputs]]
+id = "hvlBjOvUDQ8P1y3vhNCy6"
+uri = "file://reports/ci-green-repo-hygiene-2026-08-07.md"
+type = "text"
+title = "CI Green + Repo Hygiene — 2026-08-07"
+description = "All 7 tasks, placeholder-key test counts, final env block, README, and CI step-by-step."
