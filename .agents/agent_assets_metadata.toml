@@ -196,3 +196,10 @@ uri = "file://reports/background-job-reliability-eval.md"
 type = "text"
 title = "Background Job Reliability — Read-Only Evaluation"
 description = "Answers to all four questions: multi-deployment feasibility, Reserved VM tradeoffs, scheduled deployments, and worker.ts inventory. Includes recommendation."
+
+[[outputs]]
+id = "XFACfvFWUF9yhaEUjiKtM"
+uri = "file://reports/nt-sentinel-promotion-report.md"
+type = "text"
+title = "NT Sentinel Promotion — Implementation Report"
+description = "Full write-up: architecture, files changed, overlap-window fix, tests, and cleanup guidance."
