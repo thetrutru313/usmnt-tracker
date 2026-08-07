@@ -210,3 +210,10 @@ uri = "file://reports/task-7c-step1-report.md"
 type = "text"
 title = "Task 7C — Reserved VM Switch: Step 1 Pre-Flight Report"
 description = "deploymentTarget value, cost delta, URL/downtime/secrets/sidecar analysis. Awaiting approval before Step 2."
+
+[[outputs]]
+id = "DYDYY4we06yB3I44vOUAA"
+uri = "file://reports/ci-first-run-2026-08-07.md"
+type = "text"
+title = "CI First Run Report — 2026-08-07"
+description = "Verbatim failure output, root cause, and step-by-step results from the first GitHub Actions run."
