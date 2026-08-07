@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
+import { db, fixturesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { promoteNtSentinelIds } from "../usmntSync.js";
 
@@ -39,7 +39,7 @@ const REAL_AF_ID = 9_800_001;
 
 // Kickoff dates far in the future to avoid colliding with real fixtures.
 // KICKOFF_WITHOUT_LOG is 20+ days after KICKOFF_WITH_LOG so the match log
-// date (2099-09-26) is outside its ±7-day window (2099-10-08 → 2099-10-22),
+// date (2099-09-26) is outside its ±2-day window (2099-10-13 → 2099-10-17),
 // which is the scenario under test: "no matching log in window".
 const KICKOFF_WITH_LOG    = "2099-09-26 20:30:00+00";
 const KICKOFF_WITHOUT_LOG = "2099-10-15 02:00:00+00";

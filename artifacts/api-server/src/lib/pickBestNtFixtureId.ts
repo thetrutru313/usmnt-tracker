@@ -3,8 +3,8 @@
  * api_football_fixture_id and the log's date), returns the single fixture ID
  * that most likely corresponds to the requested fixture.
  *
- * Disambiguation strategy (handles multiple NT matches in the same ±7-day
- * window — e.g. Jamaica Aug 24 / T&T Aug 28):
+ * Disambiguation strategy (handles multiple NT matches in the same ±2-day
+ * window — e.g. Sept 26 and Sept 29 matches whose windows overlap on Sept 27–28):
  *
  *  1. Count how many candidate log rows vote for each fixture ID.
  *  2. Pick the ID with the most votes.

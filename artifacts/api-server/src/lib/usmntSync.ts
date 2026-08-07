@@ -374,13 +374,14 @@ let intervalHandle: NodeJS.Timeout | null = null;
 export async function promoteNtSentinelIds(): Promise<void> {
   try {
     // ORDER BY kickoff ASC is load-bearing: when two sentinel fixtures have
-    // overlapping ±7-day candidate windows (e.g. Sept 26 and Sept 29 matches),
-    // the earlier kickoff is always processed first and claims the earlier log.
-    // The later sentinel then finds the same log, hits a unique-constraint
-    // collision on the UPDATE, and stays unbound — which is correct, because
-    // its match has not been played yet.  Without this ordering the result is
-    // non-deterministic: if the later sentinel is processed first it silently
-    // claims the wrong ID and the earlier fixture stays unbound at kickoff.
+    // overlapping ±2-day candidate windows (e.g. Sept 26 and Sept 29 matches
+    // overlap on Sept 27–28), the earlier kickoff is always processed first
+    // and claims the earlier log.  The later sentinel then finds the same log,
+    // hits a unique-constraint collision on the UPDATE, and stays unbound —
+    // which is correct, because its match has not been played yet.  Without
+    // this ordering the result is non-deterministic: if the later sentinel is
+    // processed first it silently claims the wrong ID and the earlier fixture
+    // stays unbound at kickoff.
     const ntFixturesWithoutId = await db
       .select()
       .from(fixturesTable)
@@ -400,11 +401,11 @@ export async function promoteNtSentinelIds(): Promise<void> {
       // remaining fixtures in the same batch.
       try {
         const kickoffMs = new Date(fixture.kickoff).getTime();
-        const sevenBefore = new Date(kickoffMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const twoBefore = new Date(kickoffMs - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const twoAfter  = new Date(kickoffMs + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
         // Only consult players explicitly linked to this fixture — prevents
-        // ambiguity when two NT matches fall in the same ±7-day window.
+        // ambiguity when two NT matches fall in the same ±2-day window.
         const linked = await db
           .select({ playerId: fixturePlayersTable.playerId })
           .from(fixturePlayersTable)
@@ -423,8 +424,8 @@ export async function promoteNtSentinelIds(): Promise<void> {
             and(
               inArray(matchLogsTable.playerId, linkedIds),
               eq(matchLogsTable.isNationalTeam, true),
-              gte(matchLogsTable.date, sevenBefore),
-              lte(matchLogsTable.date, sevenAfter),
+              gte(matchLogsTable.date, twoBefore),
+              lte(matchLogsTable.date, twoAfter),
               isNotNull(matchLogsTable.apiFootballFixtureId),
             ),
           ) as { apiFootballFixtureId: number; date: string }[];
