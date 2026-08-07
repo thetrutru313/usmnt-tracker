@@ -1,5 +1,5 @@
 import { db, playersTable, playerStatsTable, matchLogsTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, or, isNull, lt, gte, lte, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, or, isNull, lt, gte, lte, inArray, isNotNull, asc } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import { pickBestNtFixtureId } from "./pickBestNtFixtureId.js";
@@ -373,6 +373,14 @@ let intervalHandle: NodeJS.Timeout | null = null;
  */
 export async function promoteNtSentinelIds(): Promise<void> {
   try {
+    // ORDER BY kickoff ASC is load-bearing: when two sentinel fixtures have
+    // overlapping ±7-day candidate windows (e.g. Sept 26 and Sept 29 matches),
+    // the earlier kickoff is always processed first and claims the earlier log.
+    // The later sentinel then finds the same log, hits a unique-constraint
+    // collision on the UPDATE, and stays unbound — which is correct, because
+    // its match has not been played yet.  Without this ordering the result is
+    // non-deterministic: if the later sentinel is processed first it silently
+    // claims the wrong ID and the earlier fixture stays unbound at kickoff.
     const ntFixturesWithoutId = await db
       .select()
       .from(fixturesTable)
@@ -381,7 +389,8 @@ export async function promoteNtSentinelIds(): Promise<void> {
           eq(fixturesTable.isNationalTeam, true),
           or(isNull(fixturesTable.apiFootballFixtureId), lt(fixturesTable.apiFootballFixtureId, 0)),
         ),
-      );
+      )
+      .orderBy(asc(fixturesTable.kickoff));
 
     if (ntFixturesWithoutId.length === 0) return; // nothing to promote — fast path
 
