@@ -1,0 +1,60 @@
+Connect this repo to GitHub as its remote and push. The push must overwrite
+what is currently there.
+
+REPO:   https://github.com/thetrutru313/usmnt-tracker.git
+TOKEN:  Replit Secret named GITHUB_TOKEN. Read it from the environment as
+        $GITHUB_TOKEN — do NOT print it, echo it, or write it into any file,
+        commit message, report, or shell command that gets logged. Confirm it
+        is set and non-empty before starting, without revealing its value.
+
+CONTEXT: this repo has real history (26177bc through the most recent commit).
+The GitHub repo contains an UNRELATED history — a backup zip uploaded
+separately some time ago. Git will refuse a normal push because the histories
+share no common ancestor. That backup is a redundant snapshot containing none
+of the last several days of work. Overwriting it is intended.
+
+────────────────────────────────────────────────────────────────────────
+BEFORE PUSHING — confirm all four. Stop if any fails.
+────────────────────────────────────────────────────────────────────────
+
+  a. git ls-files backups/ returns NOTHING. That directory holds a full export
+     of production data including anon_users auth token hashes. It must never
+     reach GitHub.
+  b. .env.example has no content after any "=" sign. Names and comments only.
+  c. git status --short is clean and git log --oneline | wc -l shows the full
+     history. I want to see both before anything is overwritten.
+  d. List what is in attached_assets/. That directory collects pasted content
+     from agent sessions and IS tracked by git. Report anything that looks like
+     a credential, a token, a connection string, or personal data. If you find
+     any, STOP and tell me before pushing — especially if this repo is public.
+
+────────────────────────────────────────────────────────────────────────
+THEN
+────────────────────────────────────────────────────────────────────────
+
+  1. Report the current remote: git remote -v
+  2. Set origin to the URL above WITHOUT embedding the token in it. Supply the
+     credential at push time from the environment variable so it does not
+     persist in .git/config.
+  3. Force-push: git push --force origin main
+  4. Verify on GitHub: commit history present, file count matches the local
+     tree, backups/ absent.
+  5. Report whether the Actions workflow triggered, and its outcome.
+
+────────────────────────────────────────────────────────────────────────
+EXPECT CI TO FAIL ON THE FIRST RUN
+────────────────────────────────────────────────────────────────────────
+
+.github/workflows/ was written during Prompt 3 and has NEVER executed — nothing
+has ever reached GitHub. Likely failure points:
+
+  - the Postgres service container's readiness timing
+  - PORT and BASE_PATH, which the frontend build requires
+  - the 33 integration tests that need a live DATABASE_URL
+  - pnpm install --frozen-lockfile if the lockfile has drifted
+
+Do NOT fix any of these in this task. Report the failure output verbatim and
+stop. Getting that pipeline genuinely green is its own piece of work and I want
+to see what it says first.
+
+Do not modify any application code.
