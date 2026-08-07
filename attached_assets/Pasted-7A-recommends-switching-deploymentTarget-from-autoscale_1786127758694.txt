@@ -1,0 +1,94 @@
+7A recommends switching deploymentTarget from autoscale to Reserved VM, with no
+application code change. I accept that — but it has one consequence 7A got
+wrong, and this task fixes it BEFORE the switch.
+
+WHY THIS IS NEEDED
+
+7A concluded Reserved VM is "no worse" than autoscale for Block D (sentinel
+fixture ID promotion). That is not right.
+
+Block D runs only at process start. Under autoscale, sync_metadata shows the
+process restarting roughly every 24 hours, so Block D has effectively been
+running daily. Under a Reserved VM, restarts happen only on deploy — which in
+steady state could be weeks apart.
+
+Block D can only succeed AFTER a match is played, because it resolves the real
+api_football_fixture_id from match logs. The four sentinel friendlies
+(−2001 to −2004) are Sept 26–29 and October. If we switch to Reserved VM and do
+not deploy for weeks after those matches, they stay at negative IDs with no
+results, and the mechanism that would have fixed it never runs.
+
+Accidental-but-daily beats deliberate-but-rare. So promotion has to move onto a
+real schedule before the deployment type changes.
+
+STEP 0 — ANSWER THIS FIRST. It may change what the fix should be.
+
+The four sentinel friendlies were seeded deliberately: USMNT announced them,
+API-Football did not have them yet, and the intent was to show them in the app
+immediately and let real API data attach later.
+
+There are two distinct moments when attachment could happen:
+
+  (a) API-Football publishes the fixture — possibly weeks before kickoff
+  (b) match logs exist — only after the match is played
+
+Block D keys off (b). It searches match_logs within ±7 days of kickoff, and
+pickBestNtFixtureId returns null when there are no logs yet.
+
+Determine whether ANY code path handles (a) — matching a seeded sentinel to a
+published API-Football fixture by team and date, before the match is played.
+syncNationalTeamFixtures() is the likely candidate; read it and report what it
+actually does with seeded rows.
+
+Then answer directly: on 26 September, when the first of these friendlies kicks
+off, will that fixture have a real api_football_fixture_id?
+
+  If NO — check whether pollLiveFixtures can track a fixture with a negative
+  ID. If it cannot, live scores will not work for these matches, which defeats
+  the reason they were seeded early. Say so and recommend what
+  promotion-on-publish would require. Do NOT implement it yet — report first.
+
+  If YES — name the code path that does it, and proceed to the steps below.
+
+WHAT TO DO
+
+  1. Move Block D's logic out of runCriticalStartupSeeds() and into
+     startUsmntStatsSyncSchedule() in lib/usmntSync.ts. The code comment in
+     Block D already names this as its intended home — read it first and follow
+     what it says.
+
+     That schedule runs hourly, which is the right cadence: match logs appear
+     within hours of a match, and promotion is cheap when there is nothing to
+     promote.
+
+  2. Keep it idempotent and cheap in the common case. It should short-circuit
+     immediately when no rows have NULL or negative api_football_fixture_id,
+     so an hourly run costs one indexed query when there is nothing to do.
+
+  3. Keep it running at startup as well, at least for now. Running in both
+     places is harmless — it is idempotent — and it means promotion still
+     happens promptly after a deploy. Note in the comment that the startup call
+     is now belt-and-braces rather than the only path.
+
+  4. Update Block D's "removable when" comment to reflect the new arrangement.
+
+  5. Add a test. This is the mechanism keeping four live fixtures correct, and
+     nothing currently guards it. At minimum: a sentinel row with a negative ID
+     and a matching match log gets promoted to the real ID; a sentinel with no
+     match log is left alone; a row with a positive ID is untouched.
+
+DO NOT change deploymentTarget in this task. DO NOT build a worker.ts — 7A
+established that a second deployment is not possible on this platform.
+
+VERIFY:
+  pnpm run lint && pnpm run typecheck && pnpm run build
+  pnpm --filter @workspace/api-server run test
+  pnpm --filter @workspace/usmnt-tracker run test
+
+Report the Step 0 findings FIRST, before any diff. Then the diff and the new
+test. Then stop — the deployment switch is 7C.
+
+Note that Step 0 also affects 7C's urgency. If promotion should happen when
+API-Football publishes the fixture rather than after it is played, then an
+hourly schedule matters more than I first framed it — a per-deploy run could
+miss the publish window entirely.

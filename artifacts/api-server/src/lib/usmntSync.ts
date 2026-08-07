@@ -1,7 +1,8 @@
-import { db, playersTable, playerStatsTable, matchLogsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, playersTable, playerStatsTable, matchLogsTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
+import { eq, and, or, isNull, lt, gte, lte, inArray, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
+import { pickBestNtFixtureId } from "./pickBestNtFixtureId.js";
 import {
   toNum,
   toRating,
@@ -355,9 +356,99 @@ export async function syncUsmntStats(fixturesToCheck = 20): Promise<UsmntSyncRes
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /**
+ * Promotes national-team fixture rows that still carry a null or negative
+ * sentinel `api_football_fixture_id` to the real positive ID once match logs
+ * exist for that fixture (i.e. after the match is played and the USMNT stats
+ * sync has ingested the logs).
+ *
+ * This is the post-match fallback for cases where the pre-match binding in
+ * `syncNationalTeamFixtures()` did not succeed (e.g. API-Football published
+ * the fixture after the match was played, or a kickoff date-match fell outside
+ * the ±1-day window). It runs on the hourly USMNT stats schedule so promotion
+ * happens within an hour of match logs appearing in the DB.
+ *
+ * Idempotent and cheap in the common case: the initial query uses the
+ * `is_national_team` index; when all fixtures already carry positive IDs the
+ * function returns immediately after one indexed read.
+ */
+export async function promoteNtSentinelIds(): Promise<void> {
+  try {
+    const ntFixturesWithoutId = await db
+      .select()
+      .from(fixturesTable)
+      .where(
+        and(
+          eq(fixturesTable.isNationalTeam, true),
+          or(isNull(fixturesTable.apiFootballFixtureId), lt(fixturesTable.apiFootballFixtureId, 0)),
+        ),
+      );
+
+    if (ntFixturesWithoutId.length === 0) return; // nothing to promote — fast path
+
+    for (const fixture of ntFixturesWithoutId) {
+      // Per-fixture try/catch: a unique-constraint collision on one fixture
+      // (e.g. two sentinels share a match-log candidate) must not abort the
+      // remaining fixtures in the same batch.
+      try {
+        const kickoffMs = new Date(fixture.kickoff).getTime();
+        const sevenBefore = new Date(kickoffMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        // Only consult players explicitly linked to this fixture — prevents
+        // ambiguity when two NT matches fall in the same ±7-day window.
+        const linked = await db
+          .select({ playerId: fixturePlayersTable.playerId })
+          .from(fixturePlayersTable)
+          .where(eq(fixturePlayersTable.fixtureId, fixture.id));
+
+        const linkedIds = linked.map((r) => r.playerId);
+        if (linkedIds.length === 0) continue; // no tracked players linked — skip
+
+        const candidates = await db
+          .select({
+            apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
+            date: matchLogsTable.date,
+          })
+          .from(matchLogsTable)
+          .where(
+            and(
+              inArray(matchLogsTable.playerId, linkedIds),
+              eq(matchLogsTable.isNationalTeam, true),
+              gte(matchLogsTable.date, sevenBefore),
+              lte(matchLogsTable.date, sevenAfter),
+              isNotNull(matchLogsTable.apiFootballFixtureId),
+            ),
+          ) as { apiFootballFixtureId: number; date: string }[];
+
+        const bestId = pickBestNtFixtureId(candidates, kickoffMs);
+        if (bestId == null) continue; // no logs yet — future fixture or not yet synced
+
+        await db
+          .update(fixturesTable)
+          .set({ apiFootballFixtureId: bestId })
+          .where(eq(fixturesTable.id, fixture.id));
+
+        logger.info(
+          { fixtureId: fixture.id, apiFootballFixtureId: bestId },
+          "NT sentinel promotion: backfilled api_football_fixture_id from match logs",
+        );
+      } catch (err) {
+        logger.warn({ err, fixtureId: fixture.id }, "NT sentinel promotion: per-fixture update failed (non-fatal)");
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "NT sentinel promotion: outer query failed (non-fatal)");
+  }
+}
+
+/**
  * Runs the incremental USMNT sync immediately, then hourly. The cheap
  * fixture-list poll runs on every tick; the expensive per-fixture lineup
  * fetch only fires when a new finished match is detected.
+ *
+ * Also runs `promoteNtSentinelIds()` on each tick so that sentinel fixture IDs
+ * are promoted to real API-Football IDs within an hour of match logs appearing,
+ * rather than waiting for the next server restart.
  */
 export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
   if (!process.env["API_FOOTBALL_KEY"]) {
@@ -369,6 +460,9 @@ export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
   const COOLDOWN = 50 * 60 * 1000;
   const run = async () => {
     if (!(await claimSyncRun("usmntStats", COOLDOWN))) return;
+    // Promote sentinel fixture IDs before syncing stats so that any newly
+    // promoted fixtures are already bound when match logs are processed.
+    await promoteNtSentinelIds();
     syncUsmntStats().catch((err) => logger.error({ err }, "USMNT stats sync failed"));
   };
   run();

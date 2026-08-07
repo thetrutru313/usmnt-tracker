@@ -6,12 +6,11 @@ import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
 import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
 import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
-import { startUsmntStatsSyncSchedule, syncUsmntStats } from "./lib/usmntSync";
+import { startUsmntStatsSyncSchedule, syncUsmntStats, promoteNtSentinelIds } from "./lib/usmntSync";
 import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
-import { db, fixturesTable, fixturePlayersTable, matchLogsTable } from "@workspace/db";
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
-import { pickBestNtFixtureId } from "./lib/pickBestNtFixtureId.js";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -220,86 +219,19 @@ app.listen(port, async (err) => {
     await checkAndApplyWeightDrift();
   })();
 
-  // KEEP: Active duty — this is the ONLY mechanism that promotes sentinel
-  // fixture IDs (negative values, e.g. −2001) to real api_football_fixture_id
-  // values once API-Football match logs arrive after a game is played.
-  // Deleting this block leaves all sentinel rows stuck at their negative IDs.
+  // Block D — NT fixture ID backfill (belt-and-braces startup call).
+  // The primary path is now promoteNtSentinelIds() running hourly inside
+  // startUsmntStatsSyncSchedule(). Running both is harmless — the function is
+  // idempotent — and ensures promotion still happens promptly after a deploy
+  // rather than waiting up to an hour for the first scheduled tick.
+  //
   // Removable when: all sentinel rows seeded above have positive
   // api_football_fixture_id values (i.e. all 4 Sept/Oct friendlies have been
-  // played and their match logs processed).
-  //
-  // AUTOSCALE NOTE: promotion runs only at server startup. A match played while
-  // all instances are running will not be promoted until the next restart. This
-  // logic belongs in startUsmntStatsSyncSchedule() — moving it is a separate
-  // change.
-  //
-  // Finds the correct ID from existing national-team match logs within a ±7-day
-  // window of the fixture kickoff — seeded dates can differ from API-Football's
-  // recorded date by a day or two.
-  // Runs silently on every restart; no-ops when fixtures already have a real ID.
+  // played and their match logs synced). When that point arrives,
+  // promoteNtSentinelIds() can also be removed from the schedule in
+  // startUsmntStatsSyncSchedule().
   (async () => {
-    try {
-      // Include both NULL-id rows (legacy seeded fixtures) and negative-id
-      // sentinel rows (the announced Sept/Oct 2026 friendlies seeded above).
-      // Real API-Football IDs are always positive, so negative values are safe
-      // sentinels. When match logs appear after a fixture is played the backfill
-      // will find the real ID and replace the sentinel.
-      const ntFixturesWithoutId = await db
-        .select()
-        .from(fixturesTable)
-        .where(
-          and(
-            eq(fixturesTable.isNationalTeam, true),
-            or(isNull(fixturesTable.apiFootballFixtureId), lt(fixturesTable.apiFootballFixtureId, 0)),
-          ),
-        );
-
-      for (const fixture of ntFixturesWithoutId) {
-        const kickoffMs = new Date(fixture.kickoff).getTime();
-        const sevenBefore = new Date(kickoffMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const sevenAfter  = new Date(kickoffMs + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-        // Only consult players explicitly linked to this fixture — prevents
-        // ambiguity when two NT matches fall in the same ±7-day window.
-        const linked = await db
-          .select({ playerId: fixturePlayersTable.playerId })
-          .from(fixturePlayersTable)
-          .where(eq(fixturePlayersTable.fixtureId, fixture.id));
-
-        const linkedIds = linked.map((r) => r.playerId);
-        if (linkedIds.length === 0) continue; // No tracked players for this fixture
-
-        const candidates = await db
-          .select({
-            apiFootballFixtureId: matchLogsTable.apiFootballFixtureId,
-            date: matchLogsTable.date,
-          })
-          .from(matchLogsTable)
-          .where(
-            and(
-              inArray(matchLogsTable.playerId, linkedIds),
-              eq(matchLogsTable.isNationalTeam, true),
-              gte(matchLogsTable.date, sevenBefore),
-              lte(matchLogsTable.date, sevenAfter),
-              isNotNull(matchLogsTable.apiFootballFixtureId),
-            ),
-          ) as { apiFootballFixtureId: number; date: string }[];
-
-        const bestId = pickBestNtFixtureId(candidates, kickoffMs);
-        if (bestId == null) continue; // Future fixture — no logs yet
-
-        await db
-          .update(fixturesTable)
-          .set({ apiFootballFixtureId: bestId })
-          .where(eq(fixturesTable.id, fixture.id));
-        logger.info(
-          { fixtureId: fixture.id, apiFootballFixtureId: bestId },
-          "Startup: backfilled api_football_fixture_id for seeded national-team fixture",
-        );
-      }
-    } catch (err) {
-      logger.warn({ err }, "Startup: NT fixture ID backfill failed (non-fatal)");
-    }
+    await promoteNtSentinelIds();
   })();
 
   // KEEP (pending): insert the 6 US U20 / US U17 youth NT fixtures if not
