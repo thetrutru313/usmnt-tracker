@@ -106,6 +106,11 @@ export default defineConfig({
     // Proxy /api/* to the Express API server so the dev server can be hit
     // directly (e.g. by E2E tests) without relying on the Replit path-based
     // proxy at port 80.
+    //
+    // The API server allows http://localhost:* origins in non-production builds
+    // (see ALLOWED_ORIGINS in .env.example and buildAllowedOrigins in app.ts),
+    // so the Origin header that browsers attach to cross-origin POST/PUT
+    // requests is left intact — dev exercises real CORS, not a bypass.
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

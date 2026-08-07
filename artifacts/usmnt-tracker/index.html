@@ -57,9 +57,36 @@
         https://assets.goal.com    — Goal.com's CDN: one player photo currently
                                      in the database uses this origin.
 
-      connect-src 'self'
-        All API calls go to /api/* on the same origin (same-origin in
-        production; proxied through Vite in dev). No external fetch targets.
+      connect-src 'self' https://storage.googleapis.com/replit-objstore-7761b4b7-4dc3-42da-a4a4-8ade75ae1d75/
+        Most API calls go to /api/* on the same origin (same-origin in
+        production; proxied through Vite in dev).
+
+        EXCEPTION — admin invoice upload (added 2026-07-16, CSP updated 2026-08-07):
+        The transparency admin form uploads invoice files via a two-step flow:
+          1. POST /api/admin/transparency/upload-url  →  server issues a
+             short-lived (15 min) GCS presigned PUT URL scoped to a single
+             UUID object path inside the private bucket.
+          2. Browser PUT to that presigned URL  →  goes directly to GCS,
+             bypassing the API server entirely.
+        The presigned URL always starts with
+          https://storage.googleapis.com/replit-objstore-7761b4b7-4dc3-42da-a4a4-8ade75ae1d75/
+        so the source expression above is scoped to this bucket only. It does
+        NOT permit fetches to any other GCS bucket or Google property.
+
+        WHY direct-to-GCS rather than proxying through /api/:
+        Proxying large binary files through the API server is straightforward
+        to implement but was out of scope when uploads were first added. If a
+        proxy route is ever added (artifacts/api-server/src/routes/transparency.ts),
+        this connect-src exception becomes removable — the PUT would become a
+        same-origin /api/* call and 'self' would cover it.
+
+        PATH-SCOPING NOTE — CSP treats the path prefix as a literal match
+        against the URL path, ignoring query strings (per CSP Level 3 §6.1.5).
+        GCS presigned PUT URLs carry auth as query params (?X-Goog-Signature=…)
+        and do NOT redirect, so path matching is not stripped in transit.
+        The scoped form was verified to be accepted by the browser; if a future
+        GCS infrastructure change introduced a redirect that dropped the path,
+        the fallback would be https://storage.googleapis.com (whole origin).
 
       frame-src 'none'
         The app never embeds iframes. Prevents accidental embedding.
@@ -94,7 +121,7 @@
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com;
         img-src 'self' data: https://media.api-sports.io https://assets.goal.com;
-        connect-src 'self';
+        connect-src 'self' https://storage.googleapis.com/replit-objstore-7761b4b7-4dc3-42da-a4a4-8ade75ae1d75/;
         frame-src 'none';
         object-src 'none';
         base-uri 'self';

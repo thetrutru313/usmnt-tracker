@@ -168,3 +168,17 @@ uri = "file://reports/invoice-upload-diagnosis-report.md"
 type = "text"
 title = "Invoice Upload Diagnosis Report"
 description = "Root cause analysis of the transparency invoice upload failure — CSP connect-src blocks the GCS PUT, timeline of the 8-day open window, server-side health check, and production log evidence."
+
+[[outputs]]
+id = "ugJf6ZjpmzVc2_-NjSzR_"
+uri = "file://e2e/docs/upload-e2e-analysis.md"
+type = "text"
+title = "Upload Round-Trip E2E Analysis"
+description = "Obstacles encountered, fixes applied, and what CI promotion requires."
+
+[[outputs]]
+id = "cihYaM1gm3GSPWYIqMAJr"
+uri = "file://e2e/docs/csp-cors-upload-fix-report.md"
+type = "text"
+title = "CSP & CORS Upload Fix Report"
+description = "Full write-up of the connect-src fix, CORS localhost change, duplicate-month 409 fix, new unit test, and e2e round-trip test — including CI promotion requirements and verification results."

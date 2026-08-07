@@ -208,7 +208,10 @@ router.post("/admin/transparency", requireAdminSession, async (req, res): Promis
     res.status(201).json({ ok: true, month: row });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("unique") || msg.includes("duplicate")) {
+    // PG error code 23505 = unique_violation; check it directly in case
+    // Drizzle's error wrapper omits the constraint text from .message.
+    const pgCode = (err as { code?: string }).code;
+    if (pgCode === "23505" || msg.includes("unique") || msg.includes("duplicate")) {
       res.status(409).json({ error: "A record for this month already exists" });
     } else {
       logger.error({ err }, "Admin: create transparency month failed");

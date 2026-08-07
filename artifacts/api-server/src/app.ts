@@ -124,6 +124,15 @@ function buildAllowedOrigins(): string[] {
     origins.push(...fromEnv.split(",").map((o) => o.trim()).filter(Boolean));
   }
 
+  // In non-production builds, allow any http://localhost origin.  The Vite
+  // dev server binds to a PORT that changes between sessions, so we accept
+  // all localhost origins rather than requiring a specific port to be
+  // configured.  http://localhost can only be reached from the same machine,
+  // so this doesn't weaken production security.
+  if (!isProduction) {
+    origins.push("__localhost__");   // sentinel — checked in the callback below
+  }
+
   // Replit dev domain — present in the workspace, absent in production deploys.
   const replitDev = process.env.REPLIT_DEV_DOMAIN;
   if (replitDev) {
@@ -146,13 +155,20 @@ const allowedOrigins = buildAllowedOrigins();
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow server-to-server requests (no Origin header) and same-origin
-      // requests, plus any explicitly allowlisted origin.
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: origin not allowed — ${origin}`));
+      // Allow server-to-server requests (no Origin header).
+      if (!origin) { callback(null, true); return; }
+      // Allow any explicitly allowlisted origin.
+      if (allowedOrigins.includes(origin)) { callback(null, true); return; }
+      // In non-production builds, allow any http://localhost:<port> origin.
+      // The Vite dev server occupies a PORT that varies per session; rather than
+      // requiring operators to keep ALLOWED_ORIGINS in sync, we accept all
+      // localhost origins in dev.  The __localhost__ sentinel was pushed by
+      // buildAllowedOrigins() above when NODE_ENV !== "production".
+      if (allowedOrigins.includes("__localhost__") &&
+          /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        callback(null, true); return;
       }
+      callback(new Error(`CORS: origin not allowed — ${origin}`));
     },
     credentials: true,
   }),
