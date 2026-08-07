@@ -203,3 +203,10 @@ uri = "file://reports/nt-sentinel-promotion-report.md"
 type = "text"
 title = "NT Sentinel Promotion — Implementation Report"
 description = "Full write-up: architecture, files changed, overlap-window fix, tests, and cleanup guidance."
+
+[[outputs]]
+id = "Vvg1RX0QSTwNRb4PESg0S"
+uri = "file://reports/task-7c-step1-report.md"
+type = "text"
+title = "Task 7C — Reserved VM Switch: Step 1 Pre-Flight Report"
+description = "deploymentTarget value, cost delta, URL/downtime/secrets/sidecar analysis. Awaiting approval before Step 2."
