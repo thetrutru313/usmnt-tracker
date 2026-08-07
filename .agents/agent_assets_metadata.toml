@@ -154,3 +154,10 @@ uri = "file://reports/admin-auth-fix-report.md"
 type = "text"
 title = "Admin Auth Fix — Implementation Report"
 description = "Covers Fix A (token propagation), Fix B (race guard), rate-limit UX, regression tests, verification results, and the healthcheck 500 investigation."
+
+[[outputs]]
+id = "ar0E8mlLvwM-gKjgI3Lbn"
+uri = "file://reports/post-publish-verification-report.md"
+type = "text"
+title = "Post-Publish Verification Report — Admin Auth Fix"
+description = "Full production log analysis for all four scenarios (fresh login, session persistence, re-auth modal, rate-limit UX), outage timeline, and manual browser steps for post-publish confirmation."
