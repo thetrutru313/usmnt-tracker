@@ -1,0 +1,156 @@
+Prompt 10 — CI green, and repo hygiene for a public repository
+
+Status: NOT RUN. Written 7 Aug after CI run #2 failed and the repo went public.
+
+Context that matters: the repo is now public at https://github.com/thetrutru313/usmnt-tracker. CI run #2 was the first ever and it failed at the API-server test step: 6 files, 9 tests. Everything upstream — install, codegen drift, lint, typecheck, build, drizzle-kit push against the service container — was green.
+
+Task A — make CI green (the important one)
+
+Do NOT add API_FOOTBALL_KEY to GitHub Actions secrets. Do NOT write ${{ secrets.API_FOOTBALL_KEY }} anywhere. Read the diagnosis first.
+
+The nine failures all log Error: API_FOOTBALL_KEY is not set before asserting. That is real, but it does not mean CI needs the key.
+
+artifacts/api-server/src/lib/apiFootballSync.ts:64-67:
+
+js
+export async function afFetch<T>(path: string, attempt = 0): Promise<T> {
+  await throttle();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "x-apisports-key": apiKey() },   // <- throws here
+  });
+
+apiKey() (line 33) throws when the env var is unset. It sits in the argument expression to fetch, and JavaScript evaluates arguments before invoking the callee — so apiKey() throws before fetch is ever called.
+
+All six failing files stub globalThis.fetch via vi.stubGlobal("fetch", ...). Those stubs are correct. They are simply unreachable, because the throw happens one expression earlier in the evaluation order. playerCentricSyncIntegration.test.ts even says "(no real API)" in its own test name. These tests were never meant to need a key.
+
+The fix — one line. In the workflow's job-level env: block, beside the placeholder that already exists for exactly this reason:
+
+yaml
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/usmnt_test
+      ADMIN_PASSWORD: ci-placeholder-admin-password
+      API_FOOTBALL_KEY: ci-placeholder-api-football-key   # <- add this
+      PORT: "5173"
+      BASE_PATH: /
+
+The value is never transmitted. It is interpolated into a header object that is handed to a stubbed fetch, which discards it.
+
+Why a real key would be worse than useless. Today, a test that reaches this code path unmocked fails loudly. With a real key present, that same test would quietly hit the live paid API and pass — the failure you cannot see. It would also burn paid quota on every push and place a paid credential in a public repository's Actions environment for zero benefit.
+
+Already checked, do not redo: five other test files reference the sync functions without stubbing fetch (fixtureSyncVisibility, internationalWindowGuard, livePollPostMatchTrigger, postMatchStatsTrigger, repairPassReserveGuard). All five passed in CI, which proves they never reach afFetch. Four only name the functions in comments; postMatchStatsTrigger injects syncFn. A placeholder key changes exactly one thing: it makes six files' existing mocks reachable.
+
+Verification for Task A — read this carefully
+
+API_FOOTBALL_KEY is already set to the real key in the Replit workspace. That is precisely why this never surfaced until CI ran. So running the suite normally proves nothing.
+
+Run it with the placeholder explicitly overriding the real value:
+
+sh
+API_FOOTBALL_KEY=ci-placeholder-api-football-key \
+  pnpm --filter @workspace/api-server run test
+
+Expected: 89 files, 728 tests, all passing.
+
+This is a strong check, not a formality. The placeholder is not a valid API-Football key. If any test were making a genuine network call, it would fail with a 401/403 rather than pass. Passing with a deliberately bogus key is the proof that every stub is intercepting.
+
+Report the exact file and test counts. If anything still fails, stop and report it — do not reach for the real key.
+
+Task B — delete the stale comment on the test step
+
+.github/workflows/codegen-drift.yml:84-89 currently claims three files fail on a schema-only database:
+
+        # NOTE: 3 test files fail on a schema-only DB because they need seeded rows.
+        #   coleCampbellNoStatsGraceful.test.ts  — needs a "Cole Campbell" players row
+        #   recoveryRoundTrip.test.ts            — needs >=1 seeded player row
+        #   rescoreCapOrderingIntegration.test.ts — needs a clubs row (id=1) for FK
+
+All three passed in run #2. The comment names three failures that did not happen and is silent about the six that did. It came from task-a-findings.md before the seeding situation changed. A stale "3 known failures" note is worse than none — the next reader counts six and has to work out which list is lying.
+
+Delete lines 84-89 entirely. Once Task A lands the step has no known failures, so it needs no comment at all.
+
+Confirm those three files pass in the Task A run, and say so explicitly.
+
+Task C — rename the workflow file
+
+.github/workflows/codegen-drift.yml is not the codegen drift check. It is the entire pipeline — Postgres 16 service, install, drift check, lint, typecheck, build, schema push, both test suites. The drift check is one step inside it.
+
+sh
+git mv .github/workflows/codegen-drift.yml .github/workflows/ci.yml
+
+Change nothing else in the file beyond Tasks A and B. The name: CI key inside it is already correct. Renaming the file resets GitHub's run numbering for the workflow; that is expected and harmless.
+
+Task D — add a root README.md
+
+There is no README. The landing page of a public repository is an unexplained tree of 595 files.
+
+Keep it short — roughly 40-60 lines. It is a front door, not a manual. Do not duplicate replit.md; link to it. Cover:
+
+What this is. One paragraph. A tracker for US Men's National Team players worldwide — their club fixtures, streaming/broadcast information, stats, injuries, transfers and prospects. Say plainly that fixture aggregation and broadcast info are the point, and that live score polling is a secondary convenience, not the product.
+Stack. pnpm workspace monorepo on Node 24. Express 5 API, React 19 + Vite 7 frontend, PostgreSQL 16 via Drizzle ORM, OpenAPI-driven client codegen through Orval. Deployed on Replit.
+Layout. A short table: artifacts/api-server, artifacts/usmnt-tracker, lib/db, lib/api-spec, lib/api-zod, lib/api-client-react, e2e, scripts, reports.
+Getting started. pnpm install, then point at replit.md for the three-process local setup and at .env.example for configuration. Note that pnpm is enforced by a preinstall guard — npm and yarn will refuse.
+Where the real documentation lives. Table pointing to replit.md (architecture and operations), lib/db/README.md (schema and migrations), threat_model.md (security), reports/README.md (historical records).
+Status and licence. A personal project, actively developed, MIT licensed.
+
+Accuracy rules: every command you put in the README must exist in a package.json scripts block — verify each one. Do not invent a pnpm run dev at the root; there isn't one. Do not add CI or coverage badges.
+
+Task E — add a LICENSE file
+
+package.json:3 declares "license": "MIT" but no LICENSE file exists. GitHub therefore shows the repository as unlicensed, which means all rights reserved — the opposite of what the manifest claims.
+
+Add a standard MIT licence text at the repository root as LICENSE (no extension). Copyright line: Copyright (c) 2026 thetrutru313. Use the canonical MIT text verbatim; do not paraphrase it or add clauses.
+
+Task F — move the orphaned diagnostic
+
+admin-login-diagnostic-2026-08-06.md sits at the repository root while every other report lives in reports/.
+
+sh
+git mv admin-login-diagnostic-2026-08-06.md reports/
+
+Then grep the repository for references to the old path and update any you find.
+
+Task G — resolve a documentation contradiction (docs only)
+
+replit.md states: "drizzle-kit push must never be used against dev or production — it bypasses migration history." The CI workflow runs pnpm --filter @workspace/db run push, which is drizzle-kit push.
+
+The rule is right and CI is also right: the CI database is a service container created fresh and destroyed every run, so there is no migration history to bypass. The doc simply did not anticipate CI.
+
+Add one sentence of carve-out to that passage in replit.md — the prohibition covers dev and production, the two stateful databases; the ephemeral CI database is created from scratch each run and is the sole exception.
+
+Change only the documentation. Do not change the workflow step. Switching CI from push to migrate is the better long-term answer — it would give the migration path actual test coverage — but lib/db/package.json has no migrate script (only push and push-force), so it is a larger change with real potential to surface new failures. It stays tracked, not done here.
+
+Scope limits
+No application code changes. Nothing under artifacts/*/src/ or lib/*/src/.
+No test file changes. The mocks are correct; do not "improve" them.
+No new secrets in GitHub Actions, Replit, or anywhere else.
+No dependency changes. Do not touch package.json dependencies or the lockfile.
+Files you may create: README.md, LICENSE.
+Files you may modify: the workflow (Tasks A, B, C), replit.md (Task G).
+Files you may move: the two git mv operations above.
+Final verification, in this order
+sh
+pnpm run lint
+pnpm run typecheck
+pnpm run build
+API_FOOTBALL_KEY=ci-placeholder-api-football-key \
+  pnpm --filter @workspace/api-server run test
+pnpm --filter @workspace/usmnt-tracker run test
+
+Then confirm by inspection:
+
+ .github/workflows/ci.yml exists; codegen-drift.yml does not
+ The workflow env: block has API_FOOTBALL_KEY: ci-placeholder-api-football-key
+ The string secrets.API_FOOTBALL_KEY appears nowhere in the repository
+ Lines 84-89 of the old file (the stale 3-failure NOTE) are gone
+ README.md and LICENSE exist at the root
+ git ls-files shows reports/admin-login-diagnostic-2026-08-06.md and not the root copy
+ Every command quoted in README.md resolves to a real package.json script
+Report back
+Exact file and test counts from the placeholder-key run.
+Explicit confirmation that coleCampbellNoStatsGraceful, recoveryRoundTrip and rescoreCapOrderingIntegration passed.
+The final workflow env: block, verbatim.
+The full README.md you wrote.
+The sentence you added to replit.md.
+Anything you found that this prompt did not anticipate.
+
+Commit, then push. This is the first change that will exercise CI from a clean start. Expected result: the first fully green run.

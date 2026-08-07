@@ -41,7 +41,8 @@ Replit's Publish flow. See `lib/db/README.md` for the full explanation and
 resolution path.
 
 **`drizzle-kit push` must never be used** against dev or production — it
-bypasses migration history.
+bypasses migration history. The CI service container is the sole exception:
+it is created from scratch on each run and has no migration history to preserve.
 
 ---
 

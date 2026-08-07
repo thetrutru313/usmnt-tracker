@@ -32,6 +32,10 @@ jobs:
       # the full integration surface (transparency invoice routes, rate-limit
       # tests) to run against real credentials.
       ADMIN_PASSWORD: ci-placeholder-admin-password
+      # Placeholder value — never transmitted. It satisfies apiKey() so that
+      # vi.stubGlobal("fetch", ...) stubs in the test files are reachable.
+      # A real key would silently hit the live paid API on every push.
+      API_FOOTBALL_KEY: ci-placeholder-api-football-key
       # Required by the Vite build step (prevents vite.config.ts from throwing)
       PORT: "5173"
       BASE_PATH: /
@@ -81,12 +85,6 @@ jobs:
         run: pnpm --filter @workspace/db run push
 
       - name: Test – API server
-        # NOTE: 3 test files fail on a schema-only DB because they need seeded rows.
-        # They will show as failures until a seed step is approved and added.
-        #   coleCampbellNoStatsGraceful.test.ts  — needs a "Cole Campbell" players row
-        #   recoveryRoundTrip.test.ts            — needs ≥1 seeded player row
-        #   rescoreCapOrderingIntegration.test.ts — needs a clubs row (id=1) for FK
-        # See task-a-findings.md for the full analysis.
         run: pnpm --filter @workspace/api-server run test
 
       - name: Test – USMNT Tracker (frontend)
