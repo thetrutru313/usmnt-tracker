@@ -182,3 +182,10 @@ uri = "file://e2e/docs/csp-cors-upload-fix-report.md"
 type = "text"
 title = "CSP & CORS Upload Fix Report"
 description = "Full write-up of the connect-src fix, CORS localhost change, duplicate-month 409 fix, new unit test, and e2e round-trip test — including CI promotion requirements and verification results."
+
+[[outputs]]
+id = "HstsGMme0ZaY_kjPzl734"
+uri = "file://e2e/docs/commit-2b705af.md"
+type = "text"
+title = "Commit 2b705af — record"
+description = "Commit hash, full message, diff stat, squash note, and verification results."
