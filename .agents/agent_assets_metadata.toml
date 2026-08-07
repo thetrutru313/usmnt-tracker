@@ -161,3 +161,10 @@ uri = "file://reports/post-publish-verification-report.md"
 type = "text"
 title = "Post-Publish Verification Report — Admin Auth Fix"
 description = "Full production log analysis for all four scenarios (fresh login, session persistence, re-auth modal, rate-limit UX), outage timeline, and manual browser steps for post-publish confirmation."
+
+[[outputs]]
+id = "-kvPCp2YxLRUc5k1oX-fX"
+uri = "file://reports/invoice-upload-diagnosis-report.md"
+type = "text"
+title = "Invoice Upload Diagnosis Report"
+description = "Root cause analysis of the transparency invoice upload failure — CSP connect-src blocks the GCS PUT, timeline of the 8-day open window, server-side health check, and production log evidence."
