@@ -189,3 +189,10 @@ uri = "file://e2e/docs/commit-2b705af.md"
 type = "text"
 title = "Commit 2b705af — record"
 description = "Commit hash, full message, diff stat, squash note, and verification results."
+
+[[outputs]]
+id = "TfEWvQREG6N11kPVY_C-N"
+uri = "file://reports/background-job-reliability-eval.md"
+type = "text"
+title = "Background Job Reliability — Read-Only Evaluation"
+description = "Answers to all four questions: multi-deployment feasibility, Reserved VM tradeoffs, scheduled deployments, and worker.ts inventory. Includes recommendation."
