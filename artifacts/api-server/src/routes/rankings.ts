@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetRankingsResponse } from "@workspace/api-zod";
 import { db, playersTable, clubsTable } from "@workspace/db";
-import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   playerStatsTable,
   matchLogsTable,
@@ -25,19 +25,88 @@ function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: num
   });
 }
 
+type RouteLogger = { info(obj: object, msg?: string): void; warn(obj: object, msg?: string): void };
+
+/**
+ * Resolves the active leaderboard season year by counting distinct players
+ * per candidate year in the DB and picking the one with the most data.
+ *
+ * Why not just use seasonYearCandidates()[0]?  seasonYearCandidates() returns
+ * [currentUTCYear, currentUTCYear-1, currentUTCYear-2] — three GUESSES, not
+ * "the current season".  European leagues label their season by the start year
+ * (e.g. "2025" for the 2025/26 season), so in January 2026 all data is still
+ * under "2025".  Taking [0] would select "2026" → empty leaderboards all
+ * January until the sync catches up.
+ *
+ * Contract:
+ *  - Resolves ONCE per /api/rankings request — callers reuse the result.
+ *  - Falls back to the most-recent candidate if no rows exist for any year.
+ *  - Logs the chosen year and per-candidate counts for diagnosability.
+ */
+async function resolveLeaderboardSeasonYear(log: RouteLogger): Promise<string> {
+  const candidates = seasonYearCandidates();
+  const candidateStrs = candidates.map(String);
+
+  // One round-trip: count distinct players per candidate year.
+  const rows = await db
+    .select({
+      season: playerStatsTable.season,
+      playerCount: sql<number>`COUNT(DISTINCT ${playerStatsTable.playerId})::integer`,
+    })
+    .from(playerStatsTable)
+    .where(
+      and(
+        eq(playerStatsTable.periodType, "season_all"),
+        inArray(playerStatsTable.season, candidateStrs),
+      ),
+    )
+    .groupBy(playerStatsTable.season);
+
+  const countsByYear = Object.fromEntries(
+    candidateStrs.map((y) => [y, rows.find((r) => r.season === y)?.playerCount ?? 0]),
+  );
+
+  // No data at all for any candidate — fall back to most-recent and warn.
+  if (rows.length === 0) {
+    const fallback = candidateStrs[0];
+    log.warn(
+      { candidateYears: candidateStrs, countsByYear, fallback },
+      "Rankings season resolver: no season_all data for any candidate year — falling back to most recent",
+    );
+    return fallback;
+  }
+
+  // Iterate candidates most-recent-first; pick the first year whose count
+  // strictly exceeds the current leader.  Ties naturally go to the more
+  // recent year because we start from the most-recent candidate.
+  let bestYear = candidateStrs[0];
+  let bestCount = countsByYear[candidateStrs[0]] ?? 0;
+  for (const year of candidateStrs.slice(1)) {
+    const count = countsByYear[year] ?? 0;
+    if (count > bestCount) {
+      bestCount = count;
+      bestYear = year;
+    }
+  }
+
+  log.info(
+    { candidateYears: candidateStrs, countsByYear, resolvedYear: bestYear },
+    "Rankings season resolver: picked active season year from player data",
+  );
+
+  return bestYear;
+}
+
 const router: IRouter = Router();
 
-router.get("/rankings", async (_req, res): Promise<void> => {
+router.get("/rankings", async (req, res): Promise<void> => {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
 
-  // seasonYearCandidates() returns [currentYear, currentYear-1, currentYear-2].
-  // The first candidate is always the active season; used to pin both the
-  // mostMinutes and mostGoalContributions leaderboards to season_all rows for
-  // that year so all-club totals (not just current-club stats) are ranked.
-  const [currentSeasonYear] = seasonYearCandidates();
-  const currentSeasonStr = String(currentSeasonYear);
+  // Resolve once — reused for both leaderboard queries and the seasonYear field.
+  // Never takes candidates[0] directly; see resolveLeaderboardSeasonYear above.
+  const currentSeasonStr = await resolveLeaderboardSeasonYear(req.log);
 
   const [
     mostInFormRaw,

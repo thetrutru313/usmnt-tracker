@@ -28,14 +28,21 @@
  *     A appears, B does not → PASSES.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
 import { db, playersTable, playerStatsTable, clubsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-const currentSeasonStr = String(new Date().getUTCFullYear());
-const oldSeasonStr = String(new Date().getUTCFullYear() - 2);
+// Use far-future years so the data-driven resolver has no production data
+// to compete with, giving these tests full control of which year wins.
+// Clock is frozen at 2077-01-15 → candidates = [2077, 2076, 2075].
+// Both seeded years (2076 and 2073) are isolated from production.
+const CLOCK_DATE = "2077-01-15T12:00:00.000Z"; // candidates = [2077, 2076, 2075]
+const currentSeasonStr = "2076"; // the year resolver will pick (has data, 2077 does not)
+const oldSeasonStr = "2073";     // out-of-candidates — never appears in rankings
+
+afterEach(() => { vi.useRealTimers(); });
 
 let clubId: number;
 let gozoPlayerId: number;
@@ -167,6 +174,8 @@ describe("Rankings — season_all filter (Tests 6 & 7)", () => {
   it(
     "Test 6 (C1): mostGoalContributions ranks on season_all totals (all clubs), not season totals (current club only)",
     async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(CLOCK_DATE)); // candidates=[2077,2076,2075]; resolver picks "2076"
       const res = await request(app).get("/api/rankings").expect(200);
       const inContributions = res.body.mostGoalContributions.some(
         (p: { id: number }) => p.id === gozoPlayerId,
@@ -181,6 +190,8 @@ describe("Rankings — season_all filter (Tests 6 & 7)", () => {
   it(
     "Test 7 (C2): mostMinutes only includes players with a season_all row for the current season year",
     async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(CLOCK_DATE)); // candidates=[2077,2076,2075]; resolver picks "2076"
       const res = await request(app).get("/api/rankings").expect(200);
       const playerAInRankings = res.body.mostMinutes.some(
         (p: { id: number }) => p.id === playerAId,
