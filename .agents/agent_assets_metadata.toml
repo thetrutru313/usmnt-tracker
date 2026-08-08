@@ -462,3 +462,10 @@ uri = "file://reports/prompt-12-delivery-report.md"
 type = "text"
 title = "Prompt 12 Delivery Report"
 description = "Schema fixes: FK, unique indexes, deterministic badge, column drop — full report with migration SQL, test counts, and post-publish checklist."
+
+[[outputs]]
+id = "ylhJFiwYiJTjiQiofvWRb"
+uri = "file://reports/prompt-13-step0-report.md"
+type = "text"
+title = "Prompt 13 — Step 0 Report"
+description = "Production orphan count, write-path findings, and next steps awaiting your input."
