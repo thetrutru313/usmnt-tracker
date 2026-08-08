@@ -448,3 +448,10 @@ uri = "file://reports/prompt-11-fix-report.md"
 type = "text"
 title = "Prompt 11-FIX Report"
 description = "Data-driven rankings season-year resolver — recorded failures, full implementation, production counts, and verification checklist."
+
+[[outputs]]
+id = "oxRDL6cYLplnmsVlNPnJB"
+uri = "file://reports/player_stats_season_all_production_2026-08-08.csv"
+type = "table"
+title = "player_stats season_all — production (2026-08-08)"
+description = "COUNT(DISTINCT player_id), SUM(minutes), SUM(goals) grouped by season where period_type='season_all'. Queried from production (neondb) replica."
