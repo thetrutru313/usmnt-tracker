@@ -1,0 +1,162 @@
+Prompt 11-FIX — Correct the Rankings season-year derivation
+
+STATUS: Blocking. Prompt 11 Task C shipped a defect. Do not deploy the
+Prompt 11 commit until this is fixed on top of it.
+
+═══════════════════════════════════════════════════════════════════
+THE DEFECT
+═══════════════════════════════════════════════════════════════════
+
+Prompt 11 Task C changed the Rankings leaderboards to:
+
+    .where(and(
+      eq(playerStatsTable.periodType, "season_all"),
+      eq(playerStatsTable.season, String(seasonYearCandidates()[0])),
+    ))
+
+Taking element [0] of seasonYearCandidates() is wrong. That function's own
+documentation says so, at playerStatsSync.ts:93-101:
+
+    // Different leagues label "season" differently — MLS uses the calendar
+    // year, most European leagues use the year the season *started* (e.g.
+    // "2025" for the 2025/26 season, which is still the real "current"
+    // season through the following summer, before the new season's fixtures
+    // begin). Rather than guess from today's month (fragile and
+    // league-specific), candidates cover three consecutive years and callers
+    // pick "current"/"previous" by which candidates actually returned data
+
+seasonYearCandidates() returns THREE GUESSES, most-recent-first. It does not
+return "the current season". The contract is that the caller picks by WHICH
+CANDIDATE HAS DATA. That is exactly what the sync does at
+playerStatsSync.ts:864-867 and :895 — it builds `withData` by filtering the
+candidates to those that actually returned stats, then takes [current,
+previous] from THAT.
+
+Two consequences:
+
+1. TODAY. seasonYearCandidates()[0] is new Date().getUTCFullYear() = "2026".
+   Production diagnostic Q8 showed every season row at "2025", with one at
+   "2024". If the tracked pool has no 2026 season_all rows yet, BOTH
+   leaderboards (mostMinutes, mostGoalContributions) return zero rows and the
+   cards render empty with a "· 2026" label above nothing.
+
+2. EVERY JANUARY, PERMANENTLY. getUTCFullYear() rolls to 2027 on 1 Jan 2027,
+   while the 2026/27 European season stays labelled "2026" until summer 2027.
+   The leaderboards would go empty every January and stay empty until the
+   following August. This is a time bomb — the third in this codebase's
+   history, and the same class as the two already fixed.
+
+═══════════════════════════════════════════════════════════════════
+THE FIX — derive from data, not from the calendar
+═══════════════════════════════════════════════════════════════════
+
+Add a resolver that picks the season year the tracked pool is ACTUALLY in:
+
+  Among the three years returned by seasonYearCandidates(), choose the one
+  with the MOST DISTINCT PLAYERS holding a period_type='season_all' row.
+  Tie-break to the more recent year.
+
+Requirements:
+
+  1. Resolve ONCE per /api/rankings request. Reuse the result for both
+     leaderboards and for the `seasonYear` response field. Do not resolve it
+     separately per query.
+
+  2. If NO candidate year has any season_all rows, fall back to the most
+     recent candidate and log a warning. Do not throw, and do not silently
+     return empty.
+
+  3. Log the resolved year (info level) with the per-candidate counts that
+     drove the decision. When this goes wrong again it must be visible in the
+     logs rather than requiring a database query to diagnose.
+
+  4. Do NOT change seasonYearCandidates() itself. Its three-candidate
+     behaviour is correct and playerStatsSync.ts:615 depends on it for the
+     injuries loop. This task adds a caller, it does not modify the helper.
+
+  5. Do NOT change the form-badge carve-out. computeFormBadge and
+     computeFormTier continue to read period_type='season' (current club
+     only). Prompt 11's formBadgeSeasonCarveout test must still pass
+     unchanged.
+
+═══════════════════════════════════════════════════════════════════
+TESTS — the clock must be controlled, not observed
+═══════════════════════════════════════════════════════════════════
+
+This codebase has already shipped two tests that failed on a future date. Do
+not write a test that depends on the real system clock. Use vi.setSystemTime
+(or inject the clock) and restore it afterwards.
+
+REQUIRED:
+
+  1. THE JANUARY TIME BOMB. Freeze the clock at 2027-01-15. Seed season_all
+     rows for "2026" only. Assert the resolver picks "2026" and the
+     leaderboard is NOT empty. This test must FAIL against the current
+     candidates[0] implementation — confirm that before fixing.
+
+  2. THE TODAY CASE. Freeze the clock at 2026-08-08. Seed season_all rows for
+     "2025" for 10 players and "2026" for 0 players. Assert the resolver picks
+     "2025" and the leaderboard returns those 10. This is the production shape
+     from diagnostic Q8 and must also fail before the fix.
+
+  3. SEASON TRANSITION. Freeze at 2026-08-08. Seed "2025" for 10 players and
+     "2026" for 2. Assert "2025" wins (more players). Then seed "2026" for 15
+     and assert it flips to "2026". This proves the resolver self-corrects
+     across the boundary instead of jumping on a calendar date.
+
+  4. EMPTY FALLBACK. No season_all rows at all for any candidate. Assert the
+     endpoint returns 200 with empty leaderboards and logs a warning — not a
+     500 and not a throw.
+
+  5. SINGLE RESOLUTION. Assert the resolver runs once per request, not once
+     per leaderboard.
+
+  6. The `seasonYear` field in the response equals the resolved year, so the
+     UI label and the ranked data can never disagree.
+
+Confirm tests 1 and 2 fail against the current code before you change it, and
+paste that failure output in the report.
+
+═══════════════════════════════════════════════════════════════════
+ALSO — one item missed in Prompt 11 Task B
+═══════════════════════════════════════════════════════════════════
+
+poolTiers.ts still reads:
+
+    prospect: "Prospect — under 25",
+
+computePoolTier (queries.ts:42-46) accepts an `age` parameter and never reads
+it. The tier is: worldCupRoster -> core; caps >= 5 -> inMix; else prospect.
+Age is not a factor, so the tooltip is false for every player.
+
+CORRECT THE TOOLTIP TEXT. Do NOT add an age condition to computePoolTier —
+that would move players between tiers, which is out of scope.
+
+═══════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════
+
+    pnpm run lint
+    pnpm run typecheck
+    pnpm run build
+    API_FOOTBALL_KEY=ci-placeholder-api-football-key \
+      pnpm --filter @workspace/api-server run test
+    pnpm --filter @workspace/usmnt-tracker run test
+
+Then confirm by inspection:
+  [ ] No call site takes seasonYearCandidates()[0] as "the current season"
+  [ ] seasonYearCandidates() itself is unmodified
+  [ ] The resolver logs the chosen year and the counts behind it
+  [ ] Tests 1 and 2 were recorded failing before the fix
+  [ ] formBadgeSeasonCarveout test still passes unchanged
+  [ ] poolTiers.ts prospect tooltip no longer claims "under 25"
+
+═══════════════════════════════════════════════════════════════════
+REPORT BACK
+═══════════════════════════════════════════════════════════════════
+
+  1. Recorded failure output for tests 1 and 2 against the pre-fix code.
+  2. The resolver implementation, quoted in full.
+  3. What year it resolves to against the CURRENT production data, and the
+     per-candidate counts behind that choice.
+  4. Confirmation that the two
