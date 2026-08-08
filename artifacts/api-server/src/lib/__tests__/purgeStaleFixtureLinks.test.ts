@@ -72,8 +72,6 @@ async function insertPlayer(clubId: number, suffix: string): Promise<number> {
       age: 25,
       nationalTeamCaps: 0,
       nationalTeamGoals: 0,
-      performanceTrend: "steady",
-      trending: false,
       bio: "",
       worldCupRoster: false,
     })
@@ -278,8 +276,6 @@ describe("backfillLegacyFixturePlayerClubIds — empty-scope safety", () => {
           age: 25,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady",
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })

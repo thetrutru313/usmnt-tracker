@@ -132,8 +132,6 @@ describe("Transfer recovery — purge + runRepairPass restores fixture card with
           age: 24,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady",
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })

@@ -120,8 +120,6 @@ async function insertTestPlayer(
       apiFootballPlayerId: apiId,
       nationalTeamCaps: 0,
       nationalTeamGoals: 0,
-      performanceTrend: "steady",
-      trending: false,
       bio: "",
       worldCupRoster: false,
       clubOverrideId,

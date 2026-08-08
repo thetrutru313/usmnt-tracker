@@ -268,8 +268,6 @@ describe(
             age: 24,
             nationalTeamCaps: 10,
             nationalTeamGoals: 1,
-            performanceTrend: "steady",
-            trending: false,
             bio: "",
             worldCupRoster: false,
             apiFootballPlayerId: FAKE_PLAYER_API_ID,

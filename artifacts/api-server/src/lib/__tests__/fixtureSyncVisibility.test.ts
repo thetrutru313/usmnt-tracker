@@ -107,8 +107,6 @@ async function setupTestData(): Promise<{
       age: 25,
       nationalTeamCaps: 0,
       nationalTeamGoals: 0,
-      performanceTrend: "steady",
-      trending: false,
       bio: "",
       worldCupRoster: false,
     })
@@ -127,8 +125,6 @@ async function setupTestData(): Promise<{
       age: 22,
       nationalTeamCaps: 0,
       nationalTeamGoals: 0,
-      performanceTrend: "steady",
-      trending: false,
       bio: "",
       worldCupRoster: false,
     })
@@ -320,8 +316,6 @@ describe("GET /fixtures?scope=upcoming — transferred player excluded from feat
         age: 25,
         nationalTeamCaps: 0,
         nationalTeamGoals: 0,
-        performanceTrend: "steady" as const,
-        trending: false,
         bio: "",
         worldCupRoster: false,
       };
@@ -501,8 +495,6 @@ describe("Stale fixture removal — past-kickoff scheduled fixture is deleted wh
           age: 27,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })
@@ -696,8 +688,6 @@ describe("GET /fixtures — finished fixture keeps transferred player in feature
           age: 26,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })
@@ -839,8 +829,6 @@ describe("GET /fixtures?scope=upcoming — national-team fixture keeps player af
           age: 24,
           nationalTeamCaps: 10,
           nationalTeamGoals: 2,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })
@@ -976,8 +964,6 @@ describe("Stale fixture removal — both clubs' stale fixtures deleted in a mult
         age: 25,
         nationalTeamCaps: 0,
         nationalTeamGoals: 0,
-        performanceTrend: "steady" as const,
-        trending: false,
         bio: "",
         worldCupRoster: false,
       };
@@ -1254,8 +1240,6 @@ describe("Fixture reconciliation — future-missing fixture is warned (run 1) th
           age: 24,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })
@@ -1509,8 +1493,6 @@ describe("GET /fixtures — live national-team fixture keeps player in featuredP
           age: 23,
           nationalTeamCaps: 15,
           nationalTeamGoals: 3,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })

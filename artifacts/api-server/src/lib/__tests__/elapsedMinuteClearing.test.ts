@@ -104,8 +104,6 @@ describe("reconcileClubFixtures — elapsedMinute clears when fixture finishes",
           age: 26,
           nationalTeamCaps: 0,
           nationalTeamGoals: 0,
-          performanceTrend: "steady" as const,
-          trending: false,
           bio: "",
           worldCupRoster: false,
         })

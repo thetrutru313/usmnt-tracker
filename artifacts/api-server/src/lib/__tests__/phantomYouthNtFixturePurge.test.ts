@@ -85,8 +85,6 @@ const basePlayer = {
   age: 21,
   nationalTeamCaps: 3,
   nationalTeamGoals: 0,
-  performanceTrend: "steady" as const,
-  trending: false,
   bio: "",
   worldCupRoster: false,
 };

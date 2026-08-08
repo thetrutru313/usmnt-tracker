@@ -44,6 +44,19 @@ export const playerStatsTable = pgTable("player_stats", {
 },
 (table) => [
   index("player_stats_player_id_idx").on(table.playerId),
+  // B1 — General uniqueness: one row per player per (period_type, season).
+  // Covers season_all and national_team_cycle, which legitimately hold one
+  // row PER SEASON YEAR (replaceSeasonHistoryRows). Multiple rows per player
+  // across different seasons are correct; this only rejects true duplicates.
+  uniqueIndex("player_stats_player_period_season_unique").on(table.playerId, table.periodType, table.season),
+  // B2 — Stronger uniqueness for the four single-row period types.
+  // upsertStatsRow deletes by periodType alone (not by season label), so
+  // these four types hold EXACTLY ONE row per player regardless of label.
+  // A partial index is required: B1 alone would permit a 2025 and a 2026
+  // 'season' row for the same player, since they differ on the season column.
+  uniqueIndex("player_stats_single_row_period_unique")
+    .on(table.playerId, table.periodType)
+    .where(sql`${table.periodType} IN ('season','previous_season','last5','previous5')`),
 ]);
 
 export const insertPlayerStatsSchema = createInsertSchema(playerStatsTable).omit({ id: true, createdAt: true });

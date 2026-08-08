@@ -118,8 +118,6 @@ async function insertPlayer(suffix: string, clubId: number): Promise<number> {
       age: 24,
       nationalTeamCaps: 5,
       nationalTeamGoals: 0,
-      performanceTrend: "steady" as const,
-      trending: false,
       bio: "",
       worldCupRoster: false,
     })

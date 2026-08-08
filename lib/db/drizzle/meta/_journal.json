@@ -15,6 +15,20 @@
       "when": 1786053157428,
       "tag": "0001_add_admin_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786221900221,
+      "tag": "0002_fixture_players_fk_and_stats_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786221932431,
+      "tag": "0003_drop_player_dead_columns",
+      "breakpoints": true
     }
   ]
 }

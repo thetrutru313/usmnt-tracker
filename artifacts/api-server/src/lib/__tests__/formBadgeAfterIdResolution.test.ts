@@ -80,8 +80,6 @@ beforeAll(async () => {
       clubId: testClubId!,
       age: 22,
       apiFootballPlayerId: null,   // ← pre-resolution: no id yet
-      performanceTrend: "steady",  // stored column is irrelevant — badge is derived from stats
-      trending: false,
       bio: "",
     })
     .returning({ id: playersTable.id });
@@ -175,54 +173,8 @@ describe("Form badge after api_football_player_id is resolved for the first time
     30_000,
   );
 
-  it(
-    "Phase 2 — badge is not derived from the stored players.performanceTrend column after resolution",
-    async () => {
-      if (testPlayerId === null) {
-        console.warn("[formBadgeAfterIdResolution] Test player not created — skipping stored-column isolation check.");
-        return;
-      }
-
-      // The player was inserted with performanceTrend="steady" and we have not
-      // updated that column. If the route were reading the stored column instead
-      // of computing from stats, it would return "steady" even though real stats
-      // exist. The previous test already confirmed it returns "on_fire" — this
-      // test makes the column-isolation intent explicit with a direct assertion.
-      const [storedRow] = await db
-        .select({ performanceTrend: playersTable.performanceTrend })
-        .from(playersTable)
-        .where(eq(playersTable.id, testPlayerId!));
-
-      expect(storedRow, "Could not find test player row").toBeDefined();
-
-      // Stored column value.
-      const storedTrend = storedRow.performanceTrend;
-
-      // The computed badge from the API (stats exist from Phase 2 insert).
-      const res = await request(app)
-        .get(`/api/players/${testPlayerId}`)
-        .expect(200);
-
-      const computedTrend = res.body.performanceTrend as string;
-
-      // The stats produce "on_fire"; the stored column is still "steady".
-      // They must differ — if they match it means the stored column happened to
-      // equal the computed value, which would make this test a no-op.
-      expect(
-        storedTrend,
-        "Stored column should still be 'steady' (we never updated it)",
-      ).toBe("steady");
-
-      expect(
-        computedTrend,
-        `Computed badge must differ from the stored column ('steady') — route must be computing from stats, not reading the column. Got: '${computedTrend}'`,
-      ).not.toBe(storedTrend);
-
-      expect(
-        computedTrend,
-        `Expected 'on_fire' from stats but got '${computedTrend}'`,
-      ).toBe("on_fire");
-    },
-    30_000,
-  );
+  // Note: the third test ("badge is not derived from the stored players.performanceTrend column")
+  // was removed when that column was dropped in Prompt 12 Task D. The two remaining tests
+  // already prove the badge is computed from stats: Phase 1 shows "steady" with no stats,
+  // Phase 2 shows "on_fire" after stats are written — without any column to read from.
 });

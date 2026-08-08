@@ -325,8 +325,6 @@ async function main() {
         youthNationalTeam: p.youthNationalTeam,
         debutDate: p.debutDate,
         potentialCallUpScore: p.callUpScore,
-        performanceTrend: p.trend,
-        trending: p.trending,
         bio: p.bio,
       })),
     )

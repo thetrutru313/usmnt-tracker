@@ -81,6 +81,12 @@ beforeAll(async () => {
       )
     )
   `).catch(() => {});
+  // Also delete any fixture_players rows linked by player_id (handles rows
+  // inserted by syncApiFootballFixtures for fixtures not in the list above).
+  await db.execute(sql`
+    DELETE FROM fixture_players
+    WHERE player_id IN (SELECT id FROM players WHERE slug = ${PLAYER_SLUG})
+  `).catch(() => {});
   await db.execute(sql`
     DELETE FROM fixtures
     WHERE api_football_fixture_id IN (
@@ -189,6 +195,10 @@ afterAll(async () => {
     await db.execute(sql`
       DELETE FROM fixture_players WHERE fixture_id = ${fxId}
     `).catch(() => {});
+  }
+  // Also clean up any fixture_players rows the sync may have created (FK blocks player delete).
+  if (playerId) {
+    await db.execute(sql`DELETE FROM fixture_players WHERE player_id = ${playerId}`).catch(() => {});
   }
 
   await db.execute(sql`

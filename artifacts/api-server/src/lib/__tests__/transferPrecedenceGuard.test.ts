@@ -178,8 +178,7 @@ describe("syncApiFootballFixtures — transfer-precedence guard", () => {
         .values({
           name: "__TPG1 Player__", slug: "__tpg-t1-player__", position: "MF",
           category: "current", clubId: destClub.id, age: 23,
-          nationalTeamCaps: 5, nationalTeamGoals: 0, performanceTrend: "steady",
-          trending: false, bio: "", worldCupRoster: false,
+          nationalTeamCaps: 5, nationalTeamGoals: 0, bio: "", worldCupRoster: false,
           apiFootballPlayerId: T1_PLAYER_API_ID,
         })
         .returning({ id: playersTable.id });
@@ -237,8 +236,7 @@ describe("syncApiFootballFixtures — transfer-precedence guard", () => {
         .values({
           name: "__TPG2 Player__", slug: "__tpg-t2-player__", position: "FW",
           category: "current", clubId: oldClub.id, age: 22,
-          nationalTeamCaps: 3, nationalTeamGoals: 1, performanceTrend: "up",
-          trending: false, bio: "", worldCupRoster: false,
+          nationalTeamCaps: 3, nationalTeamGoals: 1, bio: "", worldCupRoster: false,
           apiFootballPlayerId: T2_PLAYER_API_ID,
         })
         .returning({ id: playersTable.id });
@@ -295,8 +293,7 @@ describe("syncApiFootballFixtures — transfer-precedence guard", () => {
         .values({
           name: "__TPG3 Player__", slug: "__tpg-t3-player__", position: "GK",
           category: "current", clubId: clubAnchor.id, age: 27,
-          nationalTeamCaps: 0, nationalTeamGoals: 0, performanceTrend: "steady",
-          trending: false, bio: "", worldCupRoster: false,
+          nationalTeamCaps: 0, nationalTeamGoals: 0, bio: "", worldCupRoster: false,
           apiFootballPlayerId: T3_PLAYER_API_ID,
         })
         .returning({ id: playersTable.id });

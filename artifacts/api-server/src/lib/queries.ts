@@ -108,6 +108,11 @@ export async function computeFormBadgesForPlayerIds(
 ): Promise<Map<number, { performanceTrend: string; trending: boolean }>> {
   if (playerIds.length === 0) return new Map();
 
+  // ORDER BY created_at DESC so the first occurrence of each (player_id,
+  // period_type) pair is always the newest row. After Task B2 at most one row
+  // per (player_id, period_type) can exist for these four types, so this is
+  // belt-and-braces — but the query must not depend on a constraint added
+  // elsewhere for its own correctness (getStatsForPlayer already does this).
   const statsRows = await db
     .select({
       playerId: playerStatsTable.playerId,
@@ -121,13 +126,19 @@ export async function computeFormBadgesForPlayerIds(
         inArray(playerStatsTable.playerId, playerIds),
         inArray(playerStatsTable.periodType, ["last5", "previous5", "season"]),
       ),
-    );
+    )
+    .orderBy(desc(playerStatsTable.createdAt));
 
   const last5Map = new Map<number, { minutes: number; avgRating: number | null }>();
   const prev5Map = new Map<number, { minutes: number; avgRating: number | null }>();
   const seasonAvgMap = new Map<number, number | null>();
 
+  // Dedup: keep the first (= newest) row per (playerId, periodType).
+  const seen = new Set<string>();
   for (const row of statsRows) {
+    const key = `${row.playerId}:${row.periodType}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (row.periodType === "last5") last5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
     else if (row.periodType === "previous5") prev5Map.set(row.playerId, { minutes: row.minutes, avgRating: row.avgRating });
     else if (row.periodType === "season") seasonAvgMap.set(row.playerId, row.avgRating);

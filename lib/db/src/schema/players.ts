@@ -55,8 +55,6 @@ export const playersTable = pgTable("players", {
   youthNationalTeam: text("youth_national_team"),
   debutDate: date("debut_date", { mode: "string" }),
   potentialCallUpScore: integer("potential_call_up_score"),
-  performanceTrend: text("performance_trend").notNull().default("steady"), // rising | steady | falling
-  trending: boolean("trending").notNull().default(false),
   bio: text("bio").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Cached timestamp of the last successful /players/squads API call for this

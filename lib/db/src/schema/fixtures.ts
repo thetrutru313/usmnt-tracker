@@ -2,6 +2,7 @@ import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clubsTable } from "./clubs";
+import { playersTable } from "./players";
 
 export const fixturesTable = pgTable("fixtures", {
   id: serial("id").primaryKey(),
@@ -42,7 +43,7 @@ export type Fixture = typeof fixturesTable.$inferSelect;
 export const fixturePlayersTable = pgTable("fixture_players", {
   id: serial("id").primaryKey(),
   fixtureId: integer("fixture_id").notNull().references(() => fixturesTable.id),
-  playerId: integer("player_id").notNull(),
+  playerId: integer("player_id").notNull().references(() => playersTable.id),
   // Snapshot of which club this link was created for (set by the club
   // fixtures sync; null for curated/seeded national-team links). Lets reads
   // compare against the player's *current* club — if they've since
