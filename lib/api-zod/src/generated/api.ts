@@ -66,6 +66,7 @@ export const GetPlayerResponse = zod.object({
   "slug": zod.string(),
   "position": zod.string(),
   "category": zod.enum(['current', 'fringe', 'prospect']),
+  "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n'),
   "clubName": zod.string(),
   "league": zod.string(),
   "clubCountry": zod.string(),
@@ -799,25 +800,7 @@ export const GetRankingsResponse = zod.object({
   "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
 })),
-  "transferBuzz": zod.array(zod.object({
-  "id": zod.number(),
-  "player": zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "position": zod.string(),
-  "photoUrl": zod.string().nullable()
-}),
-  "fromClub": zod.string(),
-  "toClub": zod.string(),
-  "transferType": zod.enum(['transfer', 'loan', 'contract_extension']),
-  "fee": zod.string().nullish(),
-  "status": zod.enum(['confirmed', 'rumor']),
-  "probabilityScore": zod.number().nullish(),
-  "announcedAt": zod.coerce.date(),
-  "summary": zod.string(),
-  "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold'])
-}))
+  "seasonYear": zod.string()
 })
 
 

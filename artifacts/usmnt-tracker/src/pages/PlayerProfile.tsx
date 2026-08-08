@@ -108,8 +108,11 @@ export default function PlayerProfile() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {(() => {
-                  const tier: PoolTier = player.category === 'current' ? 'core' : player.category === 'fringe' ? 'inMix' : 'prospect';
-                  const label = player.category === 'current' ? 'Core Squad' : player.category === 'fringe' ? 'In the Mix' : 'Prospect';
+                  // poolTier is computed server-side by the same computePoolTier()
+                  // function used by the list route — guarantees the badge here
+                  // always agrees with the Players page and Rankings cards.
+                  const tier: PoolTier = player.poolTier as PoolTier;
+                  const label = tier === 'core' ? 'Core Squad' : tier === 'inMix' ? 'In the Mix' : 'Prospect';
                   return (
                     <Badge variant="outline" className={`uppercase font-mono text-[10px] tracking-widest flex items-center gap-1 ${POOL_TIER_STYLES[tier]}`}>
                       <PoolTierIcon tier={tier} />
@@ -344,7 +347,8 @@ export default function PlayerProfile() {
                           </td>
                           <td className="py-2 font-medium">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className={`shrink-0 ${match.result === 'W' ? 'text-green-500' : match.result === 'L' ? 'text-destructive' : 'text-yellow-500'}`}>{match.result}</span>
+                              {/* result is stored as "W 2-1", "L 0-2", "D 1-1" — first char is the outcome letter */}
+                              <span className={`shrink-0 ${match.result[0] === 'W' ? 'text-green-500' : match.result[0] === 'L' ? 'text-destructive' : match.result[0] ? 'text-yellow-500' : ''}`}>{match.result}</span>
                               <span className="truncate">{match.opponent}</span>
                             </div>
                           </td>

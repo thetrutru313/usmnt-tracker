@@ -10,6 +10,7 @@ import type { MatchLog } from './matchLog';
 import type { NewsArticle } from './newsArticle';
 import type { PlayerCategory } from './playerCategory';
 import type { PlayerInjurySummary } from './playerInjurySummary';
+import type { PlayerPoolTier } from './playerPoolTier';
 import type { PlayerProfilePerformanceTrend } from './playerProfilePerformanceTrend';
 import type { PlayerStats } from './playerStats';
 import type { PlayerTransferSummary } from './playerTransferSummary';
@@ -20,6 +21,7 @@ export interface PlayerProfile {
   slug: string;
   position: string;
   category: PlayerCategory;
+  poolTier: PlayerPoolTier;
   clubName: string;
   league: string;
   clubCountry: string;

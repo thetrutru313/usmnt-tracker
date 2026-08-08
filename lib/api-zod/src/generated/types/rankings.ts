@@ -8,7 +8,6 @@
 import type { Injury } from './injury';
 import type { MatchLogWithPlayer } from './matchLogWithPlayer';
 import type { PlayerSummary } from './playerSummary';
-import type { Transfer } from './transfer';
 
 export interface Rankings {
   mostInForm: PlayerSummary[];
@@ -17,5 +16,5 @@ export interface Rankings {
   mostGoalContributions: PlayerSummary[];
   returningFromInjury: Injury[];
   risingFast: PlayerSummary[];
-  transferBuzz: Transfer[];
+  seasonYear: string;
 }

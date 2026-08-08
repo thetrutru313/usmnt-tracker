@@ -252,6 +252,7 @@ export interface PlayerProfile {
   slug: string;
   position: string;
   category: PlayerCategory;
+  poolTier: PlayerPoolTier;
   clubName: string;
   league: string;
   clubCountry: string;
@@ -491,7 +492,7 @@ export interface Rankings {
   mostGoalContributions: PlayerSummary[];
   returningFromInjury: Injury[];
   risingFast: PlayerSummary[];
-  transferBuzz: Transfer[];
+  seasonYear: string;
 }
 
 export interface ClubResult {

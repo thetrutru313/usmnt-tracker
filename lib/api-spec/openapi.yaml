@@ -517,6 +517,7 @@ components:
         - slug
         - position
         - category
+        - poolTier
         - clubName
         - league
         - clubCountry
@@ -552,6 +553,8 @@ components:
         position: { type: string }
         category:
           $ref: "#/components/schemas/PlayerCategory"
+        poolTier:
+          $ref: "#/components/schemas/PlayerPoolTier"
         clubName: { type: string }
         league: { type: string }
         clubCountry: { type: string }
@@ -982,7 +985,7 @@ components:
         - mostGoalContributions
         - returningFromInjury
         - risingFast
-        - transferBuzz
+        - seasonYear
       properties:
         mostInForm:
           type: array
@@ -1008,10 +1011,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PlayerSummary"
-        transferBuzz:
-          type: array
-          items:
-            $ref: "#/components/schemas/Transfer"
+        # The season year both leaderboards (mostMinutes, mostGoalContributions) cover.
+        # Derived server-side via seasonYearCandidates() — never hardcoded.
+        seasonYear:
+          type: string
 
     MatchLogWithPlayer:
       type: object

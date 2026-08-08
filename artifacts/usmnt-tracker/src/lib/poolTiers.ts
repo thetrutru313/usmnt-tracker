@@ -3,7 +3,7 @@ export type PoolTier = "core" | "inMix" | "prospect";
 export const POOL_TIER_LABELS: Record<PoolTier, string> = {
   core: "Core Squad — 2026 World Cup roster",
   inMix: "In the Mix — 5+ national team caps",
-  prospect: "Prospect — under 25",
+  prospect: "Prospect — fewer than 5 national team caps",
 };
 
 export const POOL_TIER_STYLES: Record<PoolTier, string> = {

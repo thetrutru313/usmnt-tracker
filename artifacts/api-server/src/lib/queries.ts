@@ -178,6 +178,10 @@ export async function getPlayerById(id: number) {
       slug: playersTable.slug,
       position: playersTable.position,
       category: playersTable.category,
+      // worldCupRoster is needed to compute poolTier via the shared
+      // computePoolTier function — stripped from the response below so the
+      // caller only sees poolTier, matching the PlayerSummary contract.
+      worldCupRoster: playersTable.worldCupRoster,
       clubName: clubsTable.name,
       league: clubsTable.league,
       clubCountry: clubsTable.country,
@@ -198,10 +202,19 @@ export async function getPlayerById(id: number) {
     .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
     .where(eq(playersTable.id, id));
   if (!row) return undefined;
-  const { dateOfBirth, age: storedAge, ...rest } = row;
+  const { dateOfBirth, age: storedAge, worldCupRoster, ...rest } = row;
+  const age = resolveAge(dateOfBirth, storedAge);
   const badges = await computeFormBadgesForPlayerIds([id]);
   const badge = badges.get(id) ?? { performanceTrend: "steady", trending: false };
-  return { ...rest, age: resolveAge(dateOfBirth, storedAge), ...badge };
+  return {
+    ...rest,
+    age,
+    // computePoolTier is the single source of truth — the same function used
+    // by listPlayers, getFeaturedPlayersMap, and getFeaturedPlayersForFixtures.
+    // Calling it here guarantees the profile badge always agrees with the list.
+    poolTier: computePoolTier({ worldCupRoster, nationalTeamCaps: rest.nationalTeamCaps, age }),
+    ...badge,
+  };
 }
 
 export async function getStatsForPlayer(playerId: number, periodType: "season" | "last5" | "previous_season" | "previous5") {

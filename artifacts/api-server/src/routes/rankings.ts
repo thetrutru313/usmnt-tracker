@@ -10,12 +10,10 @@ import {
   resolveAge,
   computeFormBadgesForPlayerIds,
   withInjuryBadges,
-  withTransferBadges,
-  transfersWithPlayerQuery,
-  transfersTable,
   injuriesWithPlayerQuery,
   injuriesTable,
 } from "../lib/queries";
+import { seasonYearCandidates } from "../lib/playerStatsSync";
 
 /** Mirrors the `listPlayers` transform: resolves age from DOB, replaces `worldCupRoster` with the derived `poolTier`, and strips `dateOfBirth` from the response. */
 function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number; dateOfBirth?: string | null }>(
@@ -34,6 +32,13 @@ router.get("/rankings", async (_req, res): Promise<void> => {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
 
+  // seasonYearCandidates() returns [currentYear, currentYear-1, currentYear-2].
+  // The first candidate is always the active season; used to pin both the
+  // mostMinutes and mostGoalContributions leaderboards to season_all rows for
+  // that year so all-club totals (not just current-club stats) are ranked.
+  const [currentSeasonYear] = seasonYearCandidates();
+  const currentSeasonStr = String(currentSeasonYear);
+
   const [
     mostInFormRaw,
     bestWeekendPerformancesRaw,
@@ -41,7 +46,6 @@ router.get("/rankings", async (_req, res): Promise<void> => {
     mostGoalContributionsRaw,
     returningFromInjuryRaw,
     risingFastCandidatesRaw,
-    transferBuzzRaw,
   ] = await Promise.all([
     db
       .select(playerSummaryColumns)
@@ -84,12 +88,15 @@ router.get("/rankings", async (_req, res): Promise<void> => {
       ))
       .orderBy(desc(matchLogsTable.rating))
       .limit(8),
+    // Ironmen: season_all so goals/minutes from all clubs in the season are
+    // counted, not just the current club.  Pinned to currentSeasonStr so the
+    // leaderboard doesn't mix seasons when a player has multi-year history.
     db
       .select(playerSummaryColumns)
       .from(playerStatsTable)
       .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
       .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(eq(playerStatsTable.periodType, "season"))
+      .where(and(eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, currentSeasonStr)))
       .orderBy(desc(playerStatsTable.minutes))
       .limit(8),
     db
@@ -101,7 +108,7 @@ router.get("/rankings", async (_req, res): Promise<void> => {
       .from(playerStatsTable)
       .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
       .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(eq(playerStatsTable.periodType, "season"))
+      .where(and(eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, currentSeasonStr)))
       .limit(50),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(6),
     // Rising Prospects: over-fetch candidates — badge computation below filters to on_fire/rising only.
@@ -121,7 +128,6 @@ router.get("/rankings", async (_req, res): Promise<void> => {
       )
       .orderBy(desc(playerStatsTable.avgRating))
       .limit(50),
-    transfersWithPlayerQuery().where(eq(transfersTable.status, "rumor")).orderBy(desc(transfersTable.probabilityScore)).limit(6),
   ]);
 
   // Batch-compute live form badges for all player-summary rows in one round-trip.
@@ -160,10 +166,7 @@ router.get("/rankings", async (_req, res): Promise<void> => {
       .slice(0, 8),
   );
 
-  const [returningFromInjury, transferBuzz] = await Promise.all([
-    withInjuryBadges(returningFromInjuryRaw),
-    withTransferBadges(transferBuzzRaw),
-  ]);
+  const returningFromInjury = await withInjuryBadges(returningFromInjuryRaw);
 
   const payload = {
     mostInForm: withPoolTier(overlayBadge(mostInFormRaw)),
@@ -172,7 +175,9 @@ router.get("/rankings", async (_req, res): Promise<void> => {
     mostGoalContributions,
     returningFromInjury,
     risingFast,
-    transferBuzz,
+    // seasonYear: the year both leaderboards (mostMinutes + mostGoalContributions)
+    // cover — lets the UI label the "Ironmen" card without re-deriving the year.
+    seasonYear: currentSeasonStr,
   };
 
   res.json(GetRankingsResponse.parse(payload));

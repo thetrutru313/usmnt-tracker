@@ -99,7 +99,7 @@ const USA_NATIONAL_TEAM_ID = 2384;
 // candidates actually returned data — the two aggregates in this list are
 // used for the injuries endpoint, which doesn't need "current vs previous"
 // disambiguation, so plain freshest-first order is fine there.
-function seasonYearCandidates(): number[] {
+export function seasonYearCandidates(): number[] {
   const year = new Date().getUTCFullYear();
   return [year, year - 1, year - 2];
 }
