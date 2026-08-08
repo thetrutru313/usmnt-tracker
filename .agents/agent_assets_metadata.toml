@@ -441,3 +441,10 @@ uri = "file://reports/prompt-11-report.md"
 type = "text"
 title = "Prompt 11 Report"
 description = "Display consistency fixes (Tasks A–D): result colour coding, poolTier unification, season_all rankings, Transfer Buzz removal."
+
+[[outputs]]
+id = "Dk-XV7PEbv2l9CcYr3OFv"
+uri = "file://reports/prompt-11-fix-report.md"
+type = "text"
+title = "Prompt 11-FIX Report"
+description = "Data-driven rankings season-year resolver — recorded failures, full implementation, production counts, and verification checklist."
