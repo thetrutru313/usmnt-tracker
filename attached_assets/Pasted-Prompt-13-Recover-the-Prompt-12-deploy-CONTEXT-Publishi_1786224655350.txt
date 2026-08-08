@@ -1,0 +1,167 @@
+Prompt 13 — Recover the Prompt 12 deploy
+
+CONTEXT: Publishing Prompt 12 failed validation. The FK statement
+  ALTER TABLE "fixture_players" ADD CONSTRAINT "fixture_players_player_id_players_id_fk"
+could not be applied, because production still holds 8 orphaned
+fixture_players rows (all referencing deleted player_id 23).
+
+ROOT CAUSE — this is the important part:
+
+Replit's Publish flow does NOT execute our migration files. It computes a
+SCHEMA DIFF between dev and production and generates DDL from it. The publish
+dialog listed exactly five statements — the FK, two CREATE UNIQUE INDEX, two
+DROP COLUMN. Our migration 0002 begins with:
+
+    DELETE FROM "fixture_players" fp
+    WHERE NOT EXISTS (SELECT 1 FROM "players" p WHERE p.id = fp.player_id);
+
+That statement was absent. A schema diff cannot express DML, so any DELETE,
+UPDATE or backfill written into a migration file NEVER reaches production.
+
+This is why 0000_baseline and 0001_add_admin_sessions appeared to work — both
+were pure DDL, so the diff produced equivalent statements. Prompt 12 is the
+first migration that depended on data changes crossing over.
+
+NOTHING WAS APPLIED. The publish failed validation before executing, so
+production is untouched. Do not re-attempt the publish until this is resolved.
+
+═══════════════════════════════════════════════════════════════════
+STEP 0 — CONFIRM, then try the simple path first
+═══════════════════════════════════════════════════════════════════
+
+0a. Confirm the diagnosis. Run against PRODUCTION (read-only):
+
+    SELECT COUNT(*) AS orphans
+    FROM fixture_players fp
+    WHERE NOT EXISTS (SELECT 1 FROM players p WHERE p.id = fp.player_id);
+
+    Expected: 8. If it returns 0, STOP and report — the FK failed for some
+    other reason and everything below is the wrong fix.
+
+0b. Determine whether ANY write path to production exists. Check whether the
+    Replit database pane, SQL console, or any UI tool can execute a DELETE
+    against the production database — not just the agent's executeSql, which
+    is read-only there.
+
+    IF A WRITE PATH EXISTS: run exactly this one statement against production
+    and nothing else —
+
+        DELETE FROM fixture_players fp
+        WHERE NOT EXISTS (SELECT 1 FROM players p WHERE p.id = fp.player_id);
+
+    Re-run 0a to confirm it returns 0, then publish Prompt 12 unchanged. The
+    FK will now succeed. You are done — skip Steps 1 and 2 entirely.
+
+    Report which tool you used and the rows-affected count.
+
+IF THERE IS NO WRITE PATH, continue to Step 1. Application code at boot is
+then the only way to change a row in production.
+
+═══════════════════════════════════════════════════════════════════
+STEP 1 — First publish: everything EXCEPT the FK, plus a one-time cleanup
+═══════════════════════════════════════════════════════════════════
+
+The diff compares dev's schema to production's. Dev currently HAS the FK, so
+every publish will keep trying to add it. Dev must not have it for the first
+publish to succeed.
+
+Work forward-only. Do NOT edit or delete migrations 0002 or 0003 — they are
+already applied to dev, and rewriting applied history is how migration 0010
+became corrupt.
+
+1a. Remove `.references(() => playersTable.id)` from `playerId` in
+    lib/db/src/schema/fixtures.ts. Leave the index and everything else.
+
+1b. Generate a new migration:
+      cd lib/db && node_modules/.bin/drizzle-kit generate \
+        --name=temp_drop_fixture_players_fk --config=./drizzle.config.ts
+    READ the generated SQL. It should contain exactly one statement:
+    ALTER TABLE "fixture_players" DROP CONSTRAINT ... — nothing else.
+
+1c. Apply to DEV only:
+      node_modules/.bin/drizzle-kit migrate --config=./drizzle.config.ts
+
+1d. Add a one-time startup repair in artifacts/api-server/src/index.ts,
+    alongside the existing startup blocks:
+
+      - Deletes fixture_players rows whose player_id has no matching player.
+      - Uses exactly the NOT EXISTS predicate above. Do NOT hardcode
+        player_id 23 or a count of 8.
+      - Logs the number of rows deleted at info level, every boot, including
+        when it is zero.
+      - Wrapped in try/catch that logs a warning and does not block startup.
+      - Comment it clearly as a ONE-TIME REPAIR, with a note that it must be
+        removed after Step 2 completes, and why it exists (Replit Publish
+        cannot carry DML — see lib/db/README.md).
+
+1e. Publish. This carries: the two unique indexes, the two column drops, the
+    FK removal (a no-op in production, which never had it), and the new
+    application code.
+
+1f. After the deploy is live, re-run the query from 0a against production.
+    It MUST return 0. Also paste the startup log line showing the deleted
+    count. Do not proceed to Step 2 until both are confirmed.
+
+═══════════════════════════════════════════════════════════════════
+STEP 2 — Second publish: the FK
+═══════════════════════════════════════════════════════════════════
+
+2a. Re-add `.references(() => playersTable.id)` to fixtures.ts.
+2b. Generate: --name=restore_fixture_players_fk
+2c. READ the SQL — one ADD CONSTRAINT statement, no ON DELETE CASCADE.
+2d. Apply to dev, verify tests still pass.
+2e. Publish. The FK now succeeds because production has no orphans.
+2f. Confirm the constraint exists in production:
+
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'fixture_players'::regclass AND contype = 'f';
+
+═══════════════════════════════════════════════════════════════════
+STEP 3 — Correct the documentation
+═══════════════════════════════════════════════════════════════════
+
+lib/db/README.md currently implies migration files are the production source
+of truth. They are not. Rewrite that section to state plainly:
+
+  - Migration files are authoritative for DEV only.
+  - Production receives a SCHEMA DIFF computed by Replit's Publish flow
+    between the dev and production schemas. Migration files are not executed
+    there.
+  - Therefore DDL crosses over; DML does NOT. Any data repair — DELETE,
+    UPDATE, backfill — must ship as application code that runs at startup,
+    be verified in production, and then be removed.
+  - A schema change that DEPENDS on a data change must be split across two
+    publishes, in that order. Document this recovery as the worked example.
+  - Because the diff reads DEV's schema, dev drifting from the migration
+    files means production inherits dev's shape, not the repo's. Never run
+    drizzle-kit push against dev.
+
+Also add a note to CHECKPOINT.md under the schema-management section.
+
+═══════════════════════════════════════════════════════════════════
+SCOPE LIMITS
+═══════════════════════════════════════════════════════════════════
+
+  - Do NOT choose "Copy your development database schema & data to
+    production" in the publish dialog, now or ever. It would overwrite the
+    live database — real player data, 1,209 match logs, transparency
+    invoices, anon user follows — with dev's test residue.
+  - Do NOT change the FK to ON DELETE CASCADE to make this easier. The
+    restricting behaviour is deliberate; cascade reinstates the silent
+    orphaning that caused this.
+  - Do NOT edit migrations 0002 or 0003.
+  - Do NOT run drizzle-kit push against dev or production.
+
+═══════════════════════════════════════════════════════════════════
+REPORT BACK
+═══════════════════════════════════════════════════════════════════
+
+  1. Result of query 0a, and whether a production write path was found.
+  2. If Step 0b succeeded: rows deleted, and confirmation the publish then
+     went through. Steps 1-2 skipped.
+  3. If not: the generated SQL for both new migrations, verbatim; the
+     production orphan count after Step 1f with the startup log line; and
+     confirmation of the constraint in Step 2f.
+  4. Confirmation that Atletico fixtures 628, 629, 631 and 632 no longer
+     render as empty cards.
+  5. The rewritten lib/db/README.md section.
