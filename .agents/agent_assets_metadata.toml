@@ -224,3 +224,136 @@ uri = "file://reports/ci-green-repo-hygiene-2026-08-07.md"
 type = "text"
 title = "CI Green + Repo Hygiene — 2026-08-07"
 description = "All 7 tasks, placeholder-key test counts, final env block, README, and CI step-by-step."
+
+[[outputs]]
+id = "s23H0RckvJSXu5QLcr3fN"
+uri = "file://reports/diagnostics-2026-08-07/Q1_duplicate_player_stats.csv"
+type = "table"
+title = "Q1_duplicate_player_stats"
+description = "Q1: Duplicate player_stats rows — groups, total rows, worst-case copies by period_type"
+
+[[outputs]]
+id = "QGAmD03noln5j8HHtFfSj"
+uri = "file://reports/diagnostics-2026-08-07/Q1b_disagree_duplicates.csv"
+type = "table"
+title = "Q1b_disagree_duplicates"
+description = "Q1b: Duplicates that DISAGREE on minutes or avg_rating — non-deterministic badge players"
+
+[[outputs]]
+id = "PkwnQC8BbqmWmlLZfxVq3"
+uri = "file://reports/diagnostics-2026-08-07/Q1c_constraint_preflight.csv"
+type = "table"
+title = "Q1c_constraint_preflight"
+description = "Q1c: Pre-flight count — rows that would block adding UNIQUE(player_id, period_type)"
+
+[[outputs]]
+id = "p3imFbkwZe0gMWvM-fSd0"
+uri = "file://reports/diagnostics-2026-08-07/Q2_transfer_vs_profile_mismatch.csv"
+type = "table"
+title = "Q2_transfer_vs_profile_mismatch"
+description = "Q2: Transfer page vs profile club mismatch — players where to_club ≠ current club name"
+
+[[outputs]]
+id = "FLIQJlQvNa49CnyjW0fjx"
+uri = "file://reports/diagnostics-2026-08-07/Q2b_guard_skip_reason.csv"
+type = "table"
+title = "Q2b_guard_skip_reason"
+description = "Q2b: Guard skip reason for each mismatch — which of the 3 silent skip paths fired"
+
+[[outputs]]
+id = "1aNik65ARcSPsxQvka9oY"
+uri = "file://reports/diagnostics-2026-08-07/Q3_duplicate_transfer_rows.csv"
+type = "table"
+title = "Q3_duplicate_transfer_rows"
+description = "Q3: Duplicate transfer rows for the same move — null-date daily-duplicate exposure"
+
+[[outputs]]
+id = "I2v6oFUNamqFB5DS1u_xU"
+uri = "file://reports/diagnostics-2026-08-07/Q3b_transfer_date_source.csv"
+type = "table"
+title = "Q3b_transfer_date_source"
+description = "Q3b: Transfer date source split — real API midnight dates vs wall-clock fallback"
+
+[[outputs]]
+id = "oTHGb-gDkM9GSgSlqjsVj"
+uri = "file://reports/diagnostics-2026-08-07/Q4_transfer_buzz_panel.csv"
+type = "table"
+title = "Q4_transfer_buzz_panel"
+description = "Q4: Transfer Buzz panel contents — status distribution and probability_score coverage"
+
+[[outputs]]
+id = "eVSgz0JiBxC0ixOfoVLtI"
+uri = "file://reports/diagnostics-2026-08-07/Q5_untagged_fixtures_why.csv"
+type = "table"
+title = "Q5_untagged_fixtures_why"
+description = "Q5: Untagged fixtures and why each is visible — NT bypass vs past-kickoff vs unexpected"
+
+[[outputs]]
+id = "YZ2dvZt5P7wxKYUaXg3Ib"
+uri = "file://reports/diagnostics-2026-08-07/Q5b_untagged_fixtures_on_screen.csv"
+type = "table"
+title = "Q5b_untagged_fixtures_on_screen"
+description = "Q5b: Untagged fixtures currently on screen — upcoming + finished in last 7 days"
+
+[[outputs]]
+id = "bH6JzZU6cwZzqrFw_zKdC"
+uri = "file://reports/diagnostics-2026-08-07/Q6_tagged_but_zero_chips.csv"
+type = "table"
+title = "Q6_tagged_but_zero_chips"
+description = "Q6: Tagged fixtures with zero chips — all links stale (club_id mismatch) on scheduled"
+
+[[outputs]]
+id = "5ZsB_nh000ZpiD-VQI_GR"
+uri = "file://reports/diagnostics-2026-08-07/Q6b_null_club_id_links.csv"
+type = "table"
+title = "Q6b_null_club_id_links"
+description = "Q6b: NULL club_id links — permanently immune to purge and chip filter"
+
+[[outputs]]
+id = "vQfbpbmxWqrOQ6QQzsA2g"
+uri = "file://reports/diagnostics-2026-08-07/Q7_pool_tier_badge_mismatch.csv"
+type = "table"
+title = "Q7_pool_tier_badge_mismatch"
+description = "Q7: Pool-tier badge mismatch — list/dashboard badge vs profile badge per player"
+
+[[outputs]]
+id = "UsXVA7JOTtchwMSGIuqvz"
+uri = "file://reports/diagnostics-2026-08-07/Q8_season_aggregate_split.csv"
+type = "table"
+title = "Q8_season_aggregate_split"
+description = "Q8: Season aggregate split — rankings (current club) vs profile (all clubs) divergence"
+
+[[outputs]]
+id = "_WthyBp422SwVB04zqCxk"
+uri = "file://reports/diagnostics-2026-08-07/Q9_orphaned_fixture_links.csv"
+type = "table"
+title = "Q9_orphaned_fixture_links"
+description = "Q9: Orphaned fixture_players rows pointing at deleted players"
+
+[[outputs]]
+id = "6lcqw_m8e5_QfzyO-xr0C"
+uri = "file://reports/diagnostics-2026-08-07/Q10_dead_denormalized_columns.csv"
+type = "table"
+title = "Q10_dead_denormalized_columns"
+description = "Q10: Dead denormalised columns — performance_trend and trending distribution"
+
+[[outputs]]
+id = "nkcuqX1c7bidpl-rxNnuG"
+uri = "file://reports/diagnostics-2026-08-07/Q11_admin_club_overrides.csv"
+type = "table"
+title = "Q11_admin_club_overrides"
+description = "Q11: Admin club overrides currently in force and drift state"
+
+[[outputs]]
+id = "2SaAbgShvsXfc8U1rchAw"
+uri = "file://reports/diagnostics-2026-08-07/Q12_match_log_result_format.csv"
+type = "table"
+title = "Q12_match_log_result_format"
+description = "Q12: Match-log result format — bare-letter vs scoreline rows confirming colour-bug"
+
+[[outputs]]
+id = "EhvZBtq4D_P5SNlUvImdd"
+uri = "file://reports/diagnostics-2026-08-07/Q13_sync_freshness.csv"
+type = "table"
+title = "Q13_sync_freshness"
+description = "Q13: Sync freshness — last_run_at and age for all sync jobs"

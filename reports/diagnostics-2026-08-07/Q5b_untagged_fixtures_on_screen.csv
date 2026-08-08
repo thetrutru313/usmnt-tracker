@@ -1,0 +1,55 @@
+id,home_team,away_team,competition,kickoff,status,is_national_team,api_football_fixture_id
+1273,United States U20,Guatemala U20,CONCACAF U20,2026-08-05 01:00:00+00,finished,t,1610882
+1483,Costa Rica U20,United States U20,CONCACAF U20,2026-08-07 21:00:00+00,finished,t,1611926
+103,AZ Alkmaar,ADO Den Haag,Eredivisie,2026-08-08 19:00:00+00,scheduled,f,1552121
+606,Barcelona,Nottingham Forest,Friendlies Clubs,2026-08-08 19:00:00+00,scheduled,f,1598601
+688,Portland Timbers II,Los Angeles FC II,MLS Next Pro,2026-08-08 20:00:00+00,scheduled,f,1513268
+607,Udinese,Barcelona,Friendlies Clubs,2026-08-08 20:00:00+00,scheduled,f,1598603
+703,Columbus Crew II,New York RB II,MLS Next Pro,2026-08-08 22:00:00+00,scheduled,f,1513269
+668,Chattanooga,Atlanta United II,MLS Next Pro,2026-08-08 23:00:00+00,scheduled,f,1513270
+652,Minnesota United II,The Town,MLS Next Pro,2026-08-09 00:00:00+00,scheduled,f,1513266
+136,Inter Miami,Monterrey,Leagues Cup,2026-08-09 00:00:00+00,scheduled,f,1530130
+301,Benfica,Academico Viseu,Primeira Liga,2026-08-09 19:30:00+00,scheduled,f,1575446
+1507,United States U20,Mexico U20,CONCACAF U20,2026-08-09 23:00:00+00,scheduled,t,1619051
+256,Tigres UANL,Vancouver Whitecaps,Leagues Cup,2026-08-12 02:00:00+00,scheduled,f,1530147
+356,Arsenal,Como,Friendlies Clubs,2026-08-12 18:30:00+00,scheduled,f,1591929
+137,Inter Miami,Leon,Leagues Cup,2026-08-12 23:30:00+00,scheduled,f,1530148
+669,Atlanta United II,New York RB II,MLS Next Pro,2026-08-14 20:00:00+00,scheduled,f,1513281
+609,Werder Bremen,Auxerre,Friendlies Clubs,2026-08-15 12:30:00+00,scheduled,f,1598612
+603,Union Berlin,Ipswich,Friendlies Clubs,2026-08-15 13:30:00+00,scheduled,f,1598616
+81,Norwich,West Brom,Championship,2026-08-15 14:00:00+00,scheduled,f,1563088
+104,Utrecht,AZ Alkmaar,Eredivisie,2026-08-15 16:45:00+00,scheduled,f,1552128
+704,Columbus Crew II,New York City II,MLS Next Pro,2026-08-15 22:00:00+00,scheduled,f,1513284
+710,CF Montreal,DC United,Major League Soccer,2026-08-15 23:30:00+00,scheduled,f,1490380
+377,Houston Dynamo,Los Angeles Galaxy,Major League Soccer,2026-08-16 00:30:00+00,scheduled,f,1490382
+138,Nashville SC,Inter Miami,Major League Soccer,2026-08-16 00:30:00+00,scheduled,f,1490381
+653,The Town,St. Louis City II,MLS Next Pro,2026-08-16 16:00:00+00,scheduled,f,1513288
+108,Liverpool,Como,Friendlies Clubs,2026-08-16 17:00:00+00,scheduled,f,1550631
+302,Casa Pia,Benfica,Primeira Liga,2026-08-16 19:30:00+00,scheduled,f,1575459
+661,New England II,Philadelphia Union II,MLS Next Pro,2026-08-16 23:00:00+00,scheduled,f,1513291
+689,Los Angeles FC II,Tacoma Defiance,MLS Next Pro,2026-08-17 02:00:00+00,scheduled,f,1513293
+670,Atlanta United II,Chicago Fire II,MLS Next Pro,2026-08-18 15:00:00+00,scheduled,f,1513294
+654,Houston Dynamo FC II,The Town,MLS Next Pro,2026-08-19 23:00:00+00,scheduled,f,1513297
+586,Vancouver Whitecaps,Houston Dynamo,Major League Soccer,2026-08-20 02:30:00+00,scheduled,f,1490404
+690,Los Angeles FC II,Sporting KC II,MLS Next Pro,2026-08-21 02:00:00+00,scheduled,f,1513301
+696,Bayern München II,Memmingen,Regionalliga - Bayern,2026-08-21 17:00:00+00,scheduled,f,1586181
+671,Atlanta United II,Orlando City II,MLS Next Pro,2026-08-22 17:00:00+00,scheduled,f,1513303
+738,Vancouver Whitecaps,FC Dallas,Major League Soccer,2026-08-23 01:30:00+00,scheduled,f,1490415
+705,Huntsville City,Columbus Crew II,MLS Next Pro,2026-08-23 23:00:00+00,scheduled,f,1513310
+655,Austin II,The Town,MLS Next Pro,2026-08-24 00:30:00+00,scheduled,f,1513314
+275,Verl,Hamburger SV,DFB Pokal,2026-08-24 16:00:00+00,scheduled,f,1550699
+691,Vancouver Whitecaps II,Los Angeles FC II,MLS Next Pro,2026-08-27 01:00:00+00,scheduled,f,1513316
+672,Inter Miami II,Atlanta United II,MLS Next Pro,2026-08-28 23:00:00+00,scheduled,f,1513318
+697,Illertissen,Bayern München II,Regionalliga - Bayern,2026-08-29 12:00:00+00,scheduled,f,1586190
+656,The Town,Los Angeles FC II,MLS Next Pro,2026-08-30 16:00:00+00,scheduled,f,1513325
+706,Columbus Crew II,Chicago Fire II,MLS Next Pro,2026-08-30 17:00:00+00,scheduled,f,1513317
+1152,Vancouver Whitecaps,CF Montreal,Canadian Championship,2026-09-03 02:00:00+00,scheduled,f,1589401
+698,Bayern München II,Eichstätt,Regionalliga - Bayern,2026-09-04 17:00:00+00,scheduled,f,1586195
+664,Philadelphia Union II,Columbus Crew II,MLS Next Pro,2026-09-04 23:00:00+00,scheduled,f,1513336
+1326,USA,Peru,International Friendly,2026-09-26 20:30:00+00,scheduled,t,-2001
+1327,USA,Chile,International Friendly,2026-09-30 00:00:00+00,scheduled,t,-2002
+1328,USA,Mexico,International Friendly,2026-10-04 02:00:00+00,scheduled,t,-2003
+1329,USA,Canada,International Friendly,2026-10-07 00:00:00+00,scheduled,t,-2004
+750,United States U17,Montenegro U17,World Cup - U17,2026-11-19 15:00:00+00,scheduled,t,1546162
+751,United States U17,Chile U17,World Cup - U17,2026-11-22 15:00:00+00,scheduled,t,1546181
+752,Algeria U17,United States U17,World Cup - U17,2026-11-25 15:00:00+00,scheduled,t,1546185

@@ -1,0 +1,4 @@
+why_visible,status,fixtures,earliest,latest
+future non-NT - should NOT be visible,scheduled,44,2026-08-08 19:00:00+00,2026-09-04 23:00:00+00
+NT flag - unconditional bypass (by design),finished,30,2025-02-11 01:00:00+00,2026-08-07 21:00:00+00
+NT flag - unconditional bypass (by design),scheduled,8,2026-08-09 23:00:00+00,2026-11-25 15:00:00+00
