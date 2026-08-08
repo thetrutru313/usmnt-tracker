@@ -434,3 +434,10 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q13_sync_freshness_rerun.csv
 type = "table"
 title = "Q13_sync_freshness_rerun"
 description = "Q13 rerun — Sync freshness — last_run_at and age for all sync jobs"
+
+[[outputs]]
+id = "Az3h41ZmPubGLPdoV8S5Q"
+uri = "file://reports/prompt-11-report.md"
+type = "text"
+title = "Prompt 11 Report"
+description = "Display consistency fixes (Tasks A–D): result colour coding, poolTier unification, season_all rankings, Transfer Buzz removal."
