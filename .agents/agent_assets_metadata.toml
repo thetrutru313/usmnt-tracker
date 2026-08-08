@@ -455,3 +455,10 @@ uri = "file://reports/player_stats_season_all_production_2026-08-08.csv"
 type = "table"
 title = "player_stats season_all — production (2026-08-08)"
 description = "COUNT(DISTINCT player_id), SUM(minutes), SUM(goals) grouped by season where period_type='season_all'. Queried from production (neondb) replica."
+
+[[outputs]]
+id = "Fg8uhmWwgRPpDUpYoapDO"
+uri = "file://reports/prompt-12-delivery-report.md"
+type = "text"
+title = "Prompt 12 Delivery Report"
+description = "Schema fixes: FK, unique indexes, deterministic badge, column drop — full report with migration SQL, test counts, and post-publish checklist."
