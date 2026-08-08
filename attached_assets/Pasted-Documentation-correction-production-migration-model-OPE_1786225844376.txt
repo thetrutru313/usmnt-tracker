@@ -1,0 +1,109 @@
+Documentation correction — production migration model
+
+OPERATING RULES
+
+Follow this literally. If an observed value contradicts what is stated here,
+STOP and report rather than improvising. When asked to quote something
+verbatim, paste the actual bytes. Report what you actually did, including
+anything skipped.
+
+═══════════════════════════════════════════════════════════════════
+BACKGROUND — what we learned publishing Prompt 12
+═══════════════════════════════════════════════════════════════════
+
+Replit's Publish flow does NOT apply migration files to production. It
+computes a SCHEMA DIFF between the dev and production databases and generates
+DDL from that diff.
+
+Evidence: the publish dialog for Prompt 12 listed exactly five statements —
+one ADD CONSTRAINT, two CREATE UNIQUE INDEX, two DROP COLUMN. Migration
+0002_fixture_players_fk_and_stats_unique.sql begins with a DELETE statement,
+and it was absent from that list. The publish then failed validation on the
+FK, because the orphan rows the DELETE was meant to remove were still there.
+
+Resolution: the DELETE was run by hand against production through the Replit
+database console, which accepts writes. The publish then succeeded.
+
+Two facts follow, and the documentation currently contradicts both.
+
+═══════════════════════════════════════════════════════════════════
+TASK A — Correct lib/db/README.md
+═══════════════════════════════════════════════════════════════════
+
+A1. THE FALSE CLAIM. Step 4 of "How to add a migration" reads:
+
+    4. **Commit and open a PR.** Replit's Publish flow applies the migration
+       to production automatically when you publish.
+
+That is wrong. Publish applies a schema diff, not the migration file.
+
+A2. THE STALE LAYOUT. The `drizzle/` directory section describes
+_journal.json as having "one entry" and lists only 0000_baseline.sql. There
+are now four migrations (0000-0003) and four journal entries.
+
+REWRITE to state plainly and prominently:
+
+  - Migration files are authoritative for DEV ONLY. `drizzle-kit migrate`
+    against dev is the only place they execute.
+  - Production receives a SCHEMA DIFF computed by Publish between the dev and
+    production schemas.
+  - Therefore DDL crosses over; DML does NOT. Any DELETE, UPDATE or backfill
+    written into a migration file will silently never reach production.
+  - Data changes to production are applied BY HAND through the Replit
+    database console, which accepts writes. Note explicitly that the agent's
+    executeSql with environment: "production" is READ-ONLY and cannot do
+    this — that distinction is what made this hard to discover.
+  - A schema change that DEPENDS on a data change must be applied in two
+    steps: run the data change by hand in the console, confirm it, then
+    publish the schema change.
+  - Because the diff reads DEV's schema, dev drifting from the migration
+    files means production inherits dev's shape rather than the repository's.
+    This is the real reason `drizzle-kit push` must never run against dev —
+    the existing warning gives a weaker reason and should be strengthened.
+
+Add the Prompt 12 sequence as a short worked example: a migration containing
+a DELETE followed by an FK that depended on it, why validation failed, and
+how it was resolved.
+
+Fix the stale directory listing to show all four migrations.
+
+Also correct the summary line in "How to add a migration" so it no longer
+claims Publish applies migrations.
+
+═══════════════════════════════════════════════════════════════════
+TASK B — Check replit.md for the same claim
+═══════════════════════════════════════════════════════════════════
+
+replit.md has a "Database migrations" section. Read it. If it states or
+implies that Publish applies migration files to production, correct it the
+same way and point to lib/db/README.md for the full explanation. If it does
+not, say so explicitly rather than editing it unnecessarily.
+
+Change nothing else in replit.md.
+
+═══════════════════════════════════════════════════════════════════
+SCOPE LIMITS
+═══════════════════════════════════════════════════════════════════
+
+  - Documentation only. No schema files, no migrations, no application code,
+    no tests.
+  - Do not modify migrations 0000 through 0003.
+  - Do not run drizzle-kit generate, migrate, or push.
+
+═══════════════════════════════════════════════════════════════════
+VERIFICATION AND PUSH
+═══════════════════════════════════════════════════════════════════
+
+Run `pnpm run lint`, then commit and push.
+
+REPO:  https://github.com/thetrutru313/usmnt-tracker.git
+TOKEN: Replit Secret named GITHUB_TOKEN. Read it from the environment as
+       $GITHUB_TOKEN — do NOT print it, echo it, or write it into any file,
+       commit message, report, or logged shell command.
+
+The remote tip is currently f115ce9.
+
+Report back:
+  1. The rewritten lib/db/README.md section, verbatim.
+  2. Whether replit.md needed changing, and the diff if so.
+  3. The GitHub Actions run URL and its outcome.
