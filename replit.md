@@ -36,9 +36,14 @@ node_modules/.bin/drizzle-kit migrate --config=./drizzle.config.ts   # apply to 
 
 **Production:** `drizzle-kit migrate` must NOT be pointed at production — the
 `__drizzle_migrations` table does not exist there and migrate would try to
-recreate all existing tables. Production receives schema changes via
-Replit's Publish flow. See `lib/db/README.md` for the full explanation and
-resolution path.
+recreate all existing tables. Production receives schema changes via Replit's
+Publish flow, which computes a **schema diff** between dev and production and
+generates DDL from it — **it does not execute migration files**. This means
+DDL crosses over; DML (DELETE, UPDATE, backfills) does **not** — data changes
+written into a migration file silently never reach production. Data changes
+must be applied by hand through the Replit database console (the agent's
+`executeSql` with `environment: "production"` is read-only and cannot do this).
+See `lib/db/README.md` for the full explanation and a worked example.
 
 **`drizzle-kit push` must never be used** against dev or production — it
 bypasses migration history. The CI service container is the sole exception:

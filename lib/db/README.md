@@ -21,13 +21,18 @@ history for the USMNT Tracker. Read this before touching anything in
    node_modules/.bin/drizzle-kit migrate --config=./drizzle.config.ts
    ```
    (Uses `DATABASE_URL` from the environment — dev by default.)
-4. **Commit and open a PR.** Replit's Publish flow applies the migration to
-   production automatically when you publish.
+4. **Commit and push.** The migration file executes only against dev.
+   Production receives a **schema diff** — not the migration file itself.
+   See "How production gets schema changes" below before relying on any data
+   change (DELETE, UPDATE, backfill) reaching production via Publish.
 
-**`push` must never be used against dev or production.** It bypasses the
-migration history and will leave `__drizzle_migrations` out of sync.
-The `push` script in `package.json` exists only for emergency
-schema exploration in a throwaway scratch database.
+**`push` must never be used against dev or production.** Bypassing migration
+history is one reason; the deeper reason is that Replit's Publish flow diffs
+DEV's live schema against production — if `push` alters dev's schema without a
+corresponding migration file, the next Publish inherits dev's actual shape and
+ships it to production, silently bypassing what the repository describes.
+The `push` script in `package.json` exists only for emergency schema
+exploration in a throwaway scratch database.
 
 ---
 
@@ -54,11 +59,16 @@ This means:
 
 ```
 drizzle/
-  0000_baseline.sql        ← Single authoritative baseline: the full schema
-                             as of the migration reset (2026-08-06)
+  0000_baseline.sql        ← Full schema baseline (2026-08-06 migration reset)
+  0001_add_admin_sessions.sql
+  0002_fixture_players_fk_and_stats_unique.sql
+  0003_drop_player_dead_columns.sql
   meta/
-    _journal.json          ← Ordered list of all migrations (one entry)
+    _journal.json          ← Ordered list of all migrations (four entries)
     0000_snapshot.json     ← Drizzle's internal schema snapshot
+    0001_snapshot.json
+    0002_snapshot.json
+    0003_snapshot.json
   _archive/                ← HISTORICAL ONLY — must never be re-applied
     0000_late_invaders.sql
     0001_recovery_tokens_superseded_at.sql
@@ -99,11 +109,78 @@ being recorded as the new baseline.
 
 > ⚠️ **Read this before pointing `migrate` at any database other than dev.**
 
-### Current state (as of 2026-08-06)
+### How production gets schema changes — the real model
+
+> ⚠️ **This is the most important section in this file. Read it before writing
+> any migration that contains DML.**
+
+**Migration files execute only against dev.** `drizzle-kit migrate` with
+`DATABASE_URL` pointing at dev is the only place they run.
+
+**Production receives a schema diff.** Replit's Publish flow computes a diff
+between the dev and production database schemas and generates DDL from it. It
+does not open, parse, or execute the migration `.sql` files.
+
+**DDL crosses over; DML does not.** `CREATE TABLE`, `ALTER TABLE`,
+`CREATE INDEX`, `DROP COLUMN` — all of that is expressible as a schema diff
+and will reach production. `DELETE`, `UPDATE`, `INSERT`, and any other data
+manipulation written into a migration file will **silently never reach
+production**, because a schema diff cannot express data changes.
+
+**The production write path is the Replit database console.** The agent's
+`executeSql` with `environment: "production"` is **read-only** — it rejects
+any mutating statement with `cannot execute DELETE in a read-only transaction`.
+The Replit database console (the database pane in the workspace UI, switched
+to the production environment) accepts writes. That is the only mechanism for
+applying data changes to production outside application code.
+
+**A schema change that depends on a data change requires two steps:**
+
+1. Apply the data change by hand in the Replit database console. Confirm it.
+2. Publish the schema change. Because the data is already in the correct state,
+   the DDL generated from the diff will succeed.
+
+**Dev drifting from migration files means production inherits dev's shape,
+not the repository's.** This is the deeper reason `drizzle-kit push` must
+never run against dev — if `push` mutates dev's schema without a migration
+file, the next Publish diff reads the mutated dev shape and ships it to
+production, silently bypassing the migration history.
+
+---
+
+### Worked example — Prompt 12 (2026-08-08)
+
+Migration `0002_fixture_players_fk_and_stats_unique.sql` contained:
+
+1. A `DELETE FROM fixture_players WHERE NOT EXISTS (SELECT 1 FROM players …)` —
+   to remove orphaned rows before adding the FK.
+2. `ALTER TABLE "fixture_players" ADD CONSTRAINT … FOREIGN KEY ("player_id")
+   REFERENCES "players"("id")` — the FK that required no orphans to exist.
+
+The Publish dialog listed exactly five statements — the FK, two
+`CREATE UNIQUE INDEX`, two `DROP COLUMN`. **The DELETE was absent.** A schema
+diff cannot express DML, so it was never included.
+
+Publish failed validation: production still held 8 orphaned `fixture_players`
+rows (all referencing deleted `player_id` 23). The FK could not be applied.
+
+**Resolution:**
+
+1. The orphan DELETE was run by hand in the Replit database console against
+   production. It deleted 8 rows.
+2. The orphan count was re-confirmed as 0.
+3. Publish was re-attempted and succeeded — the FK applied cleanly.
+
+**Lesson:** any migration that mixes DML + dependent DDL needs the DML applied
+by hand to production first, confirmed, then the schema publish follows.
+
+---
+
+### Current state (as of 2026-08-08)
 
 | Database | `drizzle.__drizzle_migrations` | What `migrate` would do |
 |---|---|---|
-| **dev** | 1 row — baseline recorded | ✅ Reports nothing pending, changes nothing |
+| **dev** | 4 rows — 0000 through 0003 recorded | ✅ Reports nothing pending, changes nothing |
 | **production** | Table does not exist | ❌ Would try to CREATE all 21 existing tables — **DO NOT RUN** |
 
 ### Why production's `__drizzle_migrations` is empty
@@ -118,13 +195,6 @@ ERROR: cannot execute CREATE INDEX in a read-only transaction
 There is no Neon console access for this project's production database, and
 the production container has no shell. It was not possible to insert the
 baseline row into production's `drizzle` schema.
-
-### How production gets schema changes
-
-Production schema changes are delivered via **Replit's Publish flow**, which
-diffs the dev and production databases and applies changes when you publish.
-`drizzle-kit migrate` must not be pointed at production — it has no baseline
-row and would treat the entire schema as unapplied.
 
 ### How this resolves
 
