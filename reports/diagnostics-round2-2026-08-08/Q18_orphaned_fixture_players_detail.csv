@@ -1,0 +1,9 @@
+link_id,missing_player_id,link_club_id,fixture_id,home_team,away_team,competition,kickoff,status,is_national_team,valid_links_on_same_fixture
+952,23,300,632,Atletico Madrid,Osasuna,La Liga,2026-09-16 15:00:00+00,scheduled,f,0
+951,23,300,631,Real Sociedad,Atletico Madrid,La Liga,2026-09-13 15:00:00+00,scheduled,f,0
+950,23,300,630,Athletic Club,Atletico Madrid,La Liga,2026-09-05 14:15:00+00,scheduled,f,1
+949,23,300,629,Sevilla,Atletico Madrid,La Liga,2026-08-29 19:30:00+00,scheduled,f,0
+948,23,300,215,Atletico Madrid,Villarreal,La Liga,2026-08-23 15:00:00+00,scheduled,f,1
+947,23,300,628,Atletico Madrid,Malaga,La Liga,2026-08-19 19:00:00+00,scheduled,f,0
+946,23,300,627,Manchester City,Atletico Madrid,Friendlies Clubs,2026-08-09 11:00:00+00,scheduled,f,0
+945,23,300,626,Manchester United,Atletico Madrid,Friendlies Clubs,2026-08-01 13:00:00+00,scheduled,f,0
