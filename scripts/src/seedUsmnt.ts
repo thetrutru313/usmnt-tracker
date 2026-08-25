@@ -390,6 +390,7 @@ async function main() {
       .insert(fixturesTable)
       .values({
         isNationalTeam: f.isNationalTeam,
+        ntLevel: f.isNationalTeam ? "SENIOR" : null,
         competition: f.competition,
         kickoff: isoDateTimeOffset(f.daysFromNow, f.hour),
         venue: f.venue,

@@ -10,6 +10,14 @@ export const fixturesTable = pgTable("fixtures", {
   // sync upsert instead of duplicating on every run. Null for seeded rows.
   apiFootballFixtureId: integer("api_football_fixture_id").unique(),
   isNationalTeam: boolean("is_national_team").notNull().default(false),
+  // Age-group discriminator for national-team fixtures. NULL for club
+  // fixtures (is_national_team = false). One of 'SENIOR' | 'U23' | 'U20' |
+  // 'U17' when is_national_team = true — see deriveNtLevel() in
+  // apiFootballSync.ts, the single source of truth for how this is derived.
+  // A national-team fixture whose age group cannot be classified is left
+  // NULL rather than defaulted, so senior-only queries (isSeniorNtFixture())
+  // fail closed and exclude it instead of silently treating it as senior.
+  ntLevel: text("nt_level"),
   competition: text("competition").notNull(),
   kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),
   venue: text("venue").notNull(),

@@ -111,12 +111,12 @@ async function runCriticalStartupSeeds(): Promise<void> {
       const insertResult = await db.execute(sql`
         INSERT INTO fixtures (
           api_football_fixture_id, home_team, away_team,
-          competition, kickoff, venue, city, is_national_team, status,
+          competition, kickoff, venue, city, is_national_team, nt_level, status,
           home_logo_url, away_logo_url
         )
         SELECT ${m.sentinelId}, ${m.homeTeam}, ${m.awayTeam},
                'International Friendly', ${m.kickoffUtc}::timestamptz,
-               ${m.venue}, ${m.city}, true, 'scheduled',
+               ${m.venue}, ${m.city}, true, 'SENIOR', 'scheduled',
                ${m.homeLogoUrl}, ${m.awayLogoUrl}
         WHERE NOT EXISTS (
           SELECT 1 FROM fixtures
@@ -251,45 +251,45 @@ app.listen(port, async (err) => {
           home_logo_url, away_logo_url,
           competition, kickoff, venue,
           tv_network, streaming_service,
-          is_national_team, status
+          is_national_team, nt_level, status
         ) VALUES
           -- CONCACAF U20 group stage (United States U20)
           (1544720, 'United States U20', 'Haiti U20',
            'https://media.api-sports.io/football/teams/10306.png',
            'https://media.api-sports.io/football/teams/11003.png',
            'CONCACAF U20', '2026-07-26 02:00:00+00', 'Estadio Universitario BUAP',
-           'FOX Sports', 'Fox One', true, 'scheduled'),
+           'FOX Sports', 'Fox One', true, 'U20', 'scheduled'),
 
           (1544726, 'El Salvador U20', 'United States U20',
            'https://media.api-sports.io/football/teams/10998.png',
            'https://media.api-sports.io/football/teams/10306.png',
            'CONCACAF U20', '2026-07-29 02:00:00+00', 'Estadio Universitario BUAP',
-           'FOX Sports', 'Fox One', true, 'scheduled'),
+           'FOX Sports', 'Fox One', true, 'U20', 'scheduled'),
 
           (1544732, 'United States U20', 'Cuba U20',
            'https://media.api-sports.io/football/teams/10306.png',
            'https://media.api-sports.io/football/teams/10994.png',
            'CONCACAF U20', '2026-08-01 02:00:00+00', 'Estadio Universitario BUAP',
-           'FOX Sports', 'Fox One', true, 'scheduled'),
+           'FOX Sports', 'Fox One', true, 'U20', 'scheduled'),
 
           -- FIFA U-17 World Cup group stage (United States U17)
           (1546162, 'United States U17', 'Montenegro U17',
            'https://media.api-sports.io/football/teams/12522.png',
            'https://media.api-sports.io/football/teams/17966.png',
            'World Cup - U17', '2026-11-19 15:00:00+00', 'TBD',
-           null, 'FIFA+', true, 'scheduled'),
+           null, 'FIFA+', true, 'U17', 'scheduled'),
 
           (1546181, 'United States U17', 'Chile U17',
            'https://media.api-sports.io/football/teams/12522.png',
            'https://media.api-sports.io/football/teams/12505.png',
            'World Cup - U17', '2026-11-22 15:00:00+00', 'TBD',
-           null, 'FIFA+', true, 'scheduled'),
+           null, 'FIFA+', true, 'U17', 'scheduled'),
 
           (1546185, 'Algeria U17', 'United States U17',
            'https://media.api-sports.io/football/teams/21295.png',
            'https://media.api-sports.io/football/teams/12522.png',
            'World Cup - U17', '2026-11-25 15:00:00+00', 'TBD',
-           null, 'FIFA+', true, 'scheduled')
+           null, 'FIFA+', true, 'U17', 'scheduled')
 
         ON CONFLICT (api_football_fixture_id) DO NOTHING
       `);

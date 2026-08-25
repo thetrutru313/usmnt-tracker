@@ -19,6 +19,7 @@ import {
   withTransferBadges,
   computePoolTier,
   resolveAge,
+  seniorNtFixtureCondition,
 } from "../lib/queries";
 
 const router: IRouter = Router();
@@ -213,7 +214,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
       .from(fixturesTable)
       .where(
         and(
-          eq(fixturesTable.isNationalTeam, true),
+          seniorNtFixtureCondition,
           gte(fixturesTable.kickoff, startTs),
           lt(fixturesTable.kickoff, endExclusive),
         ),

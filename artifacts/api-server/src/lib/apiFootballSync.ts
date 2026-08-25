@@ -258,6 +258,56 @@ function isUsMensNationalTeamName(name: string): boolean {
   return /^(USA|United States) U\d+$/.test(name);
 }
 
+/** Age-group levels recorded on `fixtures.nt_level`. */
+export type NtLevel = "SENIOR" | "U23" | "U20" | "U17";
+
+const NT_LEVEL_VALUES: ReadonlySet<string> = new Set(["SENIOR", "U23", "U20", "U17"]);
+
+/**
+ * Derives the `nt_level` value for a national-team fixture from its two team
+ * names. This is the single source of truth for the classification — every
+ * write path (seed scripts, startup SQL seeds, the club sync upsert, and the
+ * youth NT sync) and the one-time production backfill must all call this
+ * function rather than re-deriving the answer with their own regex.
+ *
+ * Deliberately reads the age suffix from the US side only, never the
+ * opponent — US youth fixtures have faced opponents at a different age group
+ * (e.g. "Georgia U21", "North Macedonia U21" against a US U20 side), and
+ * reading the opponent's suffix would mislabel the fixture.
+ *
+ * Returns `null` (and logs a warning) when neither team name matches a US
+ * men's national team at all, or when the US side's name doesn't parse into
+ * a known age group — callers must not default a null result to "SENIOR".
+ */
+export function deriveNtLevel(homeTeam: string, awayTeam: string): NtLevel | null {
+  const usSide = isUsMensNationalTeamName(homeTeam)
+    ? homeTeam
+    : isUsMensNationalTeamName(awayTeam)
+      ? awayTeam
+      : null;
+
+  if (usSide === null) {
+    logger.warn({ homeTeam, awayTeam }, "deriveNtLevel: neither team is a recognized US men's national team name");
+    return null;
+  }
+
+  if (usSide === "USA") return "SENIOR";
+
+  const match = usSide.match(/\bU(\d{2})\b/);
+  if (!match) {
+    logger.warn({ homeTeam, awayTeam, usSide }, "deriveNtLevel: US team name has no age suffix and isn't exactly 'USA' — cannot classify");
+    return null;
+  }
+
+  const level = `U${match[1]}`;
+  if (!NT_LEVEL_VALUES.has(level)) {
+    logger.warn({ homeTeam, awayTeam, usSide, level }, "deriveNtLevel: US team name has an unrecognized age suffix");
+    return null;
+  }
+
+  return level as NtLevel;
+}
+
 /**
  * Returns true when the fixture should be skipped for player tagging.
  *
@@ -1438,6 +1488,10 @@ export async function syncApiFootballFixtures(
         isNationalTeam:
           isUsMensNationalTeamName(f.teams.home.name) ||
           isUsMensNationalTeamName(f.teams.away.name),
+        ntLevel:
+          isUsMensNationalTeamName(f.teams.home.name) || isUsMensNationalTeamName(f.teams.away.name)
+            ? deriveNtLevel(f.teams.home.name, f.teams.away.name)
+            : null,
         competition: f.league.name,
         kickoff: new Date(f.fixture.date),
         venue: f.fixture.venue.name ?? "TBD",
@@ -2070,6 +2124,7 @@ export async function syncYouthNtFixtures(): Promise<{
           const values = {
             apiFootballFixtureId: f.fixture.id,
             isNationalTeam: true,
+            ntLevel: deriveNtLevel(f.teams.home.name, f.teams.away.name),
             competition: f.league.name,
             kickoff: new Date(f.fixture.date),
             venue: f.fixture.venue.name ?? "TBD",

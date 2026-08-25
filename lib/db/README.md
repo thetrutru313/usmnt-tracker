@@ -243,3 +243,30 @@ ever a discrepancy between a migration file and the schema source, the schema
 source wins and a new migration must be generated to reconcile.
 
 All 21 tables are exported from `src/schema/index.ts`.
+
+### `fixtures.nt_level`
+
+`fixtures.is_national_team` is `true` for the senior USMNT and for youth
+age-group sides (U17/U20/U23) alike — it does not distinguish age group.
+`nt_level` is the discriminator: `NULL` for club fixtures, else one of
+`'SENIOR' | 'U23' | 'U20' | 'U17'` for national-team fixtures.
+
+- **Derivation:** `deriveNtLevel(homeTeam, awayTeam)` in
+  `artifacts/api-server/src/lib/apiFootballSync.ts` is the single source of
+  truth. It reads the age suffix from the US side only (never the
+  opponent — youth fixtures have faced age-mismatched opponents, e.g. a US
+  U20 fixture against "Georgia U21"). Every write path (the club fixture
+  sync, `syncYouthNtFixtures()`, the two raw-SQL startup seeds in
+  `artifacts/api-server/src/index.ts`, and `scripts/src/seedUsmnt.ts`) uses
+  this function or a literal matching its output — never a duplicated regex.
+  An unclassifiable national-team row is left `NULL` and logged, never
+  defaulted to `'SENIOR'`.
+- **Consumption:** `isSeniorNtFixture()` / `seniorNtFixtureCondition` in
+  `artifacts/api-server/src/lib/queries.ts` is an allowlist predicate — true
+  only when `is_national_team = true AND nt_level = 'SENIOR'`. `NULL` or any
+  unrecognized value fails **closed** (excluded), never open. It is applied
+  to exactly two queries: the Dashboard hero (`routes/dashboard.ts`,
+  `nextEventFixtures`) and the Schedule page (`routes/schedule.ts`,
+  `ntFixtures`). The Dashboard's Upcoming Matches card
+  (`todaysGames`/`upcomingGames`) and `GET /api/fixtures` deliberately show
+  every age group and do not use this predicate.

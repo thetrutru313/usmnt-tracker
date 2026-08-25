@@ -13,6 +13,33 @@ export function resolveAge(dateOfBirth: string | null | undefined, storedAge: nu
   if (Number.isNaN(birth.getTime())) return storedAge;
   return Math.floor((Date.now() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 }
+
+/**
+ * True only for the senior USMNT — never for a youth national-team fixture
+ * (U17/U20/U23) or a club fixture.
+ *
+ * Written as an allowlist deliberately: a row is senior only when
+ * `is_national_team = true` AND `nt_level = 'SENIOR'`. A national-team row
+ * whose `nt_level` is NULL (unclassified — see deriveNtLevel()) or any other
+ * value fails CLOSED, i.e. it is excluded from senior-only surfaces, rather
+ * than failing open into them. That inversion — from "assume national-team
+ * rows are senior unless proven otherwise" to "assume they are not senior
+ * unless proven otherwise" — is what fixes the U17/U20 leakage into the
+ * dashboard hero and the USMNT Schedule page.
+ *
+ * Provided in two forms:
+ *   - `isSeniorNtFixture(row)` — in-process predicate for already-fetched rows.
+ *   - `seniorNtFixtureCondition` — the equivalent Drizzle `SQL` condition, for
+ *     use directly in a `.where()` clause.
+ */
+export function isSeniorNtFixture(fixture: { isNationalTeam: boolean; ntLevel: string | null }): boolean {
+  return fixture.isNationalTeam === true && fixture.ntLevel === "SENIOR";
+}
+
+export const seniorNtFixtureCondition = and(
+  eq(fixturesTable.isNationalTeam, true),
+  eq(fixturesTable.ntLevel, "SENIOR"),
+);
 import {
   db,
   clubsTable,

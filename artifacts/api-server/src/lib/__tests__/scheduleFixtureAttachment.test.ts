@@ -89,6 +89,7 @@ async function setupTestData(): Promise<{ eventId: number; fixtureId: number }> 
     .values({
       apiFootballFixtureId: SENTINEL_ID,
       isNationalTeam: true,
+      ntLevel: "SENIOR",
       competition: "International Friendly",
       kickoff,
       venue: "__Test Venue__",

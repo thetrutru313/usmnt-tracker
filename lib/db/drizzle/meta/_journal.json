@@ -29,6 +29,13 @@
       "when": 1786221932431,
       "tag": "0003_drop_player_dead_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787677505534,
+      "tag": "0004_crazy_wind_dancer",
+      "breakpoints": true
     }
   ]
 }

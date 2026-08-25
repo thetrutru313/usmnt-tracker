@@ -3,6 +3,7 @@ import { db, scheduleEventsTable, fixturesTable } from "@workspace/db";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdminSession } from "../lib/adminAuth";
+import { seniorNtFixtureCondition } from "../lib/queries";
 
 const router: IRouter = Router();
 
@@ -58,7 +59,7 @@ router.get("/schedule", async (_req, res): Promise<void> => {
       .from(fixturesTable)
       .where(
         and(
-          eq(fixturesTable.isNationalTeam, true),
+          seniorNtFixtureCondition,
           gte(fixturesTable.kickoff, new Date(minStart + "T00:00:00Z")),
           lt(fixturesTable.kickoff, maxEndExclusive),
         ),

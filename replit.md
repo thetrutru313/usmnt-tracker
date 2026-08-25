@@ -142,7 +142,7 @@ We evaluated switching to Reserved VM (`deploymentTarget = "vm"` — note: `"vm"
 
 These items are explicitly scoped out but documented here so they can be picked up with full context:
 
-1. **`seedYouthNtFixtures.ts`** — Youth NT fixtures are seeded inline in the main seed script. Extract them into a dedicated `scripts/src/seedYouthNtFixtures.ts` to make the seeding auditable and re-runnable without touching the full seed.
+1. **`seedYouthNtFixtures.ts`** — Youth NT fixtures are seeded via raw SQL inside `artifacts/api-server/src/index.ts`'s startup seed block (not in `scripts/src/seedUsmnt.ts`, the main seed script). Extract them into a dedicated `scripts/src/seedYouthNtFixtures.ts` to make the seeding auditable and re-runnable without touching server startup.
 
 2. **CI: `drizzle-kit migrate` instead of `push`** — The CI pipeline currently runs `drizzle-kit push` against the test DB, which bypasses migration files. Switching to `migrate` would exercise the generated SQL before production ever sees it. Blocked on ensuring the CI DB has the `__drizzle_migrations` table.
 

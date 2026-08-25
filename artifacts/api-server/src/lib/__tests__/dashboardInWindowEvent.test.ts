@@ -129,6 +129,7 @@ describe("GET /api/dashboard — mid-window: startDate passed but endDate future
         .values({
           apiFootballFixtureId: -9904,
           isNationalTeam: true,
+          ntLevel: "SENIOR",
           competition: "International Friendly",
           kickoff,
           venue: "__In-Window Venue__",
@@ -224,6 +225,7 @@ describe("GET /api/dashboard — ET edge case: endDate=today, final kickoff afte
         .values({
           apiFootballFixtureId: -9905,
           isNationalTeam: true,
+          ntLevel: "SENIOR",
           competition: "International Friendly",
           kickoff,
           venue: "__ET Edge Venue__",
