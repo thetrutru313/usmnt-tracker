@@ -476,3 +476,10 @@ uri = "file://reports/u17-u20-fixture-leakage-diagnostic.md"
 type = "text"
 title = "U17/U20 Fixture Leakage Diagnostic"
 description = "Read-only audit of every fixture query, write path, and existing team-name workaround related to youth national-team fixtures appearing on the Dashboard and Schedule pages."
+
+[[outputs]]
+id = "CAHgeUYz7dEu2FEiR2IBK"
+uri = "file://reports/dashboard-fixture-render-trace.md"
+type = "text"
+title = "Dashboard Fixture Render Trace"
+description = "Read-only trace of every fixture-rendering element in Dashboard.tsx back to its API field and server query, confirming the hero and upcoming-games list are fed by independent queries."
