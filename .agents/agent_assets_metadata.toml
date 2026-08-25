@@ -469,3 +469,10 @@ uri = "file://reports/prompt-13-step0-report.md"
 type = "text"
 title = "Prompt 13 — Step 0 Report"
 description = "Production orphan count, write-path findings, and next steps awaiting your input."
+
+[[outputs]]
+id = "DsX2niNt_knfOSNsQmp4z"
+uri = "file://reports/u17-u20-fixture-leakage-diagnostic.md"
+type = "text"
+title = "U17/U20 Fixture Leakage Diagnostic"
+description = "Read-only audit of every fixture query, write path, and existing team-name workaround related to youth national-team fixtures appearing on the Dashboard and Schedule pages."
