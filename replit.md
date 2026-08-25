@@ -171,6 +171,7 @@ Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prosp
 ## Gotchas
 
 - **API server port is 8080, not 5000.** The Vite dev proxy targets `http://localhost:8080`. Confirm this in `artifacts/api-server/.replit-artifact/artifact.toml` and `artifacts/usmnt-tracker/vite.config.ts` if the frontend stops reaching the API.
+- **`scripts/src/seedUsmnt.ts` seed rows never reach production via Publish.** Players and clubs defined there are DML (data), not schema — migrations only carry DDL to production through Publish's schema diff. Adding a player to the seed script does not add them to any database. Both dev and production need the row inserted by hand via the database console.
 
 - **After changing `rssIngest.ts`**, restart the workflow to re-run ingestion. If you restart twice in quick succession, the old process may still be mid-insert and can leave one stale/uncleaned row behind — check for and delete duplicates if so.
 

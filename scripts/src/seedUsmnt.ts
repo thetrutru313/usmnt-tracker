@@ -9,10 +9,52 @@ import {
   nationalTeamWindowsTable,
 } from "@workspace/db";
 
+const TRUNCATED_TABLES = [
+  "fixture_players",
+  "news_article_players",
+  "match_logs",
+  "player_stats",
+  "injuries",
+  "transfers",
+  "fixtures",
+  "news_articles",
+  "national_team_windows",
+  "players",
+  "clubs",
+];
+
 async function main() {
   console.log("Seeding USMNT Tracker data...");
 
-  // Clear existing data so this script can be re-run idempotently.
+  // Guard: this script destroys all data in eleven tables (see TRUNCATED_TABLES
+  // below) and is only meant for building a database from empty. Refuse to run
+  // against a database that already has players, unless --force is passed.
+  const force = process.argv.includes("--force");
+  if (!force) {
+    const countResult = (await db.execute(
+      `SELECT COUNT(*)::int AS cnt FROM players`,
+    )) as unknown as { rows: Array<{ cnt: number }> };
+    const playerCount = countResult.rows[0]?.cnt ?? 0;
+    if (playerCount > 0) {
+      console.error(
+        `Refusing to run: players table already has ${playerCount} row(s).\n\n` +
+          "This script destroys ALL data in the following tables via " +
+          "TRUNCATE ... RESTART IDENTITY CASCADE:\n" +
+          TRUNCATED_TABLES.map((t) => `  - ${t}`).join("\n") +
+          "\n\nIt is only intended for building a database from empty, not for " +
+          "re-running against a database with real synced/seeded data.\n" +
+          "Pass --force to bypass this check if you are certain you want to " +
+          "destroy this data.",
+      );
+      process.exit(1);
+    }
+  }
+
+  // Destroys all synced data: TRUNCATEs fixture_players, news_article_players,
+  // match_logs, player_stats, injuries, transfers, fixtures, news_articles,
+  // national_team_windows, players, and clubs with RESTART IDENTITY CASCADE.
+  // This is NOT a safe/idempotent no-op re-run — every row in these eleven
+  // tables is deleted and every id sequence is reset to 1.
   await db.execute(`TRUNCATE TABLE
     fixture_players, news_article_players, match_logs, player_stats,
     injuries, transfers, fixtures, news_articles, national_team_windows,

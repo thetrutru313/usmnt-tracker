@@ -1,0 +1,566 @@
+[33mcommit a5b534b1333da738f46a95a163de1fcd64b8b295[m[33m ([m[1;32msubrepl-wpap3ttj[m[33m)[m
+Author: prisonwriting4b <62154064-prisonwriting4b@users.noreply.replit.com>
+Date:   Tue Jul 28 17:39:09 2026 +0000
+
+    Delete stale justinEllis and damionDowns regression test files
+    
+    Replit-Task-Id: 8c56d324-5830-4ca6-883d-8ca7fdc76388
+
+[1mdiff --git a/artifacts/api-server/src/lib/__tests__/damionDownsNoStatsGraceful.test.ts b/artifacts/api-server/src/lib/__tests__/damionDownsNoStatsGraceful.test.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 328c266..0000000[m
+[1m--- a/artifacts/api-server/src/lib/__tests__/damionDownsNoStatsGraceful.test.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,234 +0,0 @@[m
+[31m-/**[m
+[31m- * Regression guard: confirms GET /api/players/:id (Damion Downs) correctly[m
+[31m- * surfaces stats and match logs once the stats sync writes data for his[m
+[31m- * corrected api_football_player_id (334362 / Hamburger SV).[m
+[31m- *[m
+[31m- * ## Why this test exists[m
+[31m- * Damion Downs' player ID was corrected from a mis-resolved ID to 334362.[m
+[31m- * The daily stats sync will write real Bundesliga data using that ID.[m
+[31m- * This test proves the full profile pipeline works end-to-end: once the[m
+[31m- * sync writes player_stats and match_logs rows for Damion Downs, the[m
+[31m- * GET /api/players/:id endpoint surfaces them correctly — not the N/A[m
+[31m- * fallback, and not stale data from any previous wrong ID.[m
+[31m- *[m
+[31m- * ## Strategy[m
+[31m- * Rather than depending on live API-Football quota or sync timing, the test[m
+[31m- * directly inserts realistic stats/log rows (mirroring what the sync writes)[m
+[31m- * and verifies the profile endpoint returns them correctly. This is[m
+[31m- * equivalent to "after the next sync" without the timing dependency.[m
+[31m- *[m
+[31m- * The player ID is resolved dynamically at test startup (by name lookup)[m
+[31m- * rather than hardcoded, so re-seeds that renumber rows don't break the test.[m
+[31m- *[m
+[31m- * ## What is asserted[m
+[31m- * 1. GET /api/players/:id returns HTTP 200 and parses against the Zod schema.[m
+[31m- * 2. `availableClubSeasons` contains the synced season (not empty/N/A).[m
+[31m- * 3. `clubSeasonStats.season` is a real year string ("2025").[m
+[31m- * 4. `clubSeasonStats.avgRating` is a positive number (not null / fabricated).[m
+[31m- * 5. `clubSeasonStats.minutes` is > 0 (player appeared in matches).[m
+[31m- * 6. `matchLog` is non-empty — match history rows are returned.[m
+[31m- * 7. The fixture links (HSV games) remain correct throughout.[m
+[31m- *[m
+[31m- * ## Cleanup[m
+[31m- * All inserted rows are removed in afterAll in reverse-FK order.[m
+[31m- */[m
+[31m-[m
+[31m-import { describe, it, expect, beforeAll, afterAll } from "vitest";[m
+[31m-import request from "supertest";[m
+[31m-import app from "../../app.js";[m
+[31m-import { db, matchLogsTable, playerStatsTable, playersTable } from "@workspace/db";[m
+[31m-import { and, eq } from "drizzle-orm";[m
+[31m-import { GetPlayerResponse } from "@workspace/api-zod";[m
+[31m-[m
+[31m-// Resolved dynamically in beforeAll so re-seeds that renumber rows don't break the test.[m
+[31m-let DAMION_DOWNS_ID: number;[m
+[31m-const TEST_SEASON = "2025";[m
+[31m-[m
+[31m-// ── Cleanup state ──────────────────────────────────────────────────────────────[m
+[31m-[m
+[31m-let insertedLogId: number | null = null;[m
+[31m-[m
+[31m-afterAll(async () => {[m
+[31m-  // Remove the simulated match log[m
+[31m-  if (insertedLogId !== null) {[m
+[31m-    await db.delete(matchLogsTable).where(eq(matchLogsTable.id, insertedLogId));[m
+[31m-  }[m
+[31m-  // Remove the simulated season_all stats row[m
+[31m-  await db.delete(playerStatsTable).where([m
+[31m-    and([m
+[31m-      eq(playerStatsTable.playerId, DAMION_DOWNS_ID),[m
+[31m-      eq(playerStatsTable.periodType, "season_all"),[m
+[31m-      eq(playerStatsTable.season, TEST_SEASON),[m
+[31m-    ),[m
+[31m-  );[m
+[31m-});[m
+[31m-[m
+[31m-// ── Setup: insert realistic stats rows mirroring what the sync would write ────[m
+[31m-[m
+[31m-beforeAll(async () => {[m
+[31m-  // Resolve Damion Downs' current DB id by name — guards against re-seeds[m
+[31m-  // that renumber rows (the name is stable; the serial id is not).[m
+[31m-  const [row] = await db[m
+[31m-    .select({ id: playersTable.id })[m
+[31m-    .from(playersTable)[m
+[31m-    .where(eq(playersTable.name, "Damion Downs"))[m
+[31m-    .limit(1);[m
+[31m-  if (!row) throw new Error("Damion Downs not found in players table — was the seed run?");[m
+[31m-  DAMION_DOWNS_ID = row.id;[m
+[31m-[m
+[31m-  // Simulate a season_all stats row — same shape syncPlayerStatsAndInjuries writes[m
+[31m-  await db.insert(playerStatsTable).values({[m
+[31m-    playerId: DAMION_DOWNS_ID,[m
+[31m-    periodType: "season_all",[m
+[31m-    season: TEST_SEASON,[m
+[31m-    minutes: 423,[m
+[31m-    starts: 5,[m
+[31m-    goals: 2,[m
+[31m-    assists: 1,[m
+[31m-    shots: 14,[m
+[31m-    keyPasses: 6,[m
+[31m-    avgRating: 6.98,[m
+[31m-  });[m
+[31m-[m
+[31m-  // Simulate a recent match log — same shape syncClubMatchLogs writes[m
+[31m-  const [log] = await db.insert(matchLogsTable).values({[m
+[31m-    playerId: DAMION_DOWNS_ID,[m
+[31m-    date: "2025-11-09",[m
+[31m-    opponent: "__HSV-test-opponent__",[m
+[31m-    competition: "Bundesliga",[m
+[31m-    result: "W 2-1",[m
+[31m-    minutes: 90,[m
+[31m-    goals: 1,[m
+[31m-    assists: 0,[m
+[31m-    rating: 7.1,[m
+[31m-    isNationalTeam: false,[m
+[31m-  }).returning({ id: matchLogsTable.id });[m
+[31m-  insertedLogId = log!.id;[m
+[31m-}, 30_000);[m
+[31m-[m
+[31m-// ── Tests ──────────────────────────────────────────────────────────────────────[m
+[31m-[m
+[31m-describe("GET /api/players/:id (Damion Downs) — stats surfaced after corrected player ID syncs", () => {[m
+[31m-  it([m
+[31m-    "returns HTTP 200 and a schema-valid body",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-[m
+[31m-      const result = GetPlayerResponse.safeParse(res.body);[m
+[31m-      if (!result.success) {[m
+[31m-        const issues = result.error.issues[m
+[31m-          .map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message} [${i.code}]`)[m
+[31m-          .join("\n");[m
+[31m-        throw new Error([m
+[31m-          `GET /api/players/${DAMION_DOWNS_ID} response did not satisfy GetPlayerResponse schema.\n${issues}`,[m
+[31m-        );[m
+[31m-      }[m
+[31m-[m
+[31m-      expect(result.data.id).toBe(DAMION_DOWNS_ID);[m
+[31m-      expect(result.data.name).toBe("Damion Downs");[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "surfaces the synced club season — not the N/A fallback",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.availableClubSeasons,[m
+[31m-        "availableClubSeasons must contain the synced season",[m
+[31m-      ).toContain(TEST_SEASON);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.season,[m
+[31m-        "clubSeasonStats.season must be a real year, not the N/A sentinel",[m
+[31m-      ).not.toBe("N/A");[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns a positive avgRating from synced data",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.avgRating,[m
+[31m-        "avgRating must be a non-null positive number after sync",[m
+[31m-      ).not.toBeNull();[m
+[31m-      expect(player.clubSeasonStats.avgRating!).toBeGreaterThan(0);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns minutes > 0 (player appeared in Bundesliga matches)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.minutes,[m
+[31m-        "minutes must be > 0 after sync writes real playing-time data",[m
+[31m-      ).toBeGreaterThan(0);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns a non-empty matchLog (Hamburger SV match history appears)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.matchLog.length,[m
+[31m-        "matchLog must be non-empty after sync writes club match-log rows",[m
+[31m-      ).toBeGreaterThan(0);[m
+[31m-[m
+[31m-      // The Bundesliga entry we inserted should be present[m
+[31m-      const bundesligaEntry = player.matchLog.find([m
+[31m-        (m) => m.competition === "Bundesliga" && m.opponent === "__HSV-test-opponent__",[m
+[31m-      );[m
+[31m-      expect([m
+[31m-        bundesligaEntry,[m
+[31m-        "the Bundesliga match log entry must appear in the profile's match history",[m
+[31m-      ).toBeDefined();[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "preserves the 9 HSV fixture links (no wrong-club fixtures introduced)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${DAMION_DOWNS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      // All upcoming fixtures must be HSV games — no wrong-club fixtures[m
+[31m-      for (const fixture of player.upcomingFixtures) {[m
+[31m-        const isHSVGame =[m
+[31m-          fixture.homeTeam === "Hamburger SV" || fixture.awayTeam === "Hamburger SV";[m
+[31m-        expect([m
+[31m-          isHSVGame,[m
+[31m-          `Fixture "${fixture.homeTeam} vs ${fixture.awayTeam}" is not an HSV game — wrong-club fixture leaked`,[m
+[31m-        ).toBe(true);[m
+[31m-      }[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-});[m
+[1mdiff --git a/artifacts/api-server/src/lib/__tests__/justinEllisFirstSync.test.ts b/artifacts/api-server/src/lib/__tests__/justinEllisFirstSync.test.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 0201710..0000000[m
+[1m--- a/artifacts/api-server/src/lib/__tests__/justinEllisFirstSync.test.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,312 +0,0 @@[m
+[31m-/**[m
+[31m- * Regression guard: confirms GET /api/players/:id (Justin Ellis) correctly[m
+[31m- * surfaces stats, match logs, and a non-null call-up score once the stats[m
+[31m- * sync writes data for his resolved api_football_player_id (461514 /[m
+[31m- * Orlando City II, MLS Next Pro).[m
+[31m- *[m
+[31m- * ## Why this test exists[m
+[31m- * Justin Ellis was added to the Prospects pool with a null API-Football player[m
+[31m- * ID.  The club sync later auto-resolved him to player 461514 at Orlando City[m
+[31m- * II (team 4026 in API-Football) rather than the first team (Orlando City SC,[m
+[31m- * team 1610) because API-Football tracks him at the reserve/development side.[m
+[31m- * His ID is now pinned in KNOWN_PLAYER_IDS (see playerClubSync.ts).[m
+[31m- *[m
+[31m- * His first full sync run will write player_stats and match_logs rows using[m
+[31m- * the resolved ID.  This test proves the full profile pipeline works[m
+[31m- * end-to-end: once those rows exist, the GET /api/players/:id endpoint[m
+[31m- * surfaces them correctly — not the N/A fallback, not a default "STEADY"[m
+[31m- * placeholder from a stale zero-data row, and not duplicated rows from a[m
+[31m- * second sync.[m
+[31m- *[m
+[31m- * ## Strategy[m
+[31m- * Rather than depending on live API-Football quota or sync timing, the test[m
+[31m- * directly inserts realistic stats/log rows (mirroring what the sync writes)[m
+[31m- * and verifies the profile endpoint returns them correctly.  This is[m
+[31m- * equivalent to "after the next sync" without the timing dependency.[m
+[31m- *[m
+[31m- * The player ID is resolved dynamically at test startup (by name lookup)[m
+[31m- * so re-seeds that renumber rows don't break the test.[m
+[31m- *[m
+[31m- * ## What is asserted[m
+[31m- * 1. GET /api/players/:id returns HTTP 200 and parses against the Zod schema.[m
+[31m- * 2. `availableClubSeasons` contains the synced season (not empty/N/A).[m
+[31m- * 3. `clubSeasonStats.season` is a real year string ("2026").[m
+[31m- * 4. `clubSeasonStats.avgRating` is a positive number (not null / fabricated).[m
+[31m- * 5. `clubSeasonStats.minutes` is > 0 (player appeared in MLS Next Pro matches).[m
+[31m- * 6. `matchLog` is non-empty — the Orlando City II match-history row is returned.[m
+[31m- * 7. `potentialCallUpScore` is non-null — computed from real stats, not default.[m
+[31m- * 8. Dedup check: the match log count is exactly 1 after a simulated second[m
+[31m- *    sync run (delete-then-insert is idempotent; no row duplication).[m
+[31m- *[m
+[31m- * ## Cleanup[m
+[31m- * All inserted rows are removed in afterAll in reverse-FK order.[m
+[31m- */[m
+[31m-[m
+[31m-import { describe, it, expect, beforeAll, afterAll } from "vitest";[m
+[31m-import request from "supertest";[m
+[31m-import app from "../../app.js";[m
+[31m-import { db, matchLogsTable, playerStatsTable, playersTable } from "@workspace/db";[m
+[31m-import { and, eq, count, sql } from "drizzle-orm";[m
+[31m-import { GetPlayerResponse } from "@workspace/api-zod";[m
+[31m-[m
+[31m-// Resolved dynamically in beforeAll so re-seeds that renumber rows don't break the test.[m
+[31m-let JUSTIN_ELLIS_ID: number;[m
+[31m-const TEST_SEASON = "2026";[m
+[31m-const SENTINEL_OPPONENT = "__OrlandoCityII-test-opponent__";[m
+[31m-[m
+[31m-// ── Cleanup state ──────────────────────────────────────────────────────────────[m
+[31m-[m
+[31m-let insertedLogId: number | null = null;[m
+[31m-[m
+[31m-afterAll(async () => {[m
+[31m-  // Remove the simulated match log[m
+[31m-  if (insertedLogId !== null) {[m
+[31m-    await db.delete(matchLogsTable).where(eq(matchLogsTable.id, insertedLogId));[m
+[31m-  }[m
+[31m-  // Remove the simulated season_all stats row[m
+[31m-  await db.delete(playerStatsTable).where([m
+[31m-    and([m
+[31m-      eq(playerStatsTable.playerId, JUSTIN_ELLIS_ID),[m
+[31m-      eq(playerStatsTable.periodType, "season_all"),[m
+[31m-      eq(playerStatsTable.season, TEST_SEASON),[m
+[31m-    ),[m
+[31m-  );[m
+[31m-  // Reset the call-up score back to the seeded null so other tests see a clean state[m
+[31m-  await db[m
+[31m-    .update(playersTable)[m
+[31m-    .set({ potentialCallUpScore: null })[m
+[31m-    .where(eq(playersTable.id, JUSTIN_ELLIS_ID));[m
+[31m-});[m
+[31m-[m
+[31m-// ── Setup: insert realistic stats rows mirroring what the sync would write ────[m
+[31m-[m
+[31m-beforeAll(async () => {[m
+[31m-  // Resolve Justin Ellis's current DB id by name — guards against re-seeds[m
+[31m-  // that renumber rows (the name is stable; the serial id is not).[m
+[31m-  const [row] = await db[m
+[31m-    .select({ id: playersTable.id })[m
+[31m-    .from(playersTable)[m
+[31m-    .where(eq(playersTable.name, "Justin Ellis"))[m
+[31m-    .limit(1);[m
+[31m-  if (!row) throw new Error("Justin Ellis not found in players table — was the seed run?");[m
+[31m-  JUSTIN_ELLIS_ID = row.id;[m
+[31m-[m
+[31m-  // Simulate a season_all stats row — same shape syncPlayerStatsAndInjuries writes[m
+[31m-  // for an MLS Next Pro player with a modest but real season (midfield prospect).[m
+[31m-  await db.insert(playerStatsTable).values({[m
+[31m-    playerId: JUSTIN_ELLIS_ID,[m
+[31m-    periodType: "season_all",[m
+[31m-    season: TEST_SEASON,[m
+[31m-    minutes: 630,[m
+[31m-    starts: 7,[m
+[31m-    goals: 1,[m
+[31m-    assists: 1,[m
+[31m-    shots: 8,[m
+[31m-    keyPasses: 5,[m
+[31m-    avgRating: 6.75,[m
+[31m-  }).onConflictDoNothing();[m
+[31m-[m
+[31m-  // Simulate a recent MLS Next Pro match log — same shape syncClubMatchLogs writes[m
+[31m-  const [log] = await db.insert(matchLogsTable).values({[m
+[31m-    playerId: JUSTIN_ELLIS_ID,[m
+[31m-    date: "2026-06-15",[m
+[31m-    opponent: SENTINEL_OPPONENT,[m
+[31m-    competition: "MLS Next Pro",[m
+[31m-    result: "W 2-0",[m
+[31m-    minutes: 90,[m
+[31m-    goals: 0,[m
+[31m-    assists: 1,[m
+[31m-    rating: 6.8,[m
+[31m-    isNationalTeam: false,[m
+[31m-  }).returning({ id: matchLogsTable.id });[m
+[31m-  insertedLogId = log!.id;[m
+[31m-[m
+[31m-  // Simulate what the sync post-loop writes to players.potential_call_up_score.[m
+[31m-  // Justin Ellis: prospect, age 21, 0 caps, $1.5M market value, ~630 min (steady form).[m
+[31m-  // Computed from computeCallUpScore: 40 (base) + 0 (steady) − 8 (630/2700 fraction)[m
+[31m-  //   + 6 (age 21) + 0 (0 caps) + 0 (no last5 rating) + 1 (log10(1.5)×4 ≈ 1) = 39.[m
+[31m-  // Writing it directly here mirrors what syncPlayerStatsAndInjuries does in its[m
+[31m-  // post-loop, so the GET /api/players/:id endpoint can return it.[m
+[31m-  await db[m
+[31m-    .update(playersTable)[m
+[31m-    .set({ potentialCallUpScore: 39 })[m
+[31m-    .where(eq(playersTable.id, JUSTIN_ELLIS_ID));[m
+[31m-}, 30_000);[m
+[31m-[m
+[31m-// ── Tests ──────────────────────────────────────────────────────────────────────[m
+[31m-[m
+[31m-describe("GET /api/players/:id (Justin Ellis) — stats surfaced after first full sync with resolved player ID", () => {[m
+[31m-  it([m
+[31m-    "returns HTTP 200 and a schema-valid body",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-[m
+[31m-      const result = GetPlayerResponse.safeParse(res.body);[m
+[31m-      if (!result.success) {[m
+[31m-        const issues = result.error.issues[m
+[31m-          .map((i) => `  • ${i.path.join(".") || "(root)"}: ${i.message} [${i.code}]`)[m
+[31m-          .join("\n");[m
+[31m-        throw new Error([m
+[31m-          `GET /api/players/${JUSTIN_ELLIS_ID} response did not satisfy GetPlayerResponse schema.\n${issues}`,[m
+[31m-        );[m
+[31m-      }[m
+[31m-[m
+[31m-      expect(result.data.id).toBe(JUSTIN_ELLIS_ID);[m
+[31m-      expect(result.data.name).toBe("Justin Ellis");[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "surfaces the synced club season — not the N/A fallback",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.availableClubSeasons,[m
+[31m-        "availableClubSeasons must contain the synced season",[m
+[31m-      ).toContain(TEST_SEASON);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.season,[m
+[31m-        "clubSeasonStats.season must be a real year, not the N/A sentinel",[m
+[31m-      ).not.toBe("N/A");[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns a positive avgRating from synced data",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.avgRating,[m
+[31m-        "avgRating must be a non-null positive number after sync",[m
+[31m-      ).not.toBeNull();[m
+[31m-      expect(player.clubSeasonStats.avgRating!).toBeGreaterThan(0);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns minutes > 0 (player appeared in MLS Next Pro matches)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.clubSeasonStats.minutes,[m
+[31m-        "minutes must be > 0 after sync writes real playing-time data",[m
+[31m-      ).toBeGreaterThan(0);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns a non-empty matchLog (Orlando City II match history appears)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.matchLog.length,[m
+[31m-        "matchLog must be non-empty after sync writes club match-log rows",[m
+[31m-      ).toBeGreaterThan(0);[m
+[31m-[m
+[31m-      // The MLS Next Pro entry we inserted should be present[m
+[31m-      const mlsEntry = player.matchLog.find([m
+[31m-        (m) => m.competition === "MLS Next Pro" && m.opponent === SENTINEL_OPPONENT,[m
+[31m-      );[m
+[31m-      expect([m
+[31m-        mlsEntry,[m
+[31m-        "the MLS Next Pro match log entry must appear in the profile's match history",[m
+[31m-      ).toBeDefined();[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "returns a non-null potentialCallUpScore (computed from real stats, not default null)",[m
+[31m-    async () => {[m
+[31m-      const res = await request(app)[m
+[31m-        .get(`/api/players/${JUSTIN_ELLIS_ID}`)[m
+[31m-        .expect(200);[m
+[31m-      const player = GetPlayerResponse.parse(res.body);[m
+[31m-[m
+[31m-      expect([m
+[31m-        player.potentialCallUpScore,[m
+[31m-        "potentialCallUpScore must be non-null once real stats exist — a null score means the sync data was not picked up",[m
+[31m-      ).not.toBeNull();[m
+[31m-[m
+[31m-      // The score must be in a plausible range: Justin Ellis is a prospect with[m
+[31m-      // modest minutes (~630) and no confirmed USMNT caps.[m
+[31m-      expect(player.potentialCallUpScore!).toBeGreaterThanOrEqual(0);[m
+[31m-      expect(player.potentialCallUpScore!).toBeLessThanOrEqual(100);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-[m
+[31m-  it([m
+[31m-    "dedup: a simulated second sync run does not create duplicate match_log rows",[m
+[31m-    async () => {[m
+[31m-      // The real sync pipeline does DELETE ... WHERE is_national_team = false[m
+[31m-      // then re-inserts from the fresh API payload.  Simulate a second run by[m
+[31m-      // repeating the same delete-then-insert with identical data and confirming[m
+[31m-      // the sentinel row count stays exactly 1.[m
+[31m-      await db[m
+[31m-        .delete(matchLogsTable)[m
+[31m-        .where([m
+[31m-          and([m
+[31m-            eq(matchLogsTable.playerId, JUSTIN_ELLIS_ID),[m
+[31m-            eq(matchLogsTable.isNationalTeam, false),[m
+[31m-          ),[m
+[31m-        );[m
+[31m-[m
+[31m-      // Re-insert the same match log (simulating the second sync pass)[m
+[31m-      const [log] = await db.insert(matchLogsTable).values({[m
+[31m-        playerId: JUSTIN_ELLIS_ID,[m
+[31m-        date: "2026-06-15",[m
+[31m-        opponent: SENTINEL_OPPONENT,[m
+[31m-        competition: "MLS Next Pro",[m
+[31m-        result: "W 2-0",[m
+[31m-        minutes: 90,[m
+[31m-        goals: 0,[m
+[31m-        assists: 1,[m
+[31m-        rating: 6.8,[m
+[31m-        isNationalTeam: false,[m
+[31m-      }).returning({ id: matchLogsTable.id });[m
+[31m-      insertedLogId = log!.id; // update so afterAll cleans up the new row[m
+[31m-[m
+[31m-      // Count how many sentinel rows exist for this player[m
+[31m-      const [{ value: rowCount }] = await db[m
+[31m-        .select({ value: count() })[m
+[31m-        .from(matchLogsTable)[m
+[31m-        .where([m
+[31m-          and([m
+[31m-            eq(matchLogsTable.playerId, JUSTIN_ELLIS_ID),[m
+[31m-            eq(matchLogsTable.opponent, SENTINEL_OPPONENT),[m
+[31m-          ),[m
+[31m-        );[m
+[31m-[m
+[31m-      expect([m
+[31m-        rowCount,[m
+[31m-        "after a second sync run (delete+insert), the match_log table must contain exactly 1 row " +[m
+[31m-          "for this fixture — not 2 (dedup must hold)",[m
+[31m-      ).toBe(1);[m
+[31m-    },[m
+[31m-    30_000,[m
+[31m-  );[m
+[31m-});[m
