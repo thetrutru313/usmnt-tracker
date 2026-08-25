@@ -105,6 +105,57 @@ export function applyQualityGate(statistics: AfDiscoveryStatBlock[]): {
   return { passes: starts >= MIN_STARTS || minutes >= MIN_MINUTES, starts, minutes };
 }
 
+/**
+ * Fetches a candidate/prospect's profile across all given season years and
+ * returns the one with the most total minutes played (excluding friendly
+ * competitions, consistent with `applyQualityGate`) — not simply the first
+ * season that returned a non-empty statistics array.
+ *
+ * API-Football returns a stat block for the current season as soon as a
+ * player is registered to a squad, even with zero minutes played. Breaking
+ * on "statistics present" rather than "minutes played" meant a player whose
+ * current season had barely started was evaluated on near-zero minutes while
+ * a complete prior season was never looked at.
+ *
+ * - If at least one season has minutes > 0, the season with the most minutes
+ *   wins.
+ * - If every season with statistics has zero minutes, the most recent such
+ *   season is returned (so a genuinely new player still gets a profile).
+ * - If no season returns any statistics at all, returns null.
+ */
+async function selectBestSeasonProfile<P extends { statistics: AfDiscoveryStatBlock[] }>(
+  seasons: number[],
+  fetchSeason: (season: number) => Promise<P[]>,
+): Promise<P | null> {
+  const candidates: Array<{ season: number; profile: P; minutes: number }> = [];
+  for (const season of seasons) {
+    try {
+      const results = await fetchSeason(season);
+      const profile = results[0];
+      if (profile?.statistics?.length) {
+        candidates.push({ season, profile, minutes: applyQualityGate(profile.statistics).minutes });
+      }
+    } catch {
+      // Try the next season year
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  // seasons is passed newest-first, so candidates[0] is the most recent
+  // season with statistics — it wins ties (e.g. every season at zero minutes).
+  let best = candidates[0]!;
+  for (const c of candidates.slice(1)) {
+    if (c.minutes > best.minutes) best = c;
+  }
+
+  logger.debug(
+    { season: best.season, minutes: best.minutes },
+    "Discovery: season selected for profile",
+  );
+  return best.profile;
+}
+
 function computeAvgRating(statistics: AfDiscoveryStatBlock[]): string | null {
   let weightedSum = 0;
   let weight = 0;
@@ -246,19 +297,12 @@ export async function discoverUSProspects(): Promise<{
       // don't trigger multiple profile fetches for the same player in this run.
       knownApiIds.add(squadPlayer.id);
 
-      // Try current season first, fall back to previous year.
-      let profile: AfDiscoveryResponse | null = null;
-      for (const season of seasonCandidates) {
-        try {
-          const results = await afFetch<AfDiscoveryResponse[]>(`/players?id=${squadPlayer.id}&season=${season}`);
-          if (results[0]?.statistics?.length) {
-            profile = results[0];
-            break;
-          }
-        } catch {
-          // Try the next season year
-        }
-      }
+      // Fetch every candidate season and pick the one with the most minutes
+      // played (see selectBestSeasonProfile) rather than the first season
+      // that merely has a statistics array.
+      const profile = await selectBestSeasonProfile(seasonCandidates, (season) =>
+        afFetch<AfDiscoveryResponse[]>(`/players?id=${squadPlayer.id}&season=${season}`),
+      );
 
       if (!profile) continue; // no stats available — too new or not in API's coverage
 
@@ -449,6 +493,7 @@ export async function rescoreAllCandidates(
   updated: number;
   failed: number;
   skipped: number;
+  skippedNoStats: number;
 }> {
   const envCap = parseInt(process.env["RESCORE_MAX_CANDIDATES"] ?? "", 10);
   const cap =
@@ -499,27 +544,32 @@ export async function rescoreAllCandidates(
   let processed = 0;
   let updated = 0;
   let failed = 0;
+  let skippedNoStats = 0;
 
   for (const candidate of candidates) {
     processed++;
     try {
-      // Re-fetch stats from API-Football
+      // Re-fetch stats from API-Football, selecting the season with the most
+      // minutes played rather than the first season with any statistics.
       type RescoredProfile = { player: { nationality: string | null; birth: { country: string | null; place?: string | null } }; statistics: AfDiscoveryStatBlock[] };
-      let profile: RescoredProfile | null = null;
-      for (const season of seasonCandidates) {
-        try {
-          const results = await afFetch<RescoredProfile[]>(`/players?id=${candidate.apiFootballPlayerId}&season=${season}`);
-          if (results[0]?.statistics?.length) {
-            profile = results[0];
-            break;
-          }
-        } catch {
-          // Try next season
-        }
-      }
+      const profile = await selectBestSeasonProfile(seasonCandidates, (season) =>
+        afFetch<RescoredProfile[]>(`/players?id=${candidate.apiFootballPlayerId}&season=${season}`),
+      );
 
       if (!profile) {
-        logger.debug({ candidateId: candidate.id, name: candidate.name }, "Rescore: no stats found, skipping");
+        // Stamp lastScoredAt so this row rotates to the back of the
+        // lastScoredAt ASC NULLS FIRST queue instead of blocking it forever.
+        // Status, confidence, and signals are intentionally left untouched —
+        // "unscoreable right now" is not the same as "ineligible".
+        await dbInstance
+          .update(playerCandidatesTable)
+          .set({ lastScoredAt: new Date() })
+          .where(eq(playerCandidatesTable.id, candidate.id));
+        logger.debug(
+          { candidateId: candidate.id, name: candidate.name },
+          "Rescore: no stats found — timestamped and deferred",
+        );
+        skippedNoStats++;
         continue;
       }
 
@@ -566,8 +616,11 @@ export async function rescoreAllCandidates(
     }
   }
 
-  logger.info({ processed, updated, failed, skipped }, "Rescore: all candidates rescored");
-  return { processed, updated, failed, skipped };
+  logger.info(
+    { processed, updated, failed, skipped, skippedNoStats },
+    "Rescore: all candidates rescored",
+  );
+  return { processed, updated, failed, skipped, skippedNoStats };
 }
 
 // ---------------------------------------------------------------------------

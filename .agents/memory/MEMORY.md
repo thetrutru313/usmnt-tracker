@@ -6,3 +6,4 @@
 - [API-Football squad national flag unreliability](api-football-squad-national-flag.md) — `national: true` is omitted during international windows; name-based heuristic required alongside the flag check.
 - [NT sentinel fixture promotion architecture](nt-sentinel-promotion.md) — two-path design: syncNationalTeamFixtures() is primary (pre-match, ±1 day, hourly); promoteNtSentinelIds() is post-match fallback. ORDER BY kickoff ASC is load-bearing.
 - [fixtures.nt_level senior/youth classification](nt-level-classification.md) — allowlist/fail-closed design for senior-only filtering; derive age group from the US side only; dev-DB test sort_order race gotcha.
+- [USMNT candidate rescore scheduling](usmnt-rescore-scheduling.md) — rescoreAllCandidates() only runs on a 7-day setInterval, not at server startup; restarting the workflow does not drain the backlog.
