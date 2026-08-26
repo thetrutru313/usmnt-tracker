@@ -2,6 +2,20 @@
 
 Tracks US Men's National Team players worldwide — news, fixtures, stats, injuries, transfers, and prospects.
 
+## Scope — read this first
+
+This application tracks the United States MEN'S National Team. Women's
+players, women's clubs, and women's competitions (NWSL, women's UEFA
+competitions, SheBelieves Cup, and any other women's league or team) are
+out of scope everywhere in this codebase — discovery, candidates, clubs,
+fixtures, stats, and display.
+
+A regression test (`womensTeamExclusion.test.ts`) enforces this at both
+admission points that could otherwise let a women's team into the pool.
+If you are changing code near club or player ingestion and that test
+starts failing, the fix is to exclude the offending data, not to weaken
+or delete the test.
+
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port **8080**)

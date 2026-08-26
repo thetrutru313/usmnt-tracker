@@ -797,12 +797,18 @@ export async function syncPlayerClubs(): Promise<{ playersChecked: number; trans
           "Player transferred to untracked club — auto-creating club row",
         );
         try {
-          newClub = await ensureClubForTeam(latest.teams.in.id, latest.teams.in.name, latest.teams.in.logo);
+          newClub = (await ensureClubForTeam(latest.teams.in.id, latest.teams.in.name, latest.teams.in.logo)) ?? undefined;
         } catch (clubErr) {
           logger.warn(
             { clubErr, player: player.name, newClubName: latest.teams.in.name },
             "Failed to auto-create destination club — skipping transfer",
           );
+          continue;
+        }
+        if (!newClub) {
+          // ensureClubForTeam rejected a women's-side team name — already
+          // logged loudly there. This app is men's-only; do not fall back to
+          // any other resolution for this transfer.
           continue;
         }
       }

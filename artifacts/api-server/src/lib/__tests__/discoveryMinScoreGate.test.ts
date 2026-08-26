@@ -121,6 +121,7 @@ vi.mock("../apiFootballSync.js", () => ({
   syncApiFootballFixtures: vi.fn().mockResolvedValue(undefined),
   syncNationalTeamFixtures: vi.fn().mockResolvedValue(undefined),
   syncYouthNtFixtures: vi.fn().mockResolvedValue(undefined),
+  isWomensTeamName: (name: string) => /\sW$/.test(name.trim()),
 }));
 
 vi.mock("../playerStatsSync.js", () => ({

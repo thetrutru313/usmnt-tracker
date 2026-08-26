@@ -1,7 +1,7 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable, serverConfigTable } from "@workspace/db";
 import { eq, sql, isNull, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
-import { afFetch } from "./apiFootballSync";
+import { afFetch, isWomensTeamName } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
 import { evaluateEligibility, detectSeniorNonUsCaps, countNationalTeamCaps, type EligibilityProfile } from "./evaluateEligibility";
 import { getMinEligibilityScore, getMaxCandidateAge, getWeightFingerprint, getResolvedWeights, SIGNAL_REGISTRY } from "./eligibilitySignalsConfig";
@@ -219,9 +219,26 @@ export async function discoverUSProspects(): Promise<{
     .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
 
-  const trackedClubs = clubs.filter(
+  const clubsWithTeamId = clubs.filter(
     (c): c is typeof c & { apiFootballTeamId: number } => c.apiFootballTeamId != null,
   );
+
+  // This tracker is men's-only (see replit.md's "Scope" section). A women's
+  // team must never be squad-scanned for candidates, even if one somehow
+  // already exists in `clubs` (e.g. from before this filter existed, or from
+  // a future admission point this filter doesn't cover) — this is the
+  // second of two independent checks; `ensureClubForTeam` is the other, and
+  // this one must not depend on it having run.
+  const trackedClubs = clubsWithTeamId.filter((c) => {
+    if (isWomensTeamName(c.name)) {
+      logger.warn(
+        { clubId: c.id, clubName: c.name },
+        "Discovery: REJECTED — club name matches the women's-side pattern; this tracker is men's-only, skipping squad scan",
+      );
+      return false;
+    }
+    return true;
+  });
 
   // All API-Football IDs already in the tracked pool (players table) or
   // previously evaluated (candidates table) — both skip further processing.

@@ -1049,6 +1049,37 @@ async function fetchPlayerCurrentTeam(
 }
 
 /**
+ * This app tracks the United States MEN'S National Team only — see
+ * replit.md's "Scope" section. Women's teams, players, and competitions
+ * must never enter `clubs`/`player_candidates`. API-Football exposes no
+ * gender field on /teams, /leagues, or /players (checked directly against
+ * every response type this codebase parses), so this is name-pattern based
+ * by necessity — not a substitute we'd prefer over a real field, just the
+ * only signal available.
+ *
+ * Matched ONLY by an end-anchored " W" suffix (e.g. "Houston Dash W",
+ * "USA W") — never a substring match anywhere in the name, which would
+ * misfire on legitimate men's clubs (there is no real men's club whose
+ * official name ends in " W", but a substring match could still catch one
+ * with "W" as an initial, e.g. a hypothetical "Team W" reserve side).
+ */
+export function isWomensTeamName(name: string): boolean {
+  return /\sW$/.test(name.trim());
+}
+
+/** Same "women's programme is out of scope" rule as `isWomensTeamName`,
+ *  applied to league/competition names instead of team names — e.g. "NWSL
+ *  Women", "Frauen-Bundesliga", "Serie A Femminile". Checked wherever a
+ *  league name could gate a candidate becoming the pool's "primary league"
+ *  or otherwise get treated as a men's competition. */
+const WOMENS_LEAGUE_RE = /women|feminine|femenil|frauen|femminile|damallsvenskan|nwsl/i;
+
+export function isWomensLeagueName(leagueName: string | null | undefined): boolean {
+  if (!leagueName) return false;
+  return WOMENS_LEAGUE_RE.test(leagueName);
+}
+
+/**
  * Ensures a `clubs` row exists for the given API-Football team id, creating a
  * minimal one when necessary.  Resolution order:
  *   1. Existing row already keyed by this `api_football_team_id` (fast path).
@@ -1057,12 +1088,26 @@ async function fetchPlayerCurrentTeam(
  *      the fixture `competition` field drives all display and broadcast logic
  *      so the club-level league string is not critical).
  * Handles concurrent sync runs via `onConflictDoNothing` + re-fetch on race.
+ *
+ * Returns `null` (never inserts, never returns an existing row) when
+ * `teamName` looks like a women's team — this is one of the two admission
+ * points that must independently refuse women's data (see
+ * `discoverUSProspects` in playerDiscovery.ts for the other). Callers must
+ * treat `null` the same as any other "couldn't resolve a club" case.
  */
 export async function ensureClubForTeam(
   teamId: number,
   teamName: string,
   logoUrl: string | null,
-): Promise<{ id: number; name: string }> {
+): Promise<{ id: number; name: string } | null> {
+  if (isWomensTeamName(teamName)) {
+    logger.warn(
+      { teamId, teamName },
+      "ensureClubForTeam: REJECTED — team name matches the women's-side pattern; this tracker is men's-only",
+    );
+    return null;
+  }
+
   // Fast path: already tracked by team id.
   const [byTeamId] = await db
     .select({ id: clubsTable.id, name: clubsTable.name })
@@ -1235,11 +1280,22 @@ export async function syncApiFootballFixtures(
 
     // Ensure the club row exists in our DB (upsert by team id, creating a
     // minimal row when the club is brand-new to our tracker).
-    let club: { id: number; name: string };
+    let club: { id: number; name: string } | null;
     try {
       club = await ensureClubForTeam(current.teamId, current.teamName, current.logoUrl);
     } catch (err) {
       logger.warn({ err, teamId: current.teamId, playerId: player.id }, "ensureClubForTeam failed — falling back to stored club");
+      failures++;
+      const list = clubPlayerMap.get(player.clubId) ?? [];
+      list.push(player.id);
+      clubPlayerMap.set(player.clubId, list);
+      continue;
+    }
+
+    if (!club) {
+      // ensureClubForTeam rejected a women's-side team name — already logged
+      // loudly there. Fall back to the player's stored club rather than
+      // resolving them onto a team this tracker must never carry.
       failures++;
       const list = clubPlayerMap.get(player.clubId) ?? [];
       list.push(player.id);
