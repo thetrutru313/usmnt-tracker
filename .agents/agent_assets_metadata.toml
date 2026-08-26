@@ -497,3 +497,10 @@ uri = "file://reports/eligibility-correctness-fixes-report.md"
 type = "text"
 title = "Eligibility Correctness Fixes — Report"
 description = "Report on the three eligibility/discovery bugs fixed: birthplace false positives, duplicated senior-caps logic, and stale candidate age."
+
+[[outputs]]
+id = "54-EVFUZrPywSfi-6YzDJ"
+uri = "file://reports/dual-national-false-positive-investigation.md"
+type = "text"
+title = "Dual-National False-Positive Investigation"
+description = "Investigation into detectSeniorNonUsCaps flagging capped USMNT internationals as DUAL_NATIONAL due to club competitions matching national-team keywords."
