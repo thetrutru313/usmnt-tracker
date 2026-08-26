@@ -38,6 +38,13 @@ export interface QualityStatBlock {
 export interface QualityScoreInputs {
   leagueId: number | null;
   leagueName: string | null;
+  /** The team behind the selected primary-league block — the club a
+   *  player's quality score is actually judged against. Used to display
+   *  the correct club even when `player_candidates.club_id` points at a
+   *  discovery-source entity (e.g. a youth national team roster) rather
+   *  than the player's real club. */
+  leagueTeamId: number | null;
+  leagueTeamName: string | null;
   coefficient: number;
   ageMultiplier: number;
   performanceSubtotal: number;
@@ -146,7 +153,12 @@ export async function resolveLeagueCoefficient(
 
 /** Steep enough that a 17-year-old with limited minutes outranks a
  *  22-year-old with substantially more in the same league — that is the
- *  ranking this feature exists to produce. */
+ *  ranking this feature exists to produce.
+ *
+ *  The tail (24+) collapses hard rather than merely tapering: this is a
+ *  *prospect* queue, and past a certain age a player is not a prospect
+ *  regardless of how well he's playing — volume must never compensate for
+ *  age here the way it can between, say, 19 and 22. */
 const AGE_MULTIPLIER_TABLE: Record<number, number> = {
   16: 2.0,
   17: 1.8,
@@ -155,7 +167,10 @@ const AGE_MULTIPLIER_TABLE: Record<number, number> = {
   20: 1.25,
   21: 1.1,
   22: 1.0,
-  23: 0.9,
+  23: 0.85,
+  24: 0.4,
+  25: 0.2,
+  26: 0.1,
 };
 
 /** Same precedence as the existing age gates: prefer live age computed from
@@ -164,7 +179,7 @@ const AGE_MULTIPLIER_TABLE: Record<number, number> = {
 export function ageMultiplierFor(age: number | null): number {
   if (age == null) return 1.0; // no age evidence — neutral, neither rewarded nor punished
   if (age <= 16) return AGE_MULTIPLIER_TABLE[16]!;
-  if (age >= 23) return AGE_MULTIPLIER_TABLE[23]!;
+  if (age >= 26) return AGE_MULTIPLIER_TABLE[26]!;
   return AGE_MULTIPLIER_TABLE[age] ?? 1.0;
 }
 
@@ -233,16 +248,40 @@ export function computePerformanceSubtotal(input: {
 // Primary league selection
 // ---------------------------------------------------------------------------
 
+/** Matches domestic and continental cup competitions — "FA Cup", "League
+ *  Cup", "DFB Pokal", "Coppa Italia", "Copa del Rey", "Leagues Cup", "US
+ *  Open Cup", "Community Shield", "Supercopa", "UEFA Champions League",
+ *  "UEFA Europa League", "CONCACAF Champions Cup", etc.
+ *
+ *  These are never a candidate's primary league: a domestic cup run can
+ *  rack up more minutes than a bench role in the actual league, and cup
+ *  competitions have no coefficient of their own (see
+ *  `selectPrimaryLeagueBlock`) — picking one as primary would wrongly drag
+ *  a strong-league player down to the unknown-league fallback. */
+const CUP_COMPETITION_RE =
+  /\bcup\b|pokal|coppa|copa del rey|copa do brasil|\btrophy\b|\bshield\b|supercup|super cup|champions league|europa league|conference league|libertadores|sudamericana/i;
+
+export function isCupCompetition(leagueName: string): boolean {
+  return CUP_COMPETITION_RE.test(leagueName);
+}
+
 /**
  * Picks the stat block that represents the player's primary club
  * competition for the season — the highest-minutes block that is neither a
- * friendly nor a national-team competition. That block's `league.id` is
- * what gates the quality score; a cup run or a single NT friendly must not
- * substitute for where the player actually earns his minutes.
+ * friendly, a national-team competition, nor a domestic/continental cup.
+ * That block's `league.id` (and `team`) is what gates the quality score and
+ * what gets displayed as the player's club; a cup run, an NT friendly, or a
+ * youth-national-team appearance must never substitute for where the player
+ * actually earns his club minutes.
+ *
+ * Returns `null` when a candidate has no qualifying club-league block at
+ * all (e.g. only cup or national-team appearances this season) — callers
+ * must fall back to the unknown-league coefficient rather than picking a
+ * cup, and must not display a club for a player with no real primary league.
  */
 export function selectPrimaryLeagueBlock(statistics: QualityStatBlock[]): QualityStatBlock | null {
   const clubBlocks = statistics.filter(
-    (s) => !isFriendlyLeague(s.league.name) && !isNationalTeamComp(s.league.name),
+    (s) => !isFriendlyLeague(s.league.name) && !isNationalTeamComp(s.league.name) && !isCupCompetition(s.league.name),
   );
   if (clubBlocks.length === 0) return null;
   return clubBlocks.reduce((best, s) => ((s.games.minutes ?? 0) > (best.games.minutes ?? 0) ? s : best));
@@ -251,6 +290,26 @@ export function selectPrimaryLeagueBlock(statistics: QualityStatBlock[]): Qualit
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
+
+/**
+ * Real raw scores (coefficient × ageMultiplier × performance) rarely
+ * approach the theoretical max of 2.0 (a top-league, ≤16-year-old, maxed-out
+ * performance) — observed raw values in a typical candidate pool top out
+ * around 0.5-0.6. Dividing by 2.0 compressed the whole usable range into the
+ * bottom third of the 0-100 scale (top of the queue ~29, twentieth ~19),
+ * leaving adjacent ranks a point or two apart — noise, not signal.
+ *
+ * Dividing by a realistic ceiling instead (clamped to 100 for the rare case
+ * that exceeds it) spreads the pool across the full scale so the strongest
+ * candidate in a typical pool reads in the 80s and ranks separate visibly.
+ * This only changes the raw-to-display mapping — it is a monotonic
+ * (order-preserving) transform, so ranking is unaffected.
+ */
+const NORMALIZATION_CEILING = 0.7;
+
+export function normalizeRawScore(raw: number): number {
+  return Math.max(0, Math.min(100, Math.round((raw / NORMALIZATION_CEILING) * 100)));
+}
 
 /**
  * Computes the 0-100 prospect quality score:
@@ -282,7 +341,9 @@ export async function computeQualityScore(input: {
   const leagueName = primary?.league.name ?? null;
 
   const appearances = input.statistics
-    .filter((s) => !isFriendlyLeague(s.league.name) && !isNationalTeamComp(s.league.name))
+    .filter(
+      (s) => !isFriendlyLeague(s.league.name) && !isNationalTeamComp(s.league.name) && !isCupCompetition(s.league.name),
+    )
     .reduce((n, s) => n + (s.games.appearences ?? s.games.lineups ?? 0), 0);
 
   const coefficient = await resolveLeagueCoefficient(leagueId, leagueName);
@@ -295,14 +356,15 @@ export async function computeQualityScore(input: {
   });
 
   const raw = coefficient * ageMultiplier * performanceSubtotal;
-  // Theoretical max raw = 1.0 (coefficient) × 2.0 (age) × 1.0 (performance) = 2.0.
-  const score = Math.max(0, Math.min(100, Math.round((raw / 2) * 100)));
+  const score = normalizeRawScore(raw);
 
   return {
     score,
     inputs: {
       leagueId,
       leagueName,
+      leagueTeamId: primary?.team.id ?? null,
+      leagueTeamName: primary?.team.name ?? null,
       coefficient,
       ageMultiplier,
       performanceSubtotal,

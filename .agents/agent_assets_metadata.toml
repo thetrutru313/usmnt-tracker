@@ -525,3 +525,10 @@ uri = "file://reports/prospect-quality-score-report.md"
 type = "text"
 title = "Prospect Quality Score — Implementation & Dry-Run Report"
 description = "Formula design, verification results, and the top-20 dry-run ranking for the new prospect quality score feature."
+
+[[outputs]]
+id = "rrXJO5KR4tKo_z5gCHkLc"
+uri = "file://reports/prospect-quality-score-tuning-report.md"
+type = "text"
+title = "Prospect Quality Score — Tuning Pass Report"
+description = "Age-curve fix, rescaled 0-100 mapping, cup-league exclusion, club-display fix, and the item-2 investigation (dev DB only), plus a re-run dry run with the new top-20."

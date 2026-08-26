@@ -351,10 +351,23 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     signalsByCandidate.set(sig.candidateId, list);
   }
 
-  const enriched = filteredCandidates.map((c) => ({
-    ...c,
-    signals: signalsByCandidate.get(c.id) ?? [],
-  }));
+  const enriched = filteredCandidates.map((c) => {
+    // The candidate's `clubId` points at whatever tracked entity's roster
+    // discovery originally found this player on — which can be a youth
+    // national team (e.g. "United States U20") used purely as a discovery
+    // source, not the player's actual club. Once quality scoring has run,
+    // prefer the team behind the selected primary league (the league the
+    // score itself is judged against) so the displayed club always matches
+    // the displayed league. Falls back to the discovery-source club name
+    // for rows that haven't been scored yet.
+    const inputs = c.qualityScoreInputs as { leagueTeamName?: string | null } | null;
+    const clubName = inputs?.leagueTeamName ?? c.clubName;
+    return {
+      ...c,
+      clubName,
+      signals: signalsByCandidate.get(c.id) ?? [],
+    };
+  });
 
   res.json({ candidates: enriched, pendingRescore: pendingRescoreRow?.total ?? 0 });
 });

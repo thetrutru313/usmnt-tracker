@@ -29,6 +29,8 @@ import {
   computePerformanceSubtotal,
   resolveLeagueCoefficient,
   selectPrimaryLeagueBlock,
+  isCupCompetition,
+  normalizeRawScore,
   _resetLeagueStrengthCacheForTesting,
   type QualityStatBlock,
 } from "../qualityScore";
@@ -57,22 +59,27 @@ beforeEach(() => {
 });
 
 describe("quality score — ranking scenarios", () => {
-  it("a 17-year-old with 600 minutes in the Bundesliga outranks a 22-year-old with 2500 minutes in the same league", async () => {
+  it("a 17-year-old with 600 minutes in USL Championship outranks a 22-year-old with 2500 minutes in the same league", async () => {
+    // Uses a lower-tier league (not Bundesliga) so neither profile clamps at
+    // the 100 ceiling — that would make the comparison meaningless rather
+    // than false. The tuning-scenario tests below cover top-tier leagues.
     const young = await computeQualityScore({
-      statistics: [clubBlock(78, "Bundesliga", { minutes: 600, lineups: 7, appearences: 8, rating: "7.00" })],
+      statistics: [clubBlock(255, "USL Championship", { minutes: 600, lineups: 7, appearences: 8, rating: "7.00" })],
       minutes: 600,
       starts: 7,
       rating: "7.00",
       age: 17,
     });
     const older = await computeQualityScore({
-      statistics: [clubBlock(78, "Bundesliga", { minutes: 2500, lineups: 28, appearences: 28, rating: "7.00" })],
+      statistics: [clubBlock(255, "USL Championship", { minutes: 2500, lineups: 28, appearences: 28, rating: "7.00" })],
       minutes: 2500,
       starts: 28,
       rating: "7.00",
       age: 22,
     });
     expect(young.score).toBeGreaterThan(older.score);
+    expect(young.score).toBeLessThan(100);
+    expect(older.score).toBeLessThan(100);
   });
 
   it("a 22-year-old with 2500 minutes in the Bundesliga outranks the same player profile in USL Championship", async () => {
@@ -163,13 +170,21 @@ describe("quality score — ranking scenarios", () => {
 });
 
 describe("ageMultiplierFor", () => {
-  it("returns the table value at each boundary and clamps outside it", () => {
+  it("returns the table value at each boundary and collapses hard past the prospect window", () => {
     expect(ageMultiplierFor(16)).toBe(2.0);
     expect(ageMultiplierFor(10)).toBe(2.0); // clamps for anything younger than the table's floor
     expect(ageMultiplierFor(17)).toBe(1.8);
+    expect(ageMultiplierFor(18)).toBe(1.6);
+    expect(ageMultiplierFor(19)).toBe(1.4);
+    expect(ageMultiplierFor(20)).toBe(1.25);
+    expect(ageMultiplierFor(21)).toBe(1.1);
     expect(ageMultiplierFor(22)).toBe(1.0);
-    expect(ageMultiplierFor(23)).toBe(0.9);
-    expect(ageMultiplierFor(30)).toBe(0.9); // clamps at the table's ceiling
+    expect(ageMultiplierFor(23)).toBe(0.85);
+    expect(ageMultiplierFor(24)).toBe(0.4);
+    expect(ageMultiplierFor(25)).toBe(0.2);
+    expect(ageMultiplierFor(26)).toBe(0.1);
+    expect(ageMultiplierFor(31)).toBe(0.1); // clamps at the table's floor — the tail never recovers
+    expect(ageMultiplierFor(null)).toBe(1.0); // no age evidence — neutral
   });
 });
 
@@ -182,5 +197,127 @@ describe("selectPrimaryLeagueBlock", () => {
     ];
     const primary = selectPrimaryLeagueBlock(blocks);
     expect(primary?.league.id).toBe(78);
+  });
+
+  it("never picks a domestic or continental cup as the primary league, even with more minutes than the real league", () => {
+    const blocks: QualityStatBlock[] = [
+      { ...clubBlock(78, "Bundesliga", { minutes: 2000 }), team: { id: 10, name: "Bayern Munich" } },
+      { ...clubBlock(9999, "DFB Pokal", { minutes: 200 }), team: { id: 10, name: "Bayern Munich" } },
+    ];
+    const primary = selectPrimaryLeagueBlock(blocks);
+    expect(primary?.league.id).toBe(78);
+    expect(primary?.league.name).toBe("Bundesliga");
+  });
+
+  it("returns null (never a cup) when a candidate has only cup appearances", () => {
+    const blocks: QualityStatBlock[] = [
+      clubBlock(9998, "Coppa Italia", { minutes: 300 }),
+      clubBlock(9997, "Leagues Cup", { minutes: 150 }),
+    ];
+    expect(selectPrimaryLeagueBlock(blocks)).toBeNull();
+  });
+});
+
+describe("isCupCompetition", () => {
+  it("recognizes common domestic/continental cups and leaves real leagues alone", () => {
+    expect(isCupCompetition("DFB Pokal")).toBe(true);
+    expect(isCupCompetition("Coppa Italia")).toBe(true);
+    expect(isCupCompetition("Leagues Cup")).toBe(true);
+    expect(isCupCompetition("FA Cup")).toBe(true);
+    expect(isCupCompetition("UEFA Champions League")).toBe(true);
+    expect(isCupCompetition("Major League Soccer")).toBe(false);
+    expect(isCupCompetition("USL Championship")).toBe(false);
+    expect(isCupCompetition("Bundesliga")).toBe(false);
+  });
+});
+
+describe("normalizeRawScore", () => {
+  it("preserves rank order exactly — a purely monotonic raw-to-display mapping", () => {
+    // All values stay under the 0.7 ceiling so none clamp to 100 — clamped
+    // ties are an expected, separate property of a bounded 0-100 scale, not
+    // something this monotonicity test is meant to exercise.
+    const rawValues = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65];
+    const scored = rawValues.map((raw) => ({ raw, score: normalizeRawScore(raw) }));
+    const byRawDesc = [...scored].sort((a, b) => b.raw - a.raw);
+    const byScoreDesc = [...scored].sort((a, b) => b.score - a.score);
+    // Every raw value here is distinct enough that a monotonic mapping cannot
+    // tie or invert their order (ties are only possible once several raws
+    // clamp to 100, which is not the case in this sample).
+    expect(byScoreDesc.map((s) => s.raw)).toEqual(byRawDesc.map((s) => s.raw));
+  });
+
+  it("spreads a typical pool across the scale instead of compressing it into the bottom third", () => {
+    // A strong-but-not-maximal candidate (e.g. 0.55 raw, roughly what a
+    // young MLS starter scores) should land in the 70s-80s, not the 20s.
+    expect(normalizeRawScore(0.55)).toBeGreaterThanOrEqual(70);
+  });
+});
+
+describe("computeQualityScore — league team propagation", () => {
+  it("reports the primary league's team as leagueTeamName/leagueTeamId, not just its league", async () => {
+    const result = await computeQualityScore({
+      statistics: [{ ...clubBlock(78, "Bundesliga", { minutes: 900 }), team: { id: 157, name: "Bayern Munich" } }],
+      minutes: 900,
+      starts: 10,
+      rating: "7.00",
+      age: 19,
+    });
+    expect(result.inputs.leagueTeamId).toBe(157);
+    expect(result.inputs.leagueTeamName).toBe("Bayern Munich");
+  });
+});
+
+describe("quality score — required tuning scenarios", () => {
+  it("a 26-year-old with 3000 minutes in Serie A ranks below a 19-year-old with 800 minutes in Serie A", async () => {
+    const veteran = await computeQualityScore({
+      statistics: [clubBlock(135, "Serie A", { minutes: 3000, lineups: 33, appearences: 33, rating: "7.20" })],
+      minutes: 3000,
+      starts: 33,
+      rating: "7.20",
+      age: 26,
+    });
+    const prospect = await computeQualityScore({
+      statistics: [clubBlock(135, "Serie A", { minutes: 800, lineups: 9, appearences: 10, rating: "6.80" })],
+      minutes: 800,
+      starts: 9,
+      rating: "6.80",
+      age: 19,
+    });
+    expect(prospect.score).toBeGreaterThan(veteran.score);
+  });
+
+  it("a Bundesliga player with 2000 league minutes and 200 DFB Pokal minutes is scored with the Bundesliga coefficient, not the fallback", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined as never);
+    const result = await computeQualityScore({
+      statistics: [
+        clubBlock(78, "Bundesliga", { minutes: 2000, lineups: 22, appearences: 22, rating: "7.00" }),
+        clubBlock(9999, "DFB Pokal", { minutes: 200, lineups: 2, appearences: 2, rating: "7.50" }),
+      ],
+      minutes: 2000,
+      starts: 22,
+      rating: "7.00",
+      age: 21,
+    });
+    expect(result.inputs.leagueId).toBe(78);
+    expect(result.inputs.coefficient).toBe(1.0); // Bundesliga's real coefficient, not the 0.25 fallback
+    warnSpy.mockRestore();
+  });
+
+  it("a player with only cup appearances gets the unknown-league coefficient and logs a warning", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined as never);
+    const result = await computeQualityScore({
+      statistics: [clubBlock(9998, "Coppa Italia", { minutes: 300, lineups: 3, appearences: 3, rating: "7.00" })],
+      minutes: 300,
+      starts: 3,
+      rating: "7.00",
+      age: 20,
+    });
+    expect(result.inputs.leagueId).toBeNull();
+    expect(result.inputs.coefficient).toBe(0.25);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ leagueName: null }),
+      expect.stringContaining("no league id"),
+    );
+    warnSpy.mockRestore();
   });
 });

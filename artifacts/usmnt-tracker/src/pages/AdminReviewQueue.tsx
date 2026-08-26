@@ -29,6 +29,11 @@ interface EligibilitySignal {
 interface QualityScoreInputs {
   leagueId: number | null;
   leagueName: string | null;
+  // The team behind the selected primary league — used server-side to
+  // correct `clubName` when the candidate's discovery-source club (e.g. a
+  // youth national team roster) isn't the player's real club.
+  leagueTeamId?: number | null;
+  leagueTeamName?: string | null;
   coefficient: number;
   ageMultiplier: number;
   performanceSubtotal: number;
