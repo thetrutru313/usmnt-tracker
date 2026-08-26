@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   serial,
@@ -83,6 +84,32 @@ export const playerCandidatesTable = pgTable("player_candidates", {
    * "duplicate of candidate #<duplicateOfId>".
    */
   duplicateOfId: integer("duplicate_of_id"),
+
+  // --- Prospect quality score (separate from eligibility confidence) ---
+  /** 0-100. Answers "is he worth my attention", not "can he play for the
+   *  US" — see `eligibilityConfidence` for the latter. Computed by
+   *  `computeQualityScore` in `src/lib/qualityScore.ts`; never derived from
+   *  or blended into eligibility scoring. Null until first scored. */
+  qualityScore: integer("quality_score"),
+  qualityScoredAt: timestamp("quality_scored_at", { withTimezone: true }),
+  /**
+   * The inputs that produced `qualityScore`, so a coefficient retune can be
+   * diffed against what actually drove a past score. Shape (all fields
+   * optional/nullable to tolerate schema evolution):
+   *   {
+   *     leagueId: number | null;       // API-Football league.id used
+   *     leagueName: string | null;
+   *     coefficient: number;           // league_strength coefficient applied
+   *     ageMultiplier: number;
+   *     performanceSubtotal: number;   // 0-1 combined minutes/starts/rating
+   *     minutes: number;
+   *     starts: number;
+   *     appearances: number;
+   *     rating: number | null;
+   *     age: number | null;
+   *   }
+   */
+  qualityScoreInputs: jsonb("quality_score_inputs"),
 });
 
 export type PlayerCandidate = typeof playerCandidatesTable.$inferSelect;

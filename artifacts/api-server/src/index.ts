@@ -9,6 +9,7 @@ import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, syncUsmntStats, promoteNtSentinelIds } from "./lib/usmntSync";
 import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
+import { seedLeagueStrengthDefaults } from "./lib/qualityScore";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 const rawPort = process.env["PORT"];
@@ -202,6 +203,10 @@ async function runCriticalStartupSeeds(): Promise<void> {
 
 // Run critical seeds synchronously before the server begins accepting requests.
 await runCriticalStartupSeeds();
+
+// Seed league_strength defaults (insert-if-missing — never overwrites a
+// hand-tuned coefficient). Cheap and idempotent; safe to run every boot.
+await seedLeagueStrengthDefaults();
 
 app.listen(port, async (err) => {
   if (err) {

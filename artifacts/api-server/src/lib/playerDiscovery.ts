@@ -6,6 +6,7 @@ import { isFriendlyLeague } from "./playerStatsSync";
 import { evaluateEligibility, detectSeniorNonUsCaps, countNationalTeamCaps, type EligibilityProfile } from "./evaluateEligibility";
 import { getMinEligibilityScore, getMaxCandidateAge, getWeightFingerprint, getResolvedWeights, SIGNAL_REGISTRY } from "./eligibilitySignalsConfig";
 import { ageFromBirthDate } from "./playerClubSync";
+import { computeQualityScore } from "./qualityScore";
 
 // ---------------------------------------------------------------------------
 // Scans squad rosters at every tracked club for US-eligible players not yet
@@ -33,10 +34,16 @@ interface AfSquadResponse {
 
 export interface AfDiscoveryStatBlock {
   team: { id: number; name: string };
-  league: { name: string; season: number };
+  /** `id` is read only by the quality scorer (`qualityScore.ts`) to key
+   *  league-strength coefficients — eligibility scoring never uses it. */
+  league: { id: number; name: string; season: number };
   games: {
     lineups: number | null;
     minutes: number | null;
+    /** Total appearances (starts + substitute appearances) — API-Football's
+     *  own (misspelled) field name. Used only by the quality scorer's
+     *  starts-to-appearances ratio; eligibility scoring never reads it. */
+    appearences: number | null;
     position: string | null;
     rating: string | null;
   };
@@ -351,6 +358,26 @@ export async function discoverUSProspects(): Promise<{
       // counters — a youth-only history must never inflate the senior total.
       const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics);
 
+      // Prospect quality score — additive, independent of eligibility above.
+      // Never allowed to break discovery: a scoring failure here leaves the
+      // candidate unscored (null) rather than aborting the whole insert.
+      const currentRating = computeAvgRating(statistics);
+      let qualityScore: number | null = null;
+      let qualityInputs: Awaited<ReturnType<typeof computeQualityScore>>["inputs"] | null = null;
+      try {
+        const result = await computeQualityScore({
+          statistics,
+          minutes,
+          starts,
+          rating: currentRating,
+          age: liveAge,
+        });
+        qualityScore = result.score;
+        qualityInputs = result.inputs;
+      } catch (err) {
+        logger.warn({ err, name: player.name }, "Discovery: quality score computation failed — leaving candidate unscored");
+      }
+
       const dataSources = ["api_football"];
 
       // Slug-based duplicate detection: if an existing pending or promoted
@@ -391,6 +418,9 @@ export async function discoverUSProspects(): Promise<{
             usmntStatus: status,
             dataSources,
             status: "pending",
+            qualityScore,
+            qualityScoredAt: new Date(),
+            qualityScoreInputs: qualityInputs,
             ...(duplicateOfId != null ? { duplicateOfId, needsReview: true } : {}),
           })
           .onConflictDoUpdate({
@@ -410,6 +440,14 @@ export async function discoverUSProspects(): Promise<{
               currentSeasonRating: computeAvgRating(statistics),
               priorNationalTeamCaps: seniorCaps > 0 ? seniorCaps : null,
               priorYouthNtCaps: youthCaps > 0 ? youthCaps : null,
+              // Quality scoring ranks; it is not gated by is_manual_override
+              // the way eligibility confidence/status are, since an operator
+              // override targets USMNT eligibility, not general prospect
+              // interest — but it never runs for manually-overridden rows'
+              // eligibility fields above, keeping the two concerns separate.
+              qualityScore,
+              qualityScoredAt: new Date(),
+              qualityScoreInputs: qualityInputs,
               // Re-flag duplicates on rescore in case a previously dismissed
               // candidate with the same name was re-inserted.
               ...(duplicateOfId != null ? { duplicateOfId, needsReview: true } : {}),
@@ -596,6 +634,27 @@ export async function rescoreAllCandidates(
         );
       }
 
+      // Prospect quality score — additive, independent of eligibility above.
+      // Reuses the same friendly-excluded season aggregates the eligibility
+      // path already fetched (applyQualityGate), not a second computation.
+      const { starts: qualityStarts, minutes: qualityMinutes } = applyQualityGate(profile.statistics);
+      const currentRating = computeAvgRating(profile.statistics);
+      let qualityScore: number | null = null;
+      let qualityInputs: Awaited<ReturnType<typeof computeQualityScore>>["inputs"] | null = null;
+      try {
+        const result = await computeQualityScore({
+          statistics: profile.statistics,
+          minutes: qualityMinutes,
+          starts: qualityStarts,
+          rating: currentRating,
+          age: liveAge,
+        });
+        qualityScore = result.score;
+        qualityInputs = result.inputs;
+      } catch (err) {
+        logger.warn({ err, candidateId: candidate.id, name: candidate.name }, "Rescore: quality score computation failed — leaving candidate unscored");
+      }
+
       await dbInstance
         .update(playerCandidatesTable)
         .set({
@@ -606,6 +665,12 @@ export async function rescoreAllCandidates(
           priorNationalTeamCaps: seniorCaps > 0 ? seniorCaps : null,
           priorYouthNtCaps: youthCaps > 0 ? youthCaps : null,
           lastScoredAt: new Date(),
+          qualityScore,
+          qualityScoredAt: new Date(),
+          qualityScoreInputs: qualityInputs,
+          currentSeasonStarts: qualityStarts,
+          currentSeasonMinutes: qualityMinutes,
+          currentSeasonRating: currentRating,
           // Demote below-threshold or over-age candidates to avoid surfacing low-quality noise
           ...(score < minScore || isOverAge ? { status: "dismissed" as const } : {}),
         })

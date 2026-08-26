@@ -22,6 +22,23 @@ interface EligibilitySignal {
   detectedAt: string;
 }
 
+/** Persisted inputs behind `qualityScore` — see `qualityScore.ts` in the
+ *  api-server. Shown so an operator can see at a glance why a candidate
+ *  scored the way they did, and so a coefficient retune can be diffed
+ *  against what actually drove a past score. */
+interface QualityScoreInputs {
+  leagueId: number | null;
+  leagueName: string | null;
+  coefficient: number;
+  ageMultiplier: number;
+  performanceSubtotal: number;
+  minutes: number;
+  starts: number;
+  appearances: number;
+  rating: number | null;
+  age: number | null;
+}
+
 interface ReviewCandidate {
   id: number;
   name: string;
@@ -36,6 +53,11 @@ interface ReviewCandidate {
   status: string;
   needsReview: boolean | null;
   signals: EligibilitySignal[];
+  /** "Is he worth my attention" — separate from eligibilityConfidence
+   *  ("can he play for the US"). Null until first scored. */
+  qualityScore: number | null;
+  qualityScoredAt: string | null;
+  qualityScoreInputs: QualityScoreInputs | null;
 }
 
 /** Returns the best display name for a candidate.
@@ -49,6 +71,20 @@ function getDisplayName(candidate: ReviewCandidate): string {
     return `${candidate.firstName} ${surname}`;
   }
   return candidate.name;
+}
+
+/** Quality score is the review queue's default ordering — descending, with
+ *  unscored candidates (null) sorted to the bottom rather than treated as
+ *  zero, so a candidate simply awaiting its first rescore doesn't look like
+ *  a genuinely low-quality prospect. Eligibility confidence stays visible on
+ *  each card but no longer determines order. */
+function sortByQualityScoreDesc(candidates: ReviewCandidate[]): ReviewCandidate[] {
+  return [...candidates].sort((a, b) => {
+    if (a.qualityScore == null && b.qualityScore == null) return 0;
+    if (a.qualityScore == null) return 1;
+    if (b.qualityScore == null) return -1;
+    return b.qualityScore - a.qualityScore;
+  });
 }
 
 interface RescoreStatus {
@@ -174,6 +210,49 @@ function ConfidenceBar({ value }: { value: number | null }) {
           style={{ width: `${value}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+// ─── Quality score ────────────────────────────────────────────────────────────
+
+/** Separate from `ConfidenceBar` (eligibility) — this answers "is he worth
+ *  my attention", not "can he play for the US". Shows the league and
+ *  coefficient that drove the number so an operator can see at a glance why
+ *  a candidate scored the way they did. */
+function QualityScoreBar({ value, inputs }: { value: number | null; inputs: QualityScoreInputs | null }) {
+  if (value === null) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Quality</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+            Unscored
+          </span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted overflow-hidden" />
+      </div>
+    );
+  }
+  const color = value >= 65 ? "bg-violet-500" : value >= 35 ? "bg-sky-400" : "bg-slate-400";
+  const label = value >= 65 ? "text-violet-600" : value >= 35 ? "text-sky-600" : "text-slate-500";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Quality</span>
+        <span className={`text-xs font-bold tabular-nums ${label}`}>{value}</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${color}`}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      {inputs && inputs.leagueName && (
+        <p className="text-[11px] text-muted-foreground/80 font-mono truncate">
+          {inputs.leagueName} (×{inputs.coefficient.toFixed(2)}) · age ×{inputs.ageMultiplier.toFixed(2)} · {inputs.minutes}min
+        </p>
+      )}
     </div>
   );
 }
@@ -342,8 +421,12 @@ function CandidateReviewCard({
         <StatusBadge status={candidate.usmntStatus} />
       </div>
 
-      {/* Confidence bar */}
-      <ConfidenceBar value={candidate.eligibilityConfidence} />
+      {/* Quality score (default sort order) and eligibility confidence — two
+          different questions, shown side by side but never blended. */}
+      <div className="grid grid-cols-2 gap-3">
+        <QualityScoreBar value={candidate.qualityScore} inputs={candidate.qualityScoreInputs} />
+        <ConfidenceBar value={candidate.eligibilityConfidence} />
+      </div>
 
       {/* Data sources */}
       {candidate.dataSources && candidate.dataSources.length > 0 && (
@@ -464,7 +547,7 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
         apiFetch("/admin/review-queue", token) as Promise<{ candidates: ReviewCandidate[]; pendingRescore: number }>,
         apiFetch("/admin/rescore-status", token) as Promise<RescoreStatus>,
       ]);
-      setCandidates(queueData.candidates);
+      setCandidates(sortByQualityScoreDesc(queueData.candidates));
       setRescoreStatus(statusData);
     } catch (err) {
       if (err instanceof SessionExpiredError) { handleSessionExpired(); return; }

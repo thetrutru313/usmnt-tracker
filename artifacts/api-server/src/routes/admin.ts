@@ -266,6 +266,11 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
       isManualOverride: playerCandidatesTable.isManualOverride,
       statusNotes: playerCandidatesTable.statusNotes,
       duplicateOfId: playerCandidatesTable.duplicateOfId,
+      // Prospect quality score — separate from eligibilityConfidence above.
+      // "Is he worth my attention" vs. "can he play for the US".
+      qualityScore: playerCandidatesTable.qualityScore,
+      qualityScoredAt: playerCandidatesTable.qualityScoredAt,
+      qualityScoreInputs: playerCandidatesTable.qualityScoreInputs,
     })
     .from(playerCandidatesTable)
     .leftJoin(clubsTable, eq(playerCandidatesTable.clubId, clubsTable.id))

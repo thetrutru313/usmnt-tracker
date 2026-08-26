@@ -19,10 +19,11 @@ function statBlock(
 ): AfDiscoveryStatBlock {
   return {
     team: { id: 1, name: "Club FC" },
-    league: { name: overrides.leagueName ?? "Premier League", season: 2024 },
+    league: { id: 39, name: overrides.leagueName ?? "Premier League", season: 2024 },
     games: {
       lineups: overrides.lineups ?? 0,
       minutes: overrides.minutes ?? 0,
+      appearences: overrides.lineups ?? 0,
       position: "MF",
       rating: null,
     },

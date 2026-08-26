@@ -50,6 +50,13 @@
       "when": 1787775434403,
       "tag": "0006_api_football_teams_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787779210189,
+      "tag": "0007_quality_score",
+      "breakpoints": true
     }
   ]
 }

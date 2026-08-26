@@ -8,3 +8,4 @@
 - [fixtures.nt_level senior/youth classification](nt-level-classification.md) — allowlist/fail-closed design for senior-only filtering; derive age group from the US side only; dev-DB test sort_order race gotcha.
 - [USMNT candidate rescore scheduling](usmnt-rescore-scheduling.md) — rescoreAllCandidates() only runs on a 7-day setInterval, not at server startup; restarting the workflow does not drain the backlog.
 - [DUAL_NATIONAL team-identity gate](dual-national-team-identity-gate.md) — league-name matching alone can't decide a national-team cap; must confirm via API-Football team.national (DB-cached).
+- [Prospect quality score design](quality-score-design.md) — league-id keying, insert-if-missing coefficient seeding, multiplicative formula shape, and try/catch isolation from eligibility scoring.

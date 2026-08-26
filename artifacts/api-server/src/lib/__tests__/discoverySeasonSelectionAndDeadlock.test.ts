@@ -175,8 +175,8 @@ function setupSelectMock(rows: unknown[]) {
 function statBlock(minutes: number, lineups = 0) {
   return {
     team: { id: 1, name: "Club FC" },
-    league: { name: "Test League", season: CURRENT_YEAR },
-    games: { lineups, minutes, position: "MF", rating: null },
+    league: { id: 39, name: "Test League", season: CURRENT_YEAR },
+    games: { lineups, minutes, appearences: lineups, position: "MF", rating: null },
   };
 }
 
