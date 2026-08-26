@@ -1,0 +1,88 @@
+Commit and push the DUAL_NATIONAL false-positive fix to GitHub.
+
+REPO: https://github.com/thetrutru313/usmnt-tracker.git
+TOKEN: Replit Secret named GITHUB_TOKEN. Read it from the environment as
+$GITHUB_TOKEN. Do NOT print it, echo it, interpolate it into a URL, or write
+it into any file, commit message, report, or logged shell command.
+
+## Credential handling
+
+Do not put the token in the remote URL — that would persist it in
+.git/config. Configure a local credential helper that reads the environment
+variable by reference instead:
+
+  git remote set-url origin https://github.com/thetrutru313/usmnt-tracker.git
+  git config --local credential.helper '!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f'
+
+Then push with `git push origin main`. If a command would ever render the
+token's value into stdout or into a file, do not run it — tell me instead.
+
+## Before staging
+
+1. Run `git status` and show me the full output.
+2. Confirm nothing sensitive is about to be staged: no .env, no .env.local,
+   no credential files, no database dumps. Verify .gitignore covers them.
+3. Run `git diff --stat` so I can see the scope.
+
+## What to commit
+
+Only the team-nationality work. Expected files:
+
+  lib/db/src/schema/                          (api_football_teams table)
+  lib/db/drizzle/0006_*.sql
+  lib/db/drizzle/meta/_journal.json
+  lib/db/drizzle/meta/0006_snapshot.json
+  lib/db/drizzle/backfill/0006_seed_api_football_teams_from_clubs.sql
+  artifacts/api-server/src/lib/teamNationalityCache.ts
+  artifacts/api-server/src/lib/evaluateEligibility.ts
+  artifacts/api-server/src/lib/playerDiscovery.ts
+  artifacts/api-server/src/lib/__tests__/   (new + updated tests)
+  plus any callers updated for the async signature change
+
+The three drizzle files must go in together — migration SQL, journal, and
+snapshot. A journal referencing a missing file breaks drizzle-kit migrate.
+
+Include the backfill SQL file even though it is not executed by the
+migration runner — it is the record of what I ran by hand in production.
+
+If your actual change set differs from this list, show me the difference
+before committing rather than silently including or dropping files.
+
+## Commit message
+
+  fix(eligibility): detect national teams by team identity, not league name
+
+  National-team detection matched league names against a keyword regex, so
+  club competitions sharing those keywords — CONCACAF Champions League, FIFA
+  Club World Cup — counted as national-team appearances with the player's
+  club standing in for a country. Capped USMNT internationals including
+  Arriola, Morris, and Delgado were flagged DUAL_NATIONAL as a result.
+
+  - Add api_football_teams cache (id, name, country, is_national, fetched_at)
+    populated once per team from /teams?id=, which returns an authoritative
+    national boolean
+  - Add isTeamNational() resolver: DB cache first, API on miss, never
+    re-fetched. Fails closed on lookup failure and logs, rather than guessing
+  - Gate detectSeniorNonUsCaps and countNationalTeamCaps on team identity;
+    league-name matching is now only a cheap pre-filter and is never
+    sufficient on its own
+  - Retain a name-pattern backstop for youth national teams, which
+    API-Football reports as national: false
+  - Youth exclusion logic unchanged
+
+  evaluateEligibility and its cap helpers are now async with an injectable
+  resolver so tests can stub team identity.
+
+  Dry run over currently-flagged candidates: 26 of 31 clear as false
+  positives, 5 remain genuine dual nationals. No stored statuses changed —
+  applied by rescore.
+
+  Migration 0006 is DDL only. The cache seed for existing clubs is in
+  lib/db/drizzle/backfill/ and is run by hand in production, since Publish
+  carries the schema diff but not data.
+
+## After pushing
+
+Run `git log --stat -1` and show me the output so I can confirm what landed.
+Then confirm the working tree is clean and the local branch is not ahead of
+origin/main.
