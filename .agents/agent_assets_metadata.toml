@@ -518,3 +518,10 @@ uri = "file://reports/prior-caps-staleness-investigation.md"
 type = "text"
 title = "Prior caps staleness investigation"
 description = "Read-only findings: rescore does write both cap columns, but candidate 137 is not Stas Kornzeniowski (that's id 963), and review-queue numbers with a null last_scored_at are stale, not current."
+
+[[outputs]]
+id = "T66GfbxrUp_TxCTcWZhw9"
+uri = "file://reports/prospect-quality-score-report.md"
+type = "text"
+title = "Prospect Quality Score — Implementation & Dry-Run Report"
+description = "Formula design, verification results, and the top-20 dry-run ranking for the new prospect quality score feature."
