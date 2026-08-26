@@ -511,3 +511,10 @@ uri = "file://reports/dual-national-team-identity-gate-fix.md"
 type = "text"
 title = "DUAL_NATIONAL team-identity gate fix"
 description = "Root cause, fix details, test coverage, and the read-only impact dry-run (31 flagged, 5 still qualify, 26 would clear)."
+
+[[outputs]]
+id = "bka1qy4VGCc9mnFN36kMW"
+uri = "file://reports/prior-caps-staleness-investigation.md"
+type = "text"
+title = "Prior caps staleness investigation"
+description = "Read-only findings: rescore does write both cap columns, but candidate 137 is not Stas Kornzeniowski (that's id 963), and review-queue numbers with a null last_scored_at are stale, not current."
