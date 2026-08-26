@@ -144,6 +144,8 @@ vi.mock("../evaluateEligibility.js", () => ({
     status: "US_ELIGIBLE_PROSPECT",
     signals: [],
   }),
+  detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+  countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
 }));
 
 vi.mock("../eligibilitySignalsConfig.js", () => ({
@@ -184,7 +186,7 @@ function makeProfileResponse() {
         firstname: "Alex",
         age: 21,
         nationality: "USA",
-        birth: { country: "USA", date: "2001-04-20", place: "Portland, OR" },
+        birth: { country: "USA", date: "2004-04-20", place: "Portland, OR" },
       },
       statistics: PASSING_STATS,
     },

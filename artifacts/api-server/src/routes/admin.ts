@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, playerCandidatesTable, playersTable, clubsTable, eligibilitySignalsTable } from "@workspace/db";
 import { requireAdminSession } from "../lib/adminAuth";
-import { eq, desc, isNull, isNotNull, or, inArray, and, count, lt, lte, asc } from "drizzle-orm";
-import { rescoreAllCandidates, backfillCandidateBirthplaces } from "../lib/playerDiscovery";
+import { eq, desc, isNull, isNotNull, or, inArray, and, count, lt, asc } from "drizzle-orm";
+import { rescoreAllCandidates, backfillCandidateBirthplaces, backfillCandidateDatesOfBirth } from "../lib/playerDiscovery";
 import { getMaxCandidateAge, SIGNAL_REGISTRY, getResolvedWeights } from "../lib/eligibilitySignalsConfig";
 import { logger } from "../lib/logger";
 import { afFetch, apiKey } from "../lib/apiFootballSync";
@@ -256,6 +256,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
       firstName: playerCandidatesTable.firstName,
       position: playerCandidatesTable.position,
       age: playerCandidatesTable.age,
+      dateOfBirth: playerCandidatesTable.dateOfBirth,
       clubName: clubsTable.name,
       usmntStatus: playerCandidatesTable.usmntStatus,
       eligibilityConfidence: playerCandidatesTable.eligibilityConfidence,
@@ -269,27 +270,29 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     .from(playerCandidatesTable)
     .leftJoin(clubsTable, eq(playerCandidatesTable.clubId, clubsTable.id))
     .where(
-      and(
-        or(
-          eq(playerCandidatesTable.status, "pending"),
-          eq(playerCandidatesTable.needsReview, true),
-        ),
-        // Exclude over-age candidates so rows inserted before a rescore cleans
-        // them up never surface in the UI. Candidates with no recorded age are
-        // kept — missing age is not a reason to hide them.
-        or(
-          isNull(playerCandidatesTable.age),
-          lte(playerCandidatesTable.age, maxAge),
-        ),
+      or(
+        eq(playerCandidatesTable.status, "pending"),
+        eq(playerCandidatesTable.needsReview, true),
       ),
     )
     .orderBy(desc(playerCandidatesTable.eligibilityConfidence));
+
+  // Exclude over-age candidates so rows inserted before a rescore cleans them
+  // up never surface in the UI. Age is computed live from date_of_birth when
+  // available — the stored `age` column is only a fallback for rows that
+  // predate date_of_birth tracking. Candidates with no age evidence at all
+  // are kept: missing age is not a reason to hide them. Done in JS (not SQL)
+  // because the live-age computation isn't expressible as a column filter.
+  const filteredCandidates = candidates.filter((c) => {
+    const liveAge = ageFromBirthDate(c.dateOfBirth) ?? c.age;
+    return liveAge == null || liveAge <= maxAge;
+  });
 
   // Compute pendingRescore in parallel with the signal fetch so the UI can
   // show a backlog warning without a separate request.
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  if (candidates.length === 0) {
+  if (filteredCandidates.length === 0) {
     const [[pendingRescoreRow]] = await Promise.all([
       db
         .select({ total: count() })
@@ -308,7 +311,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     return;
   }
 
-  const candidateIds = candidates.map((c) => c.id);
+  const candidateIds = filteredCandidates.map((c) => c.id);
   const [signals, [pendingRescoreRow]] = await Promise.all([
     db
       .select({
@@ -343,7 +346,7 @@ router.get("/admin/review-queue", async (_req, res): Promise<void> => {
     signalsByCandidate.set(sig.candidateId, list);
   }
 
-  const enriched = candidates.map((c) => ({
+  const enriched = filteredCandidates.map((c) => ({
     ...c,
     signals: signalsByCandidate.get(c.id) ?? [],
   }));
@@ -682,6 +685,36 @@ router.post("/admin/backfill-candidate-birthplace", async (_req, res): Promise<v
   // the shared afFetch queue.
   backfillCandidateBirthplaces().catch((err) =>
     logger.error({ err }, "Admin: candidate birthplace backfill crashed"),
+  );
+});
+
+/**
+ * POST /admin/backfill-candidate-dob
+ * For every player_candidates row that has an api_football_player_id but no
+ * date_of_birth, fetches birth.date from API-Football and writes it to the
+ * DB (also refreshing the display-only age column). Runs in the background —
+ * returns immediately with the number of candidates queued. Check server
+ * logs for per-candidate progress.
+ *
+ * This does not run automatically — it must be explicitly triggered here.
+ * Age gating in discovery/rescore already computes age live from
+ * date_of_birth when present; running this backfill lets that live
+ * computation apply retroactively to candidates discovered before
+ * date_of_birth was tracked.
+ */
+router.post("/admin/backfill-candidate-dob", async (_req, res): Promise<void> => {
+  if (!apiKey()) {
+    res.status(503).json({ error: "API_FOOTBALL_KEY not configured" });
+    return;
+  }
+
+  logger.info("Admin: candidate date-of-birth backfill triggered");
+  res.json({ ok: true });
+
+  // Run in background — backfillCandidateDatesOfBirth is rate-limited via
+  // the shared afFetch queue.
+  backfillCandidateDatesOfBirth().catch((err) =>
+    logger.error({ err }, "Admin: candidate date-of-birth backfill crashed"),
   );
 });
 

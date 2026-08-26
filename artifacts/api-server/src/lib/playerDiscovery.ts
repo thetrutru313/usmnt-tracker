@@ -3,8 +3,9 @@ import { eq, sql, isNull, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
-import { evaluateEligibility, type EligibilityProfile } from "./evaluateEligibility";
+import { evaluateEligibility, detectSeniorNonUsCaps, countNationalTeamCaps, type EligibilityProfile } from "./evaluateEligibility";
 import { getMinEligibilityScore, getMaxCandidateAge, getWeightFingerprint, getResolvedWeights, SIGNAL_REGISTRY } from "./eligibilitySignalsConfig";
+import { ageFromBirthDate } from "./playerClubSync";
 
 // ---------------------------------------------------------------------------
 // Scans squad rosters at every tracked club for US-eligible players not yet
@@ -68,25 +69,6 @@ export function slugify(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-}
-
-// National team competitions — presence of these league names in a stat block
-// means the player appeared for a national team, not a club.
-const NATIONAL_TEAM_RE =
-  /world cup|nations league|euro\b|copa am[eé]rica|gold cup|concacaf|olympic|qualification|qualifier|continental championship|africa cup|asian cup|afcon/i;
-
-function looksLikeNationalTeamCompetition(leagueName: string): boolean {
-  return NATIONAL_TEAM_RE.test(leagueName) && !isFriendlyLeague(leagueName);
-}
-
-function hasSeniorNonUsCaps(statistics: AfDiscoveryStatBlock[]): boolean {
-  return statistics.some(
-    (s) =>
-      looksLikeNationalTeamCompetition(s.league.name) &&
-      s.team.name !== "United States" &&
-      s.team.name !== "USA" &&
-      (s.games.lineups ?? 0) > 0,
-  );
 }
 
 /** Exported for unit tests — do not call from production code outside this module. */
@@ -315,11 +297,15 @@ export async function discoverUSProspects(): Promise<{
         continue;
       }
 
-      // Age gate — reject players older than the configured maximum age
-      if (player.age != null && player.age > maxAge) {
+      // Age gate — reject players older than the configured maximum age.
+      // Prefer the live age computed from API-Football's birth.date; the
+      // `age` field API-Football also returns is only used as a fallback
+      // when no birth date is available.
+      const liveAge = ageFromBirthDate(player.birth.date) ?? player.age;
+      if (liveAge != null && liveAge > maxAge) {
         skippedAge++;
         logger.debug(
-          { name: player.name, age: player.age, maxAge },
+          { name: player.name, age: liveAge, maxAge },
           "Discovery: candidate exceeds maximum age, skipping",
         );
         continue;
@@ -355,15 +341,15 @@ export async function discoverUSProspects(): Promise<{
       let eligibilityBasis: string;
       if (isUsNationality) {
         eligibilityBasis = "nationality";
-      } else if (!hasSeniorNonUsCaps(statistics)) {
+      } else if (!detectSeniorNonUsCaps(statistics)) {
         eligibilityBasis = "birth_country";
       } else {
         eligibilityBasis = "dual_national_unconfirmed";
       }
 
-      const priorNationalTeamCaps = statistics
-        .filter((s) => looksLikeNationalTeamCompetition(s.league.name))
-        .reduce((sum, s) => sum + (s.games.lineups ?? 0), 0);
+      // Senior and youth national-team caps are tracked as two separate
+      // counters — a youth-only history must never inflate the senior total.
+      const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
 
       const dataSources = ["api_football"];
 
@@ -389,6 +375,7 @@ export async function discoverUSProspects(): Promise<{
             firstName: player.firstname ?? null,
             position: inferPosition(statistics),
             age: player.age ?? null,
+            dateOfBirth: player.birth.date ?? null,
             clubId: club.id,
             apiFootballPlayerId: player.id,
             nationality,
@@ -397,7 +384,8 @@ export async function discoverUSProspects(): Promise<{
             currentSeasonStarts: starts,
             currentSeasonMinutes: minutes,
             currentSeasonRating: computeAvgRating(statistics),
-            priorNationalTeamCaps: priorNationalTeamCaps > 0 ? priorNationalTeamCaps : null,
+            priorNationalTeamCaps: seniorCaps > 0 ? seniorCaps : null,
+            priorYouthNtCaps: youthCaps > 0 ? youthCaps : null,
             eligibilityBasis,
             eligibilityConfidence: score,
             usmntStatus: status,
@@ -416,9 +404,12 @@ export async function discoverUSProspects(): Promise<{
               usmntStatus: sql`CASE WHEN ${playerCandidatesTable.isManualOverride} = true THEN ${playerCandidatesTable.usmntStatus} ELSE ${status}::usmnt_candidate_status END`,
               dataSources,
               birthplace: player.birth.place ?? null,
+              dateOfBirth: player.birth.date ?? null,
               currentSeasonStarts: starts,
               currentSeasonMinutes: minutes,
               currentSeasonRating: computeAvgRating(statistics),
+              priorNationalTeamCaps: seniorCaps > 0 ? seniorCaps : null,
+              priorYouthNtCaps: youthCaps > 0 ? youthCaps : null,
               // Re-flag duplicates on rescore in case a previously dismissed
               // candidate with the same name was re-inserted.
               ...(duplicateOfId != null ? { duplicateOfId, needsReview: true } : {}),
@@ -511,6 +502,7 @@ export async function rescoreAllCandidates(
       id: playerCandidatesTable.id,
       name: playerCandidatesTable.name,
       age: playerCandidatesTable.age,
+      dateOfBirth: playerCandidatesTable.dateOfBirth,
       apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
       isManualOverride: playerCandidatesTable.isManualOverride,
     })
@@ -551,7 +543,7 @@ export async function rescoreAllCandidates(
     try {
       // Re-fetch stats from API-Football, selecting the season with the most
       // minutes played rather than the first season with any statistics.
-      type RescoredProfile = { player: { nationality: string | null; birth: { country: string | null; place?: string | null } }; statistics: AfDiscoveryStatBlock[] };
+      type RescoredProfile = { player: { nationality: string | null; birth: { country: string | null; place?: string | null; date?: string | null } }; statistics: AfDiscoveryStatBlock[] };
       const profile = await selectBestSeasonProfile(seasonCandidates, (season) =>
         afFetch<RescoredProfile[]>(`/players?id=${candidate.apiFootballPlayerId}&season=${season}`),
       );
@@ -582,11 +574,24 @@ export async function rescoreAllCandidates(
 
       const { score, status, signals } = evaluateEligibility(eligibilityProfile);
 
-      // Dismiss candidates that exceed the age cap, regardless of their score.
-      const isOverAge = candidate.age != null && candidate.age > maxAge;
+      // Prior senior/youth national-team caps, kept as two separate counters
+      // (see countNationalTeamCaps) — a youth-only history must not inflate
+      // the senior total.
+      const { seniorCaps, youthCaps } = countNationalTeamCaps(profile.statistics);
+
+      // Freshly-fetched birth date, falling back to whatever is already on
+      // file so a transient missing field never blanks out a known DOB.
+      const dateOfBirth = profile.player.birth.date ?? candidate.dateOfBirth ?? null;
+
+      // Dismiss candidates that exceed the age cap, regardless of their
+      // score. Age is computed live from the birth date whenever one is
+      // known; the stored `age` column is only a fallback for candidates
+      // discovered before a birth date was ever recorded.
+      const liveAge = ageFromBirthDate(dateOfBirth) ?? candidate.age;
+      const isOverAge = liveAge != null && liveAge > maxAge;
       if (isOverAge) {
         logger.info(
-          { candidateId: candidate.id, name: candidate.name, age: candidate.age, maxAge },
+          { candidateId: candidate.id, name: candidate.name, age: liveAge, maxAge },
           "Rescore: candidate exceeds maximum age — dismissing",
         );
       }
@@ -597,6 +602,9 @@ export async function rescoreAllCandidates(
           eligibilityConfidence: score,
           usmntStatus: status,
           dataSources: ["api_football"],
+          dateOfBirth,
+          priorNationalTeamCaps: seniorCaps > 0 ? seniorCaps : null,
+          priorYouthNtCaps: youthCaps > 0 ? youthCaps : null,
           lastScoredAt: new Date(),
           // Demote below-threshold or over-age candidates to avoid surfacing low-quality noise
           ...(score < minScore || isOverAge ? { status: "dismissed" as const } : {}),
@@ -716,6 +724,111 @@ export async function backfillCandidateBirthplaces(options: {
   logger.info(
     { updated, notFound, failed, total: candidates.length },
     "Birthplace backfill: complete",
+  );
+  return { updated, notFound, failed, total: candidates.length };
+}
+
+// ---------------------------------------------------------------------------
+// Date-of-birth backfill
+// ---------------------------------------------------------------------------
+
+/** Minimal shape we need from the API-Football /players endpoint. */
+interface AfDateOfBirthRecord {
+  player: { birth: { date: string | null } };
+}
+
+/**
+ * For every `player_candidates` row that has an `api_football_player_id` but
+ * no `date_of_birth`, fetches `birth.date` from API-Football and writes it to
+ * the DB (also refreshing the display-only `age` column so both stay
+ * consistent). Mirrors `backfillCandidateBirthplaces`. Seasons are tried in
+ * descending order so players whose most recent activity is in a prior
+ * season still get a birth date returned.
+ *
+ * This function is only ever invoked from the `/admin/backfill-candidate-dob`
+ * route below — it is not called automatically on a schedule or at startup,
+ * so existing candidates keep their current age gate outcome until an
+ * operator explicitly triggers it.
+ *
+ * Returns counts of updated, notFound, and failed candidates.
+ *
+ * @param options.seasons  Season years to try, newest first.  Defaults to the
+ *   three most recent years relative to today.
+ */
+export async function backfillCandidateDatesOfBirth(options: {
+  seasons?: number[];
+} = {}): Promise<{ updated: number; notFound: number; failed: number; total: number }> {
+  const candidates = await db
+    .select({
+      id: playerCandidatesTable.id,
+      name: playerCandidatesTable.name,
+      apiFootballPlayerId: playerCandidatesTable.apiFootballPlayerId,
+    })
+    .from(playerCandidatesTable)
+    .where(
+      and(
+        isNull(playerCandidatesTable.dateOfBirth),
+        isNotNull(playerCandidatesTable.apiFootballPlayerId),
+      ),
+    );
+
+  const currentYear = new Date().getUTCFullYear();
+  const seasons = options.seasons ?? [currentYear, currentYear - 1, currentYear - 2];
+
+  logger.info({ count: candidates.length }, "Date-of-birth backfill: started");
+
+  let updated = 0;
+  let failed = 0;
+  let notFound = 0;
+
+  for (const candidate of candidates) {
+    if (!candidate.apiFootballPlayerId) {
+      logger.warn(
+        { candidateId: candidate.id, name: candidate.name },
+        "Date-of-birth backfill: skipping — no apiFootballPlayerId",
+      );
+      notFound++;
+      continue;
+    }
+    try {
+      let dateOfBirth: string | null = null;
+      for (const season of seasons) {
+        const [data] = await afFetch<AfDateOfBirthRecord[]>(
+          `/players?id=${candidate.apiFootballPlayerId}&season=${season}`,
+        );
+        dateOfBirth = data?.player?.birth?.date ?? null;
+        if (dateOfBirth) break;
+      }
+      if (!dateOfBirth) {
+        logger.debug(
+          { candidateId: candidate.id, name: candidate.name },
+          "Date-of-birth backfill: no birth date returned for any season",
+        );
+        notFound++;
+        continue;
+      }
+      const liveAge = ageFromBirthDate(dateOfBirth);
+      await db
+        .update(playerCandidatesTable)
+        .set({ dateOfBirth, ...(liveAge != null ? { age: liveAge } : {}) })
+        .where(eq(playerCandidatesTable.id, candidate.id));
+      logger.info(
+        { candidateId: candidate.id, name: candidate.name, dateOfBirth, liveAge },
+        "Date-of-birth backfill: updated",
+      );
+      updated++;
+    } catch (err) {
+      logger.warn(
+        { err, candidateId: candidate.id, name: candidate.name },
+        "Date-of-birth backfill: fetch failed",
+      );
+      failed++;
+    }
+  }
+
+  logger.info(
+    { updated, notFound, failed, total: candidates.length },
+    "Date-of-birth backfill: complete",
   );
   return { updated, notFound, failed, total: candidates.length };
 }

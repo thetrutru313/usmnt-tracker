@@ -131,6 +131,8 @@ vi.mock("../evaluateEligibility.js", () => ({
     status: "DUAL_NATIONAL",
     signals: [],
   }),
+  detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+  countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
 }));
 
 vi.mock("../eligibilitySignalsConfig.js", () => ({

@@ -128,6 +128,8 @@ vi.mock("../evaluateEligibility.js", () => ({
     status: "US_ELIGIBLE_PROSPECT",
     signals: [],
   }),
+  detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+  countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
 }));
 
 vi.mock("../eligibilitySignalsConfig.js", () => ({
@@ -166,7 +168,7 @@ function makeProfileResponse(apiId: number, name: string) {
         firstname: name.split(" ")[0] ?? null,
         age: 23,
         nationality: "USA",
-        birth: { country: "USA", date: "2002-06-15", place: "Denver, CO" },
+        birth: { country: "USA", date: "2003-06-15", place: "Denver, CO" },
       },
       statistics: PASSING_STATS,
     },

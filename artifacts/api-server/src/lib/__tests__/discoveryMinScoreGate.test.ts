@@ -131,6 +131,8 @@ vi.mock("../playerStatsSync.js", () => ({
 
 vi.mock("../evaluateEligibility.js", () => ({
   evaluateEligibility: mockEvaluateEligibility,
+  detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+  countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
 }));
 
 // Partial mock: getMaxCandidateAge is stubbed; getMinEligibilityScore and

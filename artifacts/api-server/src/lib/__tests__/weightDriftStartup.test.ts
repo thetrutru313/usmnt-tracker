@@ -106,6 +106,8 @@ vi.mock("../evaluateEligibility.js", () => ({
     status: "US_ELIGIBLE_PROSPECT",
     signals: [],
   }),
+  detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+  countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
 }));
 
 // We keep eligibilitySignalsConfig mostly real so getWeightFingerprint() works,

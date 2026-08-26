@@ -68,7 +68,14 @@ const NATIONAL_TEAM_RE =
 
 const FRIENDLY_RE = /friendly|friendlies/i;
 
-function isNationalTeamComp(leagueName: string): boolean {
+/**
+ * True when a league name looks like a national-team competition (as opposed
+ * to a club league). This is the single source of truth for that check —
+ * `playerDiscovery.ts` used to duplicate this logic in a second, subtly
+ * different `looksLikeNationalTeamCompetition`/`NATIONAL_TEAM_RE` pair; that
+ * copy has been deleted and callers there now import this one.
+ */
+export function isNationalTeamComp(leagueName: string): boolean {
   return NATIONAL_TEAM_RE.test(leagueName) && !FRIENDLY_RE.test(leagueName);
 }
 
@@ -83,8 +90,12 @@ const US_YOUTH_RE =
 
 /** Detects any non-US *senior* caps (the player has committed to another country).
  *  Youth appearances (U17, U20, U21, etc.) for any country are explicitly
- *  excluded — they do not constitute a senior commitment. */
-function detectSeniorNonUsCaps(statistics: StatBlock[]): boolean {
+ *  excluded — they do not constitute a senior commitment.
+ *
+ *  Exported as the single source of truth: `playerDiscovery.ts` used to have
+ *  its own copy (`hasSeniorNonUsCaps`) that did not exclude youth caps; that
+ *  copy has been deleted and callers there now import this one. */
+export function detectSeniorNonUsCaps(statistics: StatBlock[]): boolean {
   return statistics.some(
     (s) =>
       isNationalTeamComp(s.league.name) &&
@@ -93,6 +104,32 @@ function detectSeniorNonUsCaps(statistics: StatBlock[]): boolean {
       !ANY_YOUTH_NT_RE.test(s.team.name) &&
       (s.games.lineups ?? 0) > 0,
   );
+}
+
+/**
+ * Counts national-team appearances (any country) split into senior vs youth
+ * buckets, based on lineup appearances in national-team competitions.
+ * Used by `playerDiscovery.ts` to populate `priorNationalTeamCaps` (senior
+ * only) and `priorYouthNtCaps` (youth only) as two separate counters instead
+ * of folding youth caps into the "senior" total.
+ */
+export function countNationalTeamCaps(statistics: StatBlock[]): {
+  seniorCaps: number;
+  youthCaps: number;
+} {
+  let seniorCaps = 0;
+  let youthCaps = 0;
+  for (const s of statistics) {
+    if (!isNationalTeamComp(s.league.name)) continue;
+    const lineups = s.games.lineups ?? 0;
+    if (lineups <= 0) continue;
+    if (ANY_YOUTH_NT_RE.test(s.team.name)) {
+      youthCaps += lineups;
+    } else {
+      seniorCaps += lineups;
+    }
+  }
+  return { seniorCaps, youthCaps };
 }
 
 /** True if the player appeared for a US youth NT (U17, U20, U23…) in any stat block. */
@@ -140,20 +177,81 @@ const US_STATE_ABBREVS = new Set([
   "VA","WA","WV","WI","WY","DC",
 ]);
 
-function detectUsStateBirthplace(birthplace: string): boolean {
-  // Check if any token in the birthplace string matches a US state name or abbreviation.
-  const parts = birthplace.split(/[\s,]+/);
-  for (const part of parts) {
-    if (US_STATES.has(part) || US_STATE_ABBREVS.has(part.toUpperCase())) {
-      return true;
-    }
+/** Matches "USA", "U.S.A.", "United States[ of America]", "America" as a
+ *  whole comma-segment — used to recognize a trailing country name. */
+const US_COUNTRY_INDICATOR_RE = /^(usa|u\.s\.a\.?|united states( of america)?|america)$/i;
+
+function isUsCountryIndicatorSegment(segment: string): boolean {
+  return US_COUNTRY_INDICATOR_RE.test(segment.trim());
+}
+
+// Precompiled word-boundary regexes for full state names, built once at
+// module load rather than per call.
+const US_STATE_NAME_PATTERNS = [...US_STATES].map(
+  (state) => ({ state, re: new RegExp(`\\b${state.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i") }),
+);
+
+/**
+ * Detects whether free-text birthplace evidence points to a US state.
+ *
+ * Rewritten to close three false-positive classes that previously fired on
+ * non-English place names:
+ *   - "Rio de Janeiro" → "de" is not accepted as the Delaware abbreviation
+ *     unless it is the final comma-segment (or immediately precedes a
+ *     trailing country name) AND was uppercase in the original string.
+ *   - "La Plata" / "La Paz" → same positional + case rule rules out "La".
+ *   - "Al Rayyan" → same rule rules out "Al".
+ *   - "Tbilisi, Georgia" → "Georgia" is ambiguous between the US state and
+ *     the country, so it only counts as the US state when the string itself
+ *     carries independent US evidence (a trailing "USA"/"United States"
+ *     segment) or the candidate's confirmed birth country is the USA.
+ *
+ * `birthCountry` (API-Football's `birth.country`) is only used to help
+ * disambiguate the "Georgia" special case above — it is not a blanket gate
+ * on the whole signal, since free-text birthplace is independent evidence
+ * that can legitimately fire even when `birthCountry` is unset or disagrees
+ * (e.g. a player whose recorded nationality/birth country reflects heritage
+ * rather than birthplace).
+ */
+function detectUsStateBirthplace(birthplace: string, birthCountry: string | null): boolean {
+  const segments = birthplace
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (segments.length === 0) return false;
+
+  const last = segments[segments.length - 1]!;
+  const hasTrailingCountry = isUsCountryIndicatorSegment(last);
+  // The segment eligible for a two-letter abbreviation match: the final
+  // segment, or — when the final segment is itself a trailing country name
+  // like "USA" — the segment immediately before it.
+  const abbrevCandidate = hasTrailingCountry ? (segments[segments.length - 2] ?? null) : last;
+
+  if (
+    abbrevCandidate != null &&
+    abbrevCandidate.length === 2 &&
+    abbrevCandidate === abbrevCandidate.toUpperCase() &&
+    US_STATE_ABBREVS.has(abbrevCandidate)
+  ) {
+    return true;
   }
-  // Also check multi-word state names (e.g. "New York", "North Carolina")
-  for (const state of US_STATES) {
-    if (birthplace.toLowerCase().includes(state.toLowerCase())) {
-      return true;
+
+  const hasUsIndicator =
+    hasTrailingCountry ||
+    segments.some((seg) => isUsCountryIndicatorSegment(seg)) ||
+    birthCountry === "USA" ||
+    birthCountry === "United States";
+
+  for (const { state, re } of US_STATE_NAME_PATTERNS) {
+    if (!re.test(birthplace)) continue;
+    if (state === "Georgia" && !hasUsIndicator) {
+      // Ambiguous with the country of Georgia — needs corroborating US
+      // evidence before it counts as the US state.
+      continue;
     }
+    return true;
   }
+
   return false;
 }
 
@@ -195,7 +293,7 @@ export function evaluateEligibility(profile: EligibilityProfile): EligibilityRes
 
       case "us_state_birthplace":
         if (profile.birthplace) {
-          fires = detectUsStateBirthplace(profile.birthplace);
+          fires = detectUsStateBirthplace(profile.birthplace, profile.birthCountry);
           value = fires ? profile.birthplace : null;
         }
         break;
