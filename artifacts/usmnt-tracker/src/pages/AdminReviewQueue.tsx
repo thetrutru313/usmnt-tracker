@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertCircle, Lock, Loader2, ThumbsUp, Clock } from "lucide-react";
+import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertCircle, Lock, Loader2, ThumbsUp, Clock, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import {
   STORAGE_KEY,
@@ -448,6 +448,7 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
   const [bulkLoading, setBulkLoading] = React.useState(false);
   const [rescoreLoading, setRescoreLoading] = React.useState(false);
   const [rescoreStatus, setRescoreStatus] = React.useState<RescoreStatus | null>(null);
+  const [dobBackfillLoading, setDobBackfillLoading] = React.useState(false);
 
   function handleSessionExpired() {
     clearSession();
@@ -490,6 +491,30 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
       toast.error(err instanceof Error ? err.message : "Rescore failed");
     } finally {
       setRescoreLoading(false);
+    }
+  }
+
+  async function handleDobBackfill() {
+    const confirmed = window.confirm(
+      "This will fetch birth dates from API-Football for every candidate without one. May take several minutes and consumes API quota. Continue?",
+    );
+    if (!confirmed) return;
+
+    setDobBackfillLoading(true);
+    try {
+      // POST /admin/backfill-candidate-dob queues the backfill and returns
+      // immediately (same fire-and-forget pattern as trigger-eligibility-rescore);
+      // it does not wait for or return per-candidate updated/notFound/failed
+      // counts — those are only visible in server logs.
+      await apiFetch("/admin/backfill-candidate-dob", token, { method: "POST" });
+      toast.success("Birth date backfill started — this can take several minutes. Refreshing queue in a moment…");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await fetchQueue();
+    } catch (err) {
+      if (err instanceof SessionExpiredError) { handleSessionExpired(); return; }
+      toast.error(err instanceof Error ? err.message : "Birth date backfill failed");
+    } finally {
+      setDobBackfillLoading(false);
     }
   }
 
@@ -546,6 +571,18 @@ function ReviewQueuePanel({ token, onLogout }: { token: string; onLogout: () => 
               <Clock size={13} />
             )}
             Rescore All
+          </button>
+          <button
+            onClick={handleDobBackfill}
+            disabled={dobBackfillLoading || loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-sidebar-accent disabled:opacity-50 transition-colors"
+          >
+            {dobBackfillLoading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Calendar size={13} />
+            )}
+            Backfill Birth Dates
           </button>
           <button
             onClick={handleBulkApprove}
