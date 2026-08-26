@@ -1,7 +1,7 @@
 import { db, clubsTable, playersTable, playerCandidatesTable, eligibilitySignalsTable, serverConfigTable } from "@workspace/db";
 import { eq, sql, isNull, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
-import { afFetch, isWomensTeamName } from "./apiFootballSync";
+import { afFetch, isWomensTeamName, isWomensLeagueName } from "./apiFootballSync";
 import { isFriendlyLeague } from "./playerStatsSync";
 import { evaluateEligibility, detectSeniorNonUsCaps, countNationalTeamCaps, type EligibilityProfile } from "./evaluateEligibility";
 import { getMinEligibilityScore, getMaxCandidateAge, getWeightFingerprint, getResolvedWeights, SIGNAL_REGISTRY } from "./eligibilitySignalsConfig";
@@ -216,7 +216,7 @@ export async function discoverUSProspects(): Promise<{
   skippedScore: number;
 }> {
   const clubs = await db
-    .select({ id: clubsTable.id, name: clubsTable.name, apiFootballTeamId: clubsTable.apiFootballTeamId })
+    .select({ id: clubsTable.id, name: clubsTable.name, league: clubsTable.league, apiFootballTeamId: clubsTable.apiFootballTeamId })
     .from(clubsTable);
 
   const clubsWithTeamId = clubs.filter(
@@ -228,12 +228,23 @@ export async function discoverUSProspects(): Promise<{
   // already exists in `clubs` (e.g. from before this filter existed, or from
   // a future admission point this filter doesn't cover) — this is the
   // second of two independent checks; `ensureClubForTeam` is the other, and
-  // this one must not depend on it having run.
+  // this one must not depend on it having run. Checks both signals: the
+  // team-name suffix (the primary signal — `clubs.league` defaults to
+  // "Unknown" until the fixture sweep back-fills it) and the league name
+  // once it's known, since a club whose name alone doesn't read as women's
+  // could still be a women's-league side.
   const trackedClubs = clubsWithTeamId.filter((c) => {
     if (isWomensTeamName(c.name)) {
       logger.warn(
         { clubId: c.id, clubName: c.name },
         "Discovery: REJECTED — club name matches the women's-side pattern; this tracker is men's-only, skipping squad scan",
+      );
+      return false;
+    }
+    if (isWomensLeagueName(c.league)) {
+      logger.warn(
+        { clubId: c.id, clubName: c.name, league: c.league },
+        "Discovery: REJECTED — club's league matches a women's-competition pattern; this tracker is men's-only, skipping squad scan",
       );
       return false;
     }

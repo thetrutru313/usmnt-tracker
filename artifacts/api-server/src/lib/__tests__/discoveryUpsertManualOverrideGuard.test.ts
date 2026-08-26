@@ -130,6 +130,8 @@ vi.mock("../apiFootballSync.js", () => ({
   syncNationalTeamFixtures: vi.fn().mockResolvedValue(undefined),
   syncYouthNtFixtures: vi.fn().mockResolvedValue(undefined),
   isWomensTeamName: (name: string) => /\sW$/.test(name.trim()),
+  isWomensLeagueName: (league: string | null | undefined) =>
+    !!league && /women|feminine|femenil|frauen|femminile|damallsvenskan|nwsl/i.test(league),
   isFriendlyLeague: vi.fn().mockReturnValue(false),
 }));
 

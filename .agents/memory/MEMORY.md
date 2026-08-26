@@ -9,3 +9,4 @@
 - [USMNT candidate rescore scheduling](usmnt-rescore-scheduling.md) — rescoreAllCandidates() only runs on a 7-day setInterval, not at server startup; restarting the workflow does not drain the backlog.
 - [DUAL_NATIONAL team-identity gate](dual-national-team-identity-gate.md) — league-name matching alone can't decide a national-team cap; must confirm via API-Football team.national (DB-cached).
 - [Prospect quality score design](quality-score-design.md) — league-id keying, insert-if-missing coefficient seeding, multiplicative formula shape, and try/catch isolation from eligibility scoring.
+- [Men's-only scope exclusion](womens-scope-exclusion.md) — women's-team name/league patterns, both admission points that need independent filtering, and the exported-but-unwired-filter trap.

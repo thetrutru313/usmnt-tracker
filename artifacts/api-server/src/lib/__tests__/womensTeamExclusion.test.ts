@@ -206,6 +206,8 @@ describe("discoverUSProspects — skips a women's club already present in clubs_
     vi.doMock("../apiFootballSync.js", () => ({
       afFetch: discoveryAfFetch,
       isWomensTeamName: (name: string) => /\sW$/.test(name.trim()),
+      isWomensLeagueName: (league: string | null | undefined) =>
+        !!league && /women|feminine|femenil|frauen|femminile|damallsvenskan|nwsl/i.test(league),
     }));
 
     vi.doMock("../playerStatsSync.js", () => ({
@@ -274,6 +276,145 @@ describe("discoverUSProspects — skips a women's club already present in clubs_
 
     expect(discoveryLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ clubId: WOMENS_CLUB.id, clubName: WOMENS_CLUB.name }),
+      expect.stringContaining("men's-only"),
+    );
+
+    vi.doUnmock("@workspace/db");
+    vi.doUnmock("drizzle-orm");
+    vi.doUnmock("../logger.js");
+    vi.doUnmock("../apiFootballSync.js");
+    vi.doUnmock("../playerStatsSync.js");
+    vi.doUnmock("../evaluateEligibility.js");
+    vi.doUnmock("../eligibilitySignalsConfig.js");
+    vi.doUnmock("../playerClubSync.js");
+    vi.doUnmock("../qualityScore.js");
+  });
+
+  it("skips a club whose league name matches a women's-competition pattern, even when the club's own name doesn't", async () => {
+    vi.resetModules();
+
+    const tCandidates = { _table: "player_candidates" };
+    const tPlayers = { _table: "players" };
+    const tEligibilitySignals = { _table: "eligibility_signals" };
+
+    const discoveryDb = {
+      select: vi.fn(),
+      insert: vi.fn().mockImplementation(() => ({
+        values: vi.fn().mockImplementation(() => ({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 1, isNew: new Date() }]),
+          }),
+        })),
+      })),
+      update: vi.fn().mockImplementation(() => ({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      })),
+      delete: vi.fn().mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
+    };
+
+    const discoveryLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const discoveryAfFetch = vi.fn();
+
+    vi.doMock("@workspace/db", () => ({
+      db: discoveryDb,
+      playerCandidatesTable: tCandidates,
+      playersTable: tPlayers,
+      clubsTable: tClubs,
+      eligibilitySignalsTable: tEligibilitySignals,
+      serverConfigTable: {},
+    }));
+
+    vi.doMock("drizzle-orm", () => ({
+      eq: (_col: unknown, _val: unknown) => ({ _eq: [_col, _val] }),
+      asc: (_col: unknown) => ({ _asc: _col }),
+      and: (...args: unknown[]) => ({ _and: args }),
+      or: (...args: unknown[]) => ({ _or: args }),
+      isNull: (_col: unknown) => ({ _isNull: _col }),
+      isNotNull: (_col: unknown) => ({ _isNotNull: _col }),
+      desc: (_col: unknown) => ({ _desc: _col }),
+      gte: (_col: unknown, _val: unknown) => ({ _gte: [_col, _val] }),
+      inArray: (_col: unknown, _vals: unknown) => ({ _inArray: [_col, _vals] }),
+      lt: (_col: unknown, _val: unknown) => ({ _lt: [_col, _val] }),
+      count: () => ({ _count: true }),
+      sql: Object.assign(
+        (_strings: TemplateStringsArray, ..._values: unknown[]) => ({ _sql: true }),
+        { raw: (_val: string) => ({ _sqlRaw: _val }) },
+      ),
+    }));
+
+    vi.doMock("../logger.js", () => ({ logger: discoveryLogger }));
+
+    vi.doMock("../apiFootballSync.js", () => ({
+      afFetch: discoveryAfFetch,
+      isWomensTeamName: (name: string) => /\sW$/.test(name.trim()),
+      isWomensLeagueName: (league: string | null | undefined) =>
+        !!league && /women|feminine|femenil|frauen|femminile|damallsvenskan|nwsl/i.test(league),
+    }));
+
+    vi.doMock("../playerStatsSync.js", () => ({
+      isFriendlyLeague: vi.fn().mockReturnValue(false),
+    }));
+
+    vi.doMock("../evaluateEligibility.js", () => ({
+      evaluateEligibility: vi.fn().mockReturnValue({ score: 60, status: "US_ELIGIBLE_PROSPECT", signals: [] }),
+      detectSeniorNonUsCaps: vi.fn().mockReturnValue(false),
+      countNationalTeamCaps: vi.fn().mockReturnValue({ seniorCaps: 0, youthCaps: 0 }),
+    }));
+
+    vi.doMock("../eligibilitySignalsConfig.js", () => ({
+      getMinEligibilityScore: vi.fn().mockReturnValue(30),
+      getMaxCandidateAge: vi.fn().mockReturnValue(23),
+      getWeightFingerprint: vi.fn().mockReturnValue("test-fingerprint"),
+      getResolvedWeights: vi.fn().mockReturnValue({}),
+      SIGNAL_REGISTRY: {},
+    }));
+
+    vi.doMock("../playerClubSync.js", () => ({
+      ageFromBirthDate: vi.fn().mockReturnValue(21),
+    }));
+
+    vi.doMock("../qualityScore.js", () => ({
+      computeQualityScore: vi.fn().mockReturnValue(50),
+    }));
+
+    // Name alone gives no signal here — only the league field does.
+    const WOMENS_LEAGUE_CLUB = { id: 1900, name: "Riverside FC", league: "NWSL", apiFootballTeamId: 3001 };
+    const MENS_CLUB = { id: 5, name: "Columbus Crew", league: "MLS", apiFootballTeamId: 200 };
+
+    let callCount = 0;
+    discoveryDb.select.mockImplementation(() => {
+      const n = callCount++;
+      let resolved: unknown;
+      if (n === 0) resolved = [WOMENS_LEAGUE_CLUB, MENS_CLUB]; // clubs
+      else if (n === 1) resolved = []; // tracked players
+      else resolved = []; // existing candidates
+      return { from: vi.fn().mockResolvedValue(resolved) };
+    });
+
+    discoveryAfFetch.mockImplementation((path: string) => {
+      if (path.includes(`/players/squads?team=${WOMENS_LEAGUE_CLUB.apiFootballTeamId}`)) {
+        return Promise.resolve([
+          { team: { id: WOMENS_LEAGUE_CLUB.apiFootballTeamId, name: WOMENS_LEAGUE_CLUB.name }, players: [{ id: 9002, name: "Some Player" }] },
+        ]);
+      }
+      if (path.includes(`/players/squads?team=${MENS_CLUB.apiFootballTeamId}`)) {
+        return Promise.resolve([{ team: { id: MENS_CLUB.apiFootballTeamId, name: MENS_CLUB.name }, players: [] }]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const { discoverUSProspects } = await import("../playerDiscovery.js");
+    await discoverUSProspects();
+
+    const squadCalls = discoveryAfFetch.mock.calls
+      .map((args) => args[0] as string)
+      .filter((path) => path.includes("/players/squads"));
+
+    expect(squadCalls.some((p) => p.includes(`team=${WOMENS_LEAGUE_CLUB.apiFootballTeamId}`))).toBe(false);
+    expect(squadCalls.some((p) => p.includes(`team=${MENS_CLUB.apiFootballTeamId}`))).toBe(true);
+
+    expect(discoveryLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ clubId: WOMENS_LEAGUE_CLUB.id, clubName: WOMENS_LEAGUE_CLUB.name, league: "NWSL" }),
       expect.stringContaining("men's-only"),
     );
 
