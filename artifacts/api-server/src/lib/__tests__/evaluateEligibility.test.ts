@@ -24,6 +24,14 @@ function ntBlock(teamName: string, leagueName: string, lineups = 1): StatBlock {
   };
 }
 
+/** These tests exercise scoring/status logic with fixtures that predate
+ *  team-id-based national-team verification (they identify NT blocks by
+ *  team name only, e.g. "England", "Mexico" — no api_football team id).
+ *  A stub resolver that always reports "national" preserves their original
+ *  intent; the team-identity gate itself (club vs. national by team.id) is
+ *  covered separately in teamNationalityGate.test.ts. */
+const alwaysNational = async () => true;
+
 const MLS_BLOCK = clubBlock("Major League Soccer");
 const PREM_BLOCK = clubBlock("Premier League");
 
@@ -32,13 +40,13 @@ const PREM_BLOCK = clubBlock("Premier League");
 // ---------------------------------------------------------------------------
 
 describe("evaluateEligibility – signal coverage", () => {
-  it("fires us_nationality when nationality is USA", () => {
+  it("fires us_nationality when nationality is USA", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "England",
       statistics: [PREM_BLOCK],
     };
-    const { score, signals, status } = evaluateEligibility(profile);
+    const { score, signals, status } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_nationality")).toBe(true);
     // 35 pts (nationality only) — above the 30-pt minimum but below the 60-pt
     // US_ELIGIBLE_PROSPECT threshold; status is UNKNOWN for borderline profiles.
@@ -46,49 +54,49 @@ describe("evaluateEligibility – signal coverage", () => {
     expect(status).toBe("UNKNOWN");
   });
 
-  it("fires us_birth_country when birthCountry is USA", () => {
+  it("fires us_birth_country when birthCountry is USA", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "USA",
       statistics: [PREM_BLOCK],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_birth_country")).toBe(true);
   });
 
-  it("fires us_birth_country when birthCountry is 'United States'", () => {
+  it("fires us_birth_country when birthCountry is 'United States'", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "United States",
       statistics: [PREM_BLOCK],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_birth_country")).toBe(true);
   });
 
-  it("fires us_state_birthplace for a US state name in birthplace text", () => {
+  it("fires us_state_birthplace for a US state name in birthplace text", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
       birthplace: "Houston, Texas",
       statistics: [PREM_BLOCK],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_state_birthplace")).toBe(true);
   });
 
-  it("does NOT fire us_state_birthplace for a non-US city", () => {
+  it("does NOT fire us_state_birthplace for a non-US city", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
       birthplace: "Berlin",
       statistics: [PREM_BLOCK],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_state_birthplace")).toBe(false);
   });
 
-  it("fires us_youth_nt for a US U20 appearance", () => {
+  it("fires us_youth_nt for a US U20 appearance", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
@@ -97,13 +105,13 @@ describe("evaluateEligibility – signal coverage", () => {
         ntBlock("United States U20", "CONCACAF U20 Championship"),
       ],
     };
-    const { signals, score } = evaluateEligibility(profile);
+    const { signals, score } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_youth_nt")).toBe(true);
     // Score must meet minimum even without nationality/birth
     expect(score).toBeGreaterThanOrEqual(15);
   });
 
-  it("fires us_youth_nt for a USA U17 appearance", () => {
+  it("fires us_youth_nt for a USA U17 appearance", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "England",
@@ -112,11 +120,11 @@ describe("evaluateEligibility – signal coverage", () => {
         ntBlock("USA U17", "FIFA U-17 World Cup"),
       ],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_youth_nt")).toBe(true);
   });
 
-  it("fires us_senior_nt_cap for a USMNT appearance in a national team competition", () => {
+  it("fires us_senior_nt_cap for a USMNT appearance in a national team competition", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -125,27 +133,27 @@ describe("evaluateEligibility – signal coverage", () => {
         ntBlock("United States", "CONCACAF Gold Cup"),
       ],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "us_senior_nt_cap")).toBe(true);
   });
 
-  it("fires mls_usl_league for an MLS season", () => {
+  it("fires mls_usl_league for an MLS season", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "England",
       statistics: [MLS_BLOCK],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "mls_usl_league")).toBe(true);
   });
 
-  it("fires mls_usl_league for a USL season", () => {
+  it("fires mls_usl_league for a USL season", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "England",
       statistics: [clubBlock("USL Championship")],
     };
-    const { signals } = evaluateEligibility(profile);
+    const { signals } = await evaluateEligibility(profile, alwaysNational);
     expect(signals.some((s) => s.signalType === "mls_usl_league")).toBe(true);
   });
 });
@@ -155,18 +163,18 @@ describe("evaluateEligibility – signal coverage", () => {
 // ---------------------------------------------------------------------------
 
 describe("evaluateEligibility – status derivation", () => {
-  it("returns US_ELIGIBLE_PROSPECT for a high-confidence profile", () => {
+  it("returns US_ELIGIBLE_PROSPECT for a high-confidence profile", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
       statistics: [MLS_BLOCK],
     };
-    const { status, score } = evaluateEligibility(profile);
+    const { status, score } = await evaluateEligibility(profile, alwaysNational);
     expect(status).toBe("US_ELIGIBLE_PROSPECT");
     expect(score).toBeGreaterThanOrEqual(60);
   });
 
-  it("returns DUAL_NATIONAL when the player has senior non-US caps", () => {
+  it("returns DUAL_NATIONAL when the player has senior non-US caps", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -175,22 +183,22 @@ describe("evaluateEligibility – status derivation", () => {
         ntBlock("England", "UEFA Nations League"),
       ],
     };
-    const { status } = evaluateEligibility(profile);
+    const { status } = await evaluateEligibility(profile, alwaysNational);
     expect(status).toBe("DUAL_NATIONAL");
   });
 
-  it("returns UNKNOWN for a weak profile (only MLS + non-US birth, no nationality)", () => {
+  it("returns UNKNOWN for a weak profile (only MLS + non-US birth, no nationality)", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "England",
       statistics: [MLS_BLOCK],
     };
-    const { status, score } = evaluateEligibility(profile);
+    const { status, score } = await evaluateEligibility(profile, alwaysNational);
     expect(status).toBe("UNKNOWN");
     expect(score).toBeLessThan(60);
   });
 
-  it("returns DUAL_NATIONAL even when score is high (dual always wins)", () => {
+  it("returns DUAL_NATIONAL even when score is high (dual always wins)", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -199,11 +207,11 @@ describe("evaluateEligibility – status derivation", () => {
         ntBlock("Mexico", "CONCACAF Gold Cup"),
       ],
     };
-    const { status } = evaluateEligibility(profile);
+    const { status } = await evaluateEligibility(profile, alwaysNational);
     expect(status).toBe("DUAL_NATIONAL");
   });
 
-  it("does NOT return DUAL_NATIONAL for a non-US youth NT appearance (e.g. England U21)", () => {
+  it("does NOT return DUAL_NATIONAL for a non-US youth NT appearance (e.g. England U21)", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "England",
@@ -212,7 +220,7 @@ describe("evaluateEligibility – status derivation", () => {
         ntBlock("England U21", "UEFA U21 Championship Qualification"),
       ],
     };
-    const { status, score } = evaluateEligibility(profile);
+    const { status, score } = await evaluateEligibility(profile, alwaysNational);
     // Youth caps do not constitute a senior commitment — should NOT be DUAL_NATIONAL.
     // nationality=USA → 35 pts, below the 60-pt US_ELIGIBLE_PROSPECT threshold → UNKNOWN.
     expect(status).not.toBe("DUAL_NATIONAL");
@@ -220,7 +228,7 @@ describe("evaluateEligibility – status derivation", () => {
     expect(score).toBe(35);
   });
 
-  it("does NOT return DUAL_NATIONAL for a non-US U20 appearance (Germany U20)", () => {
+  it("does NOT return DUAL_NATIONAL for a non-US U20 appearance (Germany U20)", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "Germany",
@@ -229,7 +237,7 @@ describe("evaluateEligibility – status derivation", () => {
         ntBlock("Germany U20", "FIFA U-20 World Cup"),
       ],
     };
-    const { status } = evaluateEligibility(profile);
+    const { status } = await evaluateEligibility(profile, alwaysNational);
     expect(status).not.toBe("DUAL_NATIONAL");
   });
 });
@@ -239,7 +247,7 @@ describe("evaluateEligibility – status derivation", () => {
 // ---------------------------------------------------------------------------
 
 describe("evaluateEligibility – score clamping", () => {
-  it("clamps total score to 100 when all strong signals fire", () => {
+  it("clamps total score to 100 when all strong signals fire", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -250,7 +258,7 @@ describe("evaluateEligibility – score clamping", () => {
         ntBlock("United States", "CONCACAF Gold Cup"),
       ],
     };
-    const { score } = evaluateEligibility(profile);
+    const { score } = await evaluateEligibility(profile, alwaysNational);
     expect(score).toBe(100);
   });
 });
@@ -302,7 +310,7 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
    *   ─────────────────────────
    *   total               55  → UNKNOWN
    */
-  it("borderline profile (score=55) stays UNKNOWN with default weights", () => {
+  it("borderline profile (score=55) stays UNKNOWN with default weights", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "USA",
@@ -312,7 +320,7 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
         ntBlock("United States U20", "CONCACAF U20 Championship"),
       ],
     };
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
     expect(score).toBe(55);
     expect(status).toBe("UNKNOWN");
   });
@@ -329,7 +337,7 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
    *   ─────────────────────────
    *   total               60  → US_ELIGIBLE_PROSPECT
    */
-  it("bumping ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY to 30 crosses 60 → US_ELIGIBLE_PROSPECT", () => {
+  it("bumping ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY to 30 crosses 60 → US_ELIGIBLE_PROSPECT", async () => {
     process.env["ELIGIBILITY_WEIGHT_US_BIRTH_COUNTRY"] = "30";
     _resetWeightsCacheForTesting(); // force recompute from updated env
 
@@ -343,7 +351,7 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
       ],
     };
     // us_birth_country(30) + us_state_birthplace(15) + us_youth_nt(15) = 60
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
     expect(score).toBe(60);
     expect(status).toBe("US_ELIGIBLE_PROSPECT");
   });
@@ -360,14 +368,14 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
    *   ─────────────────────
    *   total            59  → UNKNOWN
    */
-  it("decreasing ELIGIBILITY_WEIGHT_US_NATIONALITY to 34 drops a 60-point profile back to UNKNOWN", () => {
+  it("decreasing ELIGIBILITY_WEIGHT_US_NATIONALITY to 34 drops a 60-point profile back to UNKNOWN", async () => {
     // Sanity-check baseline: without an override this profile scores exactly 60.
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
       statistics: [PREM_BLOCK],
     };
-    const defaultResult = evaluateEligibility(profile);
+    const defaultResult = await evaluateEligibility(profile, alwaysNational);
     expect(defaultResult.score).toBe(60);
     expect(defaultResult.status).toBe("US_ELIGIBLE_PROSPECT");
 
@@ -375,7 +383,7 @@ describe("evaluateEligibility – threshold guard (weight-config change)", () =>
     process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"] = "34";
     _resetWeightsCacheForTesting();
 
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
     expect(score).toBe(59);
     expect(status).toBe("UNKNOWN");
   });
@@ -403,7 +411,7 @@ describe("evaluateEligibility – weight cap clamping (maxContribution)", () => 
    *   clamped to maxContribution  : 50
    *   total score (clamped to 100): 50  → UNKNOWN (below 60-pt threshold)
    */
-  it("clamps a signal weight to maxContribution when the env-var override exceeds the cap", () => {
+  it("clamps a signal weight to maxContribution when the env-var override exceeds the cap", async () => {
     process.env["ELIGIBILITY_WEIGHT_US_NATIONALITY"] = "999";
     _resetWeightsCacheForTesting(); // force recompute from updated env
 
@@ -413,7 +421,7 @@ describe("evaluateEligibility – weight cap clamping (maxContribution)", () => 
       statistics: [PREM_BLOCK],
     };
 
-    const { score, signals, status } = evaluateEligibility(profile);
+    const { score, signals, status } = await evaluateEligibility(profile, alwaysNational);
 
     // The fired signal's weight must equal maxContribution (50), not the raw 999
     const nationalitySignal = signals.find(
@@ -435,7 +443,7 @@ describe("evaluateEligibility – weight cap clamping (maxContribution)", () => 
 // ---------------------------------------------------------------------------
 
 describe("evaluateEligibility – US youth NT as sole eligibility signal", () => {
-  it("scores a non-US-nationality, non-US-born player who played for US U20", () => {
+  it("scores a non-US-nationality, non-US-born player who played for US U20", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
@@ -444,7 +452,7 @@ describe("evaluateEligibility – US youth NT as sole eligibility signal", () =>
         ntBlock("United States U20", "CONCACAF U20 Championship"),
       ],
     };
-    const { score, signals, status } = evaluateEligibility(profile);
+    const { score, signals, status } = await evaluateEligibility(profile, alwaysNational);
     // us_youth_nt fires → 15 pts, below the 60 threshold for US_ELIGIBLE_PROSPECT
     expect(signals.some((s) => s.signalType === "us_youth_nt")).toBe(true);
     expect(score).toBe(15);
@@ -453,7 +461,7 @@ describe("evaluateEligibility – US youth NT as sole eligibility signal", () =>
     expect(score).toBeLessThan(30); // would be filtered by default min score
   });
 
-  it("scores a non-US player with youth NT + MLS above the 30-point default threshold", () => {
+  it("scores a non-US player with youth NT + MLS above the 30-point default threshold", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
@@ -462,7 +470,7 @@ describe("evaluateEligibility – US youth NT as sole eligibility signal", () =>
         ntBlock("United States U20", "CONCACAF U20 Championship"),
       ],
     };
-    const { score, signals } = evaluateEligibility(profile);
+    const { score, signals } = await evaluateEligibility(profile, alwaysNational);
     // us_youth_nt (15) + mls_usl_league (10) = 25 → still under 30 default min
     expect(signals.some((s) => s.signalType === "us_youth_nt")).toBe(true);
     expect(signals.some((s) => s.signalType === "mls_usl_league")).toBe(true);

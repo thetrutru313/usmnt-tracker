@@ -7,6 +7,13 @@ import { getMinEligibilityScore, _resetWeightsCacheForTesting } from "../eligibi
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** These tests exercise scoring/status logic with fixtures that predate
+ *  team-id-based national-team verification. A stub resolver that always
+ *  reports "national" preserves their original intent; the team-identity
+ *  gate itself (club vs. national by team.id) is covered separately in
+ *  teamNationalityGate.test.ts. */
+const alwaysNational = async () => true;
+
 function statBlock(
   overrides: Partial<AfDiscoveryStatBlock> & { leagueName?: string; lineups?: number; minutes?: number },
 ): AfDiscoveryStatBlock {
@@ -138,7 +145,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
     expect(getMinEligibilityScore()).toBe(30);
   });
 
-  it("a foreign player whose only signal is mls_usl_league scores 10, below the 30-pt threshold", () => {
+  it("a foreign player whose only signal is mls_usl_league scores 10, below the 30-pt threshold", async () => {
     const profile: EligibilityProfile = {
       nationality: "England",
       birthCountry: "England",
@@ -150,7 +157,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
         },
       ],
     };
-    const { score, signals } = evaluateEligibility(profile);
+    const { score, signals } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     expect(signals.some((s) => s.signalType === "mls_usl_league")).toBe(true);
@@ -158,7 +165,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
     expect(score).toBeLessThan(minScore); // 10 < 30 → would be skipped by discovery
   });
 
-  it("a completely foreign profile with no US signals scores 0, well below the 30-pt threshold", () => {
+  it("a completely foreign profile with no US signals scores 0, well below the 30-pt threshold", async () => {
     const profile: EligibilityProfile = {
       nationality: "Germany",
       birthCountry: "Germany",
@@ -170,7 +177,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
         },
       ],
     };
-    const { score, signals } = evaluateEligibility(profile);
+    const { score, signals } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     expect(signals).toHaveLength(0);
@@ -178,7 +185,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
     expect(score).toBeLessThan(minScore);
   });
 
-  it("a profile meeting the 30-pt threshold is not filtered (nationality=USA → 35 pts)", () => {
+  it("a profile meeting the 30-pt threshold is not filtered (nationality=USA → 35 pts)", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "England",
@@ -190,13 +197,13 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
         },
       ],
     };
-    const { score } = evaluateEligibility(profile);
+    const { score } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     expect(score).toBeGreaterThanOrEqual(minScore); // 35 ≥ 30 → passes
   });
 
-  it("ELIGIBILITY_MIN_SCORE env var is respected for a custom threshold", () => {
+  it("ELIGIBILITY_MIN_SCORE env var is respected for a custom threshold", async () => {
     process.env["ELIGIBILITY_MIN_SCORE"] = "15";
     // At threshold 15, a mls_usl_league-only profile (10 pts) still fails; need one more signal
     const minScore = getMinEligibilityScore();
@@ -215,7 +222,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
         },
       ],
     };
-    const { score } = evaluateEligibility(profile);
+    const { score } = await evaluateEligibility(profile, alwaysNational);
     expect(score).toBe(15); // us_state_birthplace only
     expect(score).toBeGreaterThanOrEqual(minScore);
   });
@@ -226,7 +233,7 @@ describe("discoveryFilter – min-score gate rejects low-evidence profiles", () 
 // ---------------------------------------------------------------------------
 
 describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently rejected", () => {
-  it("a high-scoring player with senior non-US caps is flagged DUAL_NATIONAL", () => {
+  it("a high-scoring player with senior non-US caps is flagged DUAL_NATIONAL", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -244,7 +251,7 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
         },
       ],
     };
-    const { score, status, signals } = evaluateEligibility(profile);
+    const { score, status, signals } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     // Score clears the min-score gate (nationality + birth country = 60)
@@ -256,7 +263,7 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
     expect(signals.some((s) => s.signalType === "us_birth_country")).toBe(true);
   });
 
-  it("DUAL_NATIONAL flag wins over US_ELIGIBLE_PROSPECT even at maximum score", () => {
+  it("DUAL_NATIONAL flag wins over US_ELIGIBLE_PROSPECT even at maximum score", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",
       birthCountry: "USA",
@@ -285,13 +292,13 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
         },
       ],
     };
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
 
     expect(score).toBe(100); // clamped at maximum
     expect(status).toBe("DUAL_NATIONAL"); // dual always takes precedence
   });
 
-  it("a borderline-score DUAL_NATIONAL still clears the min-score gate and is stored", () => {
+  it("a borderline-score DUAL_NATIONAL still clears the min-score gate and is stored", async () => {
     const profile: EligibilityProfile = {
       // Only us_birth_country fires (25 pts) — but dual national
       nationality: "Germany",
@@ -309,7 +316,7 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
         },
       ],
     };
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     expect(score).toBe(25); // us_birth_country only
@@ -318,7 +325,7 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
     expect(status).toBe("DUAL_NATIONAL");
   });
 
-  it("a DUAL_NATIONAL with enough score passes the gate and retains DUAL_NATIONAL status", () => {
+  it("a DUAL_NATIONAL with enough score passes the gate and retains DUAL_NATIONAL status", async () => {
     const profile: EligibilityProfile = {
       nationality: "USA",   // 35 pts
       birthCountry: "USA",  // 25 pts → total 60 → clears min-score gate
@@ -335,7 +342,7 @@ describe("discoveryFilter – DUAL_NATIONAL candidates are flagged, not silently
         },
       ],
     };
-    const { score, status } = evaluateEligibility(profile);
+    const { score, status } = await evaluateEligibility(profile, alwaysNational);
     const minScore = getMinEligibilityScore();
 
     expect(score).toBeGreaterThanOrEqual(minScore); // 60 ≥ 30 → stored

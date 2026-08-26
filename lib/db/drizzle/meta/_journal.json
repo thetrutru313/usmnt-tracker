@@ -43,6 +43,13 @@
       "when": 1787764873400,
       "tag": "0005_candidate_dob_and_youth_caps",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787775434403,
+      "tag": "0006_api_football_teams_cache",
+      "breakpoints": true
     }
   ]
 }

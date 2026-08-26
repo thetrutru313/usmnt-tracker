@@ -16,3 +16,4 @@ export * from "./recoveryTokens";
 export * from "./playerStatusHistory";
 export * from "./serverConfig";
 export * from "./adminSessions";
+export * from "./apiFootballTeams";

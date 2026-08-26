@@ -323,7 +323,7 @@ export async function discoverUSProspects(): Promise<{
         statistics,
       };
 
-      const { score, status, signals } = evaluateEligibility(eligibilityProfile);
+      const { score, status, signals } = await evaluateEligibility(eligibilityProfile);
 
       if (score < minScore) {
         skippedScore++;
@@ -341,7 +341,7 @@ export async function discoverUSProspects(): Promise<{
       let eligibilityBasis: string;
       if (isUsNationality) {
         eligibilityBasis = "nationality";
-      } else if (!detectSeniorNonUsCaps(statistics)) {
+      } else if (!(await detectSeniorNonUsCaps(statistics))) {
         eligibilityBasis = "birth_country";
       } else {
         eligibilityBasis = "dual_national_unconfirmed";
@@ -349,7 +349,7 @@ export async function discoverUSProspects(): Promise<{
 
       // Senior and youth national-team caps are tracked as two separate
       // counters — a youth-only history must never inflate the senior total.
-      const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
+      const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics);
 
       const dataSources = ["api_football"];
 
@@ -572,12 +572,12 @@ export async function rescoreAllCandidates(
         statistics: profile.statistics,
       };
 
-      const { score, status, signals } = evaluateEligibility(eligibilityProfile);
+      const { score, status, signals } = await evaluateEligibility(eligibilityProfile);
 
       // Prior senior/youth national-team caps, kept as two separate counters
       // (see countNationalTeamCaps) — a youth-only history must not inflate
       // the senior total.
-      const { seniorCaps, youthCaps } = countNationalTeamCaps(profile.statistics);
+      const { seniorCaps, youthCaps } = await countNationalTeamCaps(profile.statistics);
 
       // Freshly-fetched birth date, falling back to whatever is already on
       // file so a transient missing field never blanks out a known DOB.

@@ -51,49 +51,49 @@ function baseProfile(overrides: Partial<EligibilityProfile>): EligibilityProfile
 // ---------------------------------------------------------------------------
 
 describe("detectUsStateBirthplace (via evaluateEligibility's us_state_birthplace signal)", () => {
-  function fires(birthplace: string, birthCountry: string | null): boolean {
-    const result = evaluateEligibility(baseProfile({ birthplace, birthCountry }));
+  async function fires(birthplace: string, birthCountry: string | null): Promise<boolean> {
+    const result = await evaluateEligibility(baseProfile({ birthplace, birthCountry }));
     return result.signals.some((s) => s.signalType === "us_state_birthplace");
   }
 
-  it("does NOT fire on 'Rio de Janeiro, Brazil' (De is not the Delaware abbreviation)", () => {
-    expect(fires("Rio de Janeiro, Brazil", "Brazil")).toBe(false);
+  it("does NOT fire on 'Rio de Janeiro, Brazil' (De is not the Delaware abbreviation)", async () => {
+    expect(await fires("Rio de Janeiro, Brazil", "Brazil")).toBe(false);
   });
 
-  it("does NOT fire on 'La Plata, Argentina' (La is not the Louisiana abbreviation)", () => {
-    expect(fires("La Plata, Argentina", "Argentina")).toBe(false);
+  it("does NOT fire on 'La Plata, Argentina' (La is not the Louisiana abbreviation)", async () => {
+    expect(await fires("La Plata, Argentina", "Argentina")).toBe(false);
   });
 
-  it("does NOT fire on 'La Paz, Bolivia'", () => {
-    expect(fires("La Paz, Bolivia", "Bolivia")).toBe(false);
+  it("does NOT fire on 'La Paz, Bolivia'", async () => {
+    expect(await fires("La Paz, Bolivia", "Bolivia")).toBe(false);
   });
 
-  it("does NOT fire on 'Al Rayyan, Qatar' (Al is not the Alabama abbreviation)", () => {
-    expect(fires("Al Rayyan, Qatar", "Qatar")).toBe(false);
+  it("does NOT fire on 'Al Rayyan, Qatar' (Al is not the Alabama abbreviation)", async () => {
+    expect(await fires("Al Rayyan, Qatar", "Qatar")).toBe(false);
   });
 
-  it("does NOT fire on 'Tbilisi, Georgia' with no US evidence (country Georgia, not the US state)", () => {
-    expect(fires("Tbilisi, Georgia", "Georgia")).toBe(false);
+  it("does NOT fire on 'Tbilisi, Georgia' with no US evidence (country Georgia, not the US state)", async () => {
+    expect(await fires("Tbilisi, Georgia", "Georgia")).toBe(false);
   });
 
-  it("still fires on a genuine two-letter state abbreviation as the final segment, e.g. 'Springfield, IL'", () => {
-    expect(fires("Springfield, IL", "USA")).toBe(true);
+  it("still fires on a genuine two-letter state abbreviation as the final segment, e.g. 'Springfield, IL'", async () => {
+    expect(await fires("Springfield, IL", "USA")).toBe(true);
   });
 
-  it("still fires on a full state name embedded in a multi-word city, e.g. 'Maryland Heights, Missouri'", () => {
-    expect(fires("Maryland Heights, Missouri", "USA")).toBe(true);
+  it("still fires on a full state name embedded in a multi-word city, e.g. 'Maryland Heights, Missouri'", async () => {
+    expect(await fires("Maryland Heights, Missouri", "USA")).toBe(true);
   });
 
-  it("still fires on 'New York City' with confirmed US birth country", () => {
-    expect(fires("New York City", "USA")).toBe(true);
+  it("still fires on 'New York City' with confirmed US birth country", async () => {
+    expect(await fires("New York City", "USA")).toBe(true);
   });
 
-  it("fires on Georgia the US state when corroborated by a confirmed US birth country", () => {
-    expect(fires("Atlanta, Georgia", "USA")).toBe(true);
+  it("fires on Georgia the US state when corroborated by a confirmed US birth country", async () => {
+    expect(await fires("Atlanta, Georgia", "USA")).toBe(true);
   });
 
-  it("still fires on a genuine uppercase state abbreviation even when birthCountry is a non-US country (birthCountry is not a blanket gate — only used to disambiguate 'Georgia')", () => {
-    expect(fires("Berlin, GA", "Germany")).toBe(true);
+  it("still fires on a genuine uppercase state abbreviation even when birthCountry is a non-US country (birthCountry is not a blanket gate — only used to disambiguate 'Georgia')", async () => {
+    expect(await fires("Berlin, GA", "Germany")).toBe(true);
   });
 });
 
@@ -109,49 +109,57 @@ function natTeamStat(teamName: string, leagueName: string, lineups: number): Sta
   };
 }
 
-describe("detectSeniorNonUsCaps / countNationalTeamCaps — youth appearances excluded from senior caps", () => {
-  it("Brazil U17 World Cup appearances do not count as senior non-US caps", () => {
-    const statistics = [natTeamStat("Brazil U17", "FIFA U-17 World Cup", 3)];
-    expect(detectSeniorNonUsCaps(statistics)).toBe(false);
+// These fixtures reuse the same team.id (1) for every national-team block —
+// they're testing the youth-vs-senior name split, not the team-identity
+// gate (club vs. national by team.id), which has its own dedicated coverage
+// in teamNationalityGate.test.ts. A stub resolver that always reports
+// "national" keeps that distinction out of scope here.
+const alwaysNational = async () => true;
 
-    const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
+describe("detectSeniorNonUsCaps / countNationalTeamCaps — youth appearances excluded from senior caps", () => {
+  it("Brazil U17 World Cup appearances do not count as senior non-US caps", async () => {
+    const statistics = [natTeamStat("Brazil U17", "FIFA U-17 World Cup", 3)];
+    expect(await detectSeniorNonUsCaps(statistics, alwaysNational)).toBe(false);
+
+    const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics, alwaysNational);
     expect(seniorCaps).toBe(0);
     expect(youthCaps).toBe(3);
   });
 
-  it("evaluateEligibility does not classify a youth-only Brazil call-up as DUAL_NATIONAL", () => {
-    const result = evaluateEligibility(
+  it("evaluateEligibility does not classify a youth-only Brazil call-up as DUAL_NATIONAL", async () => {
+    const result = await evaluateEligibility(
       baseProfile({ statistics: [natTeamStat("Brazil U17", "FIFA U-17 World Cup", 3)] }),
+      alwaysNational,
     );
     expect(result.status).not.toBe("DUAL_NATIONAL");
   });
 
-  it("a genuine senior non-US cap still triggers DUAL_NATIONAL and counts toward seniorCaps only", () => {
+  it("a genuine senior non-US cap still triggers DUAL_NATIONAL and counts toward seniorCaps only", async () => {
     const statistics = [natTeamStat("Brazil", "World Cup Qualification", 2)];
-    expect(detectSeniorNonUsCaps(statistics)).toBe(true);
+    expect(await detectSeniorNonUsCaps(statistics, alwaysNational)).toBe(true);
 
-    const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
+    const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics, alwaysNational);
     expect(seniorCaps).toBe(2);
     expect(youthCaps).toBe(0);
 
-    const result = evaluateEligibility(baseProfile({ statistics }));
+    const result = await evaluateEligibility(baseProfile({ statistics }), alwaysNational);
     expect(result.status).toBe("DUAL_NATIONAL");
   });
 
-  it("mixed senior + youth caps for the same country split into the correct buckets", () => {
+  it("mixed senior + youth caps for the same country split into the correct buckets", async () => {
     const statistics = [
       natTeamStat("Brazil U20", "FIFA U-20 World Cup", 4),
       natTeamStat("Brazil", "Copa America", 1),
     ];
-    const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
+    const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics, alwaysNational);
     expect(seniorCaps).toBe(1);
     expect(youthCaps).toBe(4);
   });
 
-  it("US youth-team appearances are excluded from senior caps just like any other country's youth team", () => {
+  it("US youth-team appearances are excluded from senior caps just like any other country's youth team", async () => {
     const statistics = [natTeamStat("United States U20", "FIFA U-20 World Cup", 5)];
-    expect(detectSeniorNonUsCaps(statistics)).toBe(false);
-    const { seniorCaps, youthCaps } = countNationalTeamCaps(statistics);
+    expect(await detectSeniorNonUsCaps(statistics, alwaysNational)).toBe(false);
+    const { seniorCaps, youthCaps } = await countNationalTeamCaps(statistics, alwaysNational);
     expect(seniorCaps).toBe(0);
     expect(youthCaps).toBe(5);
   });

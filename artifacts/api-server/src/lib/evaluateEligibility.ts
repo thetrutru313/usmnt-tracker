@@ -8,6 +8,15 @@
 // ---------------------------------------------------------------------------
 
 import { SIGNAL_REGISTRY, getResolvedWeights } from "./eligibilitySignalsConfig";
+import { isTeamNational } from "./teamNationalityCache";
+
+/** Injectable resolver type for whether an API-Football team id is a
+ *  national team — the default is the real DB-cached / API-Football-backed
+ *  implementation; tests inject a stub to avoid hitting the database. */
+export type TeamIsNationalResolver = (
+  teamId: number | undefined | null,
+  teamName?: string,
+) => Promise<boolean>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,16 +103,28 @@ const US_YOUTH_RE =
  *
  *  Exported as the single source of truth: `playerDiscovery.ts` used to have
  *  its own copy (`hasSeniorNonUsCaps`) that did not exclude youth caps; that
- *  copy has been deleted and callers there now import this one. */
-export function detectSeniorNonUsCaps(statistics: StatBlock[]): boolean {
-  return statistics.some(
-    (s) =>
-      isNationalTeamComp(s.league.name) &&
-      !US_TEAM_NAMES.has(s.team.name) &&
-      !US_YOUTH_RE.test(s.team.name) &&
-      !ANY_YOUTH_NT_RE.test(s.team.name) &&
-      (s.games.lineups ?? 0) > 0,
-  );
+ *  copy has been deleted and callers there now import this one.
+ *
+ *  `isNationalTeamComp(league.name)` is only a cheap secondary pre-filter to
+ *  skip obviously-club leagues (Premier League, Bundesliga, ...) without a
+ *  team lookup. The competition name is never sufficient on its own to
+ *  count a cap — club competitions like "CONCACAF Champions League" and
+ *  "FIFA Club World Cup" match the same keywords as genuine national-team
+ *  competitions. The authoritative gate is `resolveIsNational(team.id)`,
+ *  API-Football's own `team.national` flag (see `teamNationalityCache.ts`). */
+export async function detectSeniorNonUsCaps(
+  statistics: StatBlock[],
+  resolveIsNational: TeamIsNationalResolver = isTeamNational,
+): Promise<boolean> {
+  for (const s of statistics) {
+    if (!isNationalTeamComp(s.league.name)) continue;
+    if (US_TEAM_NAMES.has(s.team.name)) continue;
+    if (US_YOUTH_RE.test(s.team.name)) continue;
+    if (ANY_YOUTH_NT_RE.test(s.team.name)) continue;
+    if ((s.games.lineups ?? 0) <= 0) continue;
+    if (await resolveIsNational(s.team.id, s.team.name)) return true;
+  }
+  return false;
 }
 
 /**
@@ -112,17 +133,25 @@ export function detectSeniorNonUsCaps(statistics: StatBlock[]): boolean {
  * Used by `playerDiscovery.ts` to populate `priorNationalTeamCaps` (senior
  * only) and `priorYouthNtCaps` (youth only) as two separate counters instead
  * of folding youth caps into the "senior" total.
+ *
+ * Gated the same way as `detectSeniorNonUsCaps`: `isNationalTeamComp` is
+ * only a pre-filter, `resolveIsNational(team.id)` is what actually decides
+ * whether a block counts, so club competitions never inflate either bucket.
  */
-export function countNationalTeamCaps(statistics: StatBlock[]): {
+export async function countNationalTeamCaps(
+  statistics: StatBlock[],
+  resolveIsNational: TeamIsNationalResolver = isTeamNational,
+): Promise<{
   seniorCaps: number;
   youthCaps: number;
-} {
+}> {
   let seniorCaps = 0;
   let youthCaps = 0;
   for (const s of statistics) {
     if (!isNationalTeamComp(s.league.name)) continue;
     const lineups = s.games.lineups ?? 0;
     if (lineups <= 0) continue;
+    if (!(await resolveIsNational(s.team.id, s.team.name))) continue;
     if (ANY_YOUTH_NT_RE.test(s.team.name)) {
       youthCaps += lineups;
     } else {
@@ -264,8 +293,15 @@ function detectUsStateBirthplace(birthplace: string, birthCountry: string | null
  * Returns the computed score (0–100), derived status, and the list of signals
  * that fired.  Weights are loaded from the registry (with optional env-var
  * overrides) at the time of the call.
+ *
+ * Async because DUAL_NATIONAL status depends on `detectSeniorNonUsCaps`,
+ * which must confirm team identity via the (DB-cached) API-Football
+ * `/teams` lookup — league-name matching alone is not sufficient.
  */
-export function evaluateEligibility(profile: EligibilityProfile): EligibilityResult {
+export async function evaluateEligibility(
+  profile: EligibilityProfile,
+  resolveIsNational: TeamIsNationalResolver = isTeamNational,
+): Promise<EligibilityResult> {
   const weights = getResolvedWeights();
   const firedSignals: FiredSignal[] = [];
 
@@ -350,7 +386,7 @@ export function evaluateEligibility(profile: EligibilityProfile): EligibilityRes
   const score = Math.min(100, rawScore);
 
   // Determine status
-  const hasSeniorNonUs = detectSeniorNonUsCaps(profile.statistics);
+  const hasSeniorNonUs = await detectSeniorNonUsCaps(profile.statistics, resolveIsNational);
   let status: UsmntCandidateStatus;
   if (hasSeniorNonUs) {
     status = "DUAL_NATIONAL";

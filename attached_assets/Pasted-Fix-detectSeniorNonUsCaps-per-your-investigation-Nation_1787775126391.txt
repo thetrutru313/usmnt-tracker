@@ -1,0 +1,73 @@
+Fix detectSeniorNonUsCaps, per your investigation. National-team detection
+must gate on team identity, not league-name keywords.
+
+## The discriminator
+
+API-Football's /teams?id={team.id} response includes a `national` boolean on
+the team object. That is authoritative — use it rather than a hand-maintained
+list of national teams.
+
+Add a small metadata cache so this costs at most one call per unique team,
+ever:
+
+- New table `api_football_teams`: api_football_team_id (pk), name,
+  country, is_national (boolean), fetched_at.
+- On encountering an unknown team id, fetch /teams?id= and store the row.
+- Never re-fetch a cached team. A club does not become a national team.
+
+Seed the cache for the team ids already present in your clubs table so the
+common cases cost nothing.
+
+## The gate
+
+A stat block counts as a senior national-team appearance only when the team
+is national. Concretely:
+
+  isNationalTeamAppearance = teamIsNational(team.id)
+
+League-name matching may remain as a secondary filter for distinguishing
+competition types, but it must never be sufficient on its own. Delete any
+path where a league-name match alone produces a cap count.
+
+Keep the existing youth exclusion exactly as it is — that part works.
+
+## Fallback
+
+If the /teams lookup fails or returns nothing, do not guess. Treat the block
+as non-national and log a warning. Failing closed here means we under-report
+dual nationals, which is the safer error: a missed flag costs a second look,
+a false flag buries a US-eligible prospect.
+
+## Also fix
+
+`priorNationalTeamCaps` and `priorYouthNtCaps` are counted through the same
+detection path, so both are currently inflated by club competitions. They
+must use the corrected gate too.
+
+## Constraints
+
+- No changes to signal weights, thresholds, the age gate, or queue sorting.
+- Migration is DDL only. Per lib/db/README.md, Publish carries the schema
+  diff but not data — give me any backfill SQL separately.
+- Do not re-open or modify dismissed candidates.
+
+## Tests
+
+- A stat block with league "CONCACAF Champions League", team "Seattle
+  Sounders" (club) does NOT count as a senior non-US cap.
+- A stat block with league "FIFA Club World Cup", team "Los Angeles FC" does
+  NOT count.
+- A stat block with league "CONCACAF Nations League", team "Canada"
+  (national) DOES count.
+- A stat block with league "CONCACAF Gold Cup", team "USA" does NOT count as
+  non-US.
+- A youth block with team "United States U20" does not count as a senior cap
+  and increments priorYouthNtCaps.
+
+Run pnpm run typecheck, pnpm run lint, and the full suite.
+
+## Report back
+
+After the fix, tell me how many of the 53 currently-DUAL_NATIONAL candidates
+would still be flagged. Do not change their stored status — I'll trigger a
+rescore.
