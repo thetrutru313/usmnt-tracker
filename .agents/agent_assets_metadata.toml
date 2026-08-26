@@ -504,3 +504,10 @@ uri = "file://reports/dual-national-false-positive-investigation.md"
 type = "text"
 title = "Dual-National False-Positive Investigation"
 description = "Investigation into detectSeniorNonUsCaps flagging capped USMNT internationals as DUAL_NATIONAL due to club competitions matching national-team keywords."
+
+[[outputs]]
+id = "QSesCVofKHwk_fR2L0vsZ"
+uri = "file://reports/dual-national-team-identity-gate-fix.md"
+type = "text"
+title = "DUAL_NATIONAL team-identity gate fix"
+description = "Root cause, fix details, test coverage, and the read-only impact dry-run (31 flagged, 5 still qualify, 26 would clear)."
