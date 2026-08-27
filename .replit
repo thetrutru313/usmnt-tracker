@@ -70,3 +70,8 @@ channel = "stable-25_05"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-7761b4b7-4dc3-42da-a4a4-8ade75ae1d75"
+
+[userenv]
+
+[userenv.shared]
+RESCORE_MAX_CANDIDATES = "300"
