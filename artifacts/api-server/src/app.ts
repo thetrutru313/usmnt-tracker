@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
@@ -152,6 +152,12 @@ function buildAllowedOrigins(): string[] {
 
 const allowedOrigins = buildAllowedOrigins();
 
+class CorsOriginError extends Error {
+  constructor(readonly origin: string) {
+    super(`CORS: origin not allowed — ${origin}`);
+  }
+}
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -159,20 +165,32 @@ app.use(
       if (!origin) { callback(null, true); return; }
       // Allow any explicitly allowlisted origin.
       if (allowedOrigins.includes(origin)) { callback(null, true); return; }
-      // In non-production builds, allow any http://localhost:<port> origin.
+      // In non-production builds, allow only HTTP loopback origins.
       // The Vite dev server occupies a PORT that varies per session; rather than
       // requiring operators to keep ALLOWED_ORIGINS in sync, we accept all
       // localhost origins in dev.  The __localhost__ sentinel was pushed by
       // buildAllowedOrigins() above when NODE_ENV !== "production".
       if (allowedOrigins.includes("__localhost__") &&
-          /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+          /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin)) {
         callback(null, true); return;
       }
-      callback(new Error(`CORS: origin not allowed — ${origin}`));
+      callback(new CorsOriginError(origin));
     },
     credentials: true,
   }),
 );
+
+// Reject before any route or request logger runs: a CORS policy denial is a
+// WARN-level 403, not a server fault. Unrelated errors keep their usual path.
+const corsErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, next) => {
+  if (!(err instanceof CorsOriginError)) {
+    next(err);
+    return;
+  }
+  logger.warn({ origin: err.origin }, err.message);
+  res.status(403).json({ error: err.message });
+};
+app.use(corsErrorHandler);
 
 // Global rate limiter: 300 requests per minute per IP for all public routes.
 // Tighter limits can be applied per-route as needed.

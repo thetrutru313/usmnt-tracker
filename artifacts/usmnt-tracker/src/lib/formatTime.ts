@@ -1,34 +1,36 @@
-/** Returns the user's IANA timezone and its current short abbreviation. */
-function localTz(): { timeZone: string; abbr: string } {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** Returns the viewer's own IANA timezone. */
+function localTz(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** Format the clock and its abbreviation together at the supplied instant. */
+function formatWithZone(date: Date, options: Intl.DateTimeFormatOptions): string {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+    timeZone: localTz(),
+    ...options,
     timeZoneName: "short",
-  }).formatToParts(new Date());
-  const abbr = parts.find((p) => p.type === "timeZoneName")?.value ?? "";
-  return { timeZone, abbr };
+  }).formatToParts(date);
+  // formatToParts may use a narrow space before AM/PM; preserve the existing
+  // format() output's ordinary spacing.
+  return parts.map((part) => part.value).join("").replace(/\u202f/g, " ");
 }
 
 /** "Jul 13, 2:00 PM PDT" */
 export function formatKickoff(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
-  const { timeZone, abbr } = localTz();
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  return formatWithZone(date, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
-  return `${formatted} ${abbr}`;
+  });
 }
 
 /** "Jul 16" */
 export function formatDate(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
-  const { timeZone } = localTz();
   return new Intl.DateTimeFormat("en-US", {
-    timeZone,
+    timeZone: localTz(),
     month: "short",
     day: "numeric",
   }).format(date);
@@ -37,11 +39,8 @@ export function formatDate(value: string | Date): string {
 /** "2:00 PM PDT" */
 export function formatTime(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
-  const { timeZone, abbr } = localTz();
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+  return formatWithZone(date, {
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
-  return `${formatted} ${abbr}`;
+  });
 }
