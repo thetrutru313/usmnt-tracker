@@ -38,7 +38,7 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
           {formatDate(fixture.kickoff)}
         </div>
         <div className="text-[10px] font-mono text-muted-foreground">
-          {formatTime(fixture.kickoff)}
+          {fixture.kickoffTimeTbd ? "Time TBD" : formatTime(fixture.kickoff)}
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
             {usScore}–{oppScore}
           </span>
         ) : (
-          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0 uppercase">vs</span>
+          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0 uppercase">{homeIsUS ? "vs" : "@"}</span>
         )}
 
         {/* Opponent logo + name */}

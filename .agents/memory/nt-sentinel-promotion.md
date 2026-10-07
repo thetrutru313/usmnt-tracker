@@ -27,4 +27,8 @@ The try/catch is inside the loop (not around it). A unique-constraint collision 
 
 ## When to remove Block D / promoteNtSentinelIds
 
-Remove from `startUsmntStatsSyncSchedule()` and from `index.ts` Block D once all four Sept/Oct 2026 friendlies have been played, their match logs synced, and their `api_football_fixture_id` values confirmed positive. At that point the fast-path short-circuit (returns immediately when no unbound rows) makes it nearly free to keep, but it should be cleaned up anyway.
+Do not retire this fallback just because the Sept/Oct 2026 friendlies have been played. The product owner requires retaining it until the November 2026 Haiti-leg sentinels -2005 and -2006 bind to real positive IDs.
+
+**Why:** Newly announced matches reuse the same backfill mechanism; retiring it based on an older window would remove their fallback.
+
+**How to apply:** Check the current announced sentinel set before removing either the startup call or hourly scheduler.

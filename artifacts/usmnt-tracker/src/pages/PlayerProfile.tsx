@@ -9,7 +9,7 @@ import { PoolTierIcon } from "@/components/FixtureCard";
 import { type PoolTier, POOL_TIER_STYLES } from "@/lib/poolTiers";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { formatKickoff } from "@/lib/formatTime";
+import { formatDate, formatKickoff } from "@/lib/formatTime";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
 import { toast } from "sonner";
 
@@ -569,7 +569,7 @@ export default function PlayerProfile() {
                   {player.upcomingFixtures.slice(0, 3).map(fixture => (
                     <div key={fixture.id} className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{formatKickoff(fixture.kickoff)}</span>
+                        <span className="text-[10px] font-mono uppercase text-muted-foreground">{fixture.kickoffTimeTbd ? `${formatDate(fixture.kickoff)} · Time TBD` : formatKickoff(fixture.kickoff)}</span>
                         <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-medium">

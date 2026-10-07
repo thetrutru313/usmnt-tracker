@@ -8,7 +8,7 @@
  */
 
 import { db, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, inArray, lt, gt, notExists, sql } from "drizzle-orm";
+import { eq, and, or, inArray, lt, gt, notExists, sql } from "drizzle-orm";
 import { logger } from "./logger.js";
 
 // ─── API-Football fixture shape ───────────────────────────────────────────────
@@ -288,23 +288,29 @@ export async function purgeOrphanedUpcomingFixtures(
 }
 
 /**
- * Deletes past fixtures that are still stuck at "scheduled" or "live" and
- * have zero `fixture_players` links.
+ * Deletes past club fixtures stuck at "scheduled"/"live" without player links.
+ * Unbound negative-ID senior NT fixtures get a seven-day API-publication
+ * grace period instead; bound NT fixtures remain protected.
  *
  * These fixtures are invisible to `reconcileClubFixtures`, which inner-joins
  * on `fixture_players` to find candidates. Without player links, the
  * reconciliation loop never sees them, so they can never self-heal to
- * "finished". Because they carry no tracked-player data they have no
- * user-visible value and are safe to delete.
+ * "finished". Club orphans carry no tracked-player data. Curated national-team
+ * sentinels intentionally lack player links and require separate retention.
  *
  * Typical cause: a fixture was inserted near its kickoff time, the repair
  * pass ran after kickoff (which skips past fixtures), and the player link
  * was therefore never created.
  */
+// Seven days allows late API publication, but prevents an unbound phantom
+// lingering as scheduled for a month. Club fixtures receive no grace period.
+export const NT_SENTINEL_GRACE_DAYS = 7;
+
 export async function purgeStaleOrphanedPastFixtures(
   now: number = Date.now(),
 ): Promise<{ purged: number }> {
   const nowDate = new Date(now);
+  const sentinelGraceCutoff = new Date(now - NT_SENTINEL_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
   const orphans = await db
     .select({
@@ -317,7 +323,15 @@ export async function purgeStaleOrphanedPastFixtures(
     .from(fixturesTable)
     .where(
       and(
-        eq(fixturesTable.isNationalTeam, false),
+        or(
+          eq(fixturesTable.isNationalTeam, false),
+          and(
+            eq(fixturesTable.isNationalTeam, true),
+            eq(fixturesTable.ntLevel, "SENIOR"),
+            lt(fixturesTable.apiFootballFixtureId, 0),
+            lt(fixturesTable.kickoff, sentinelGraceCutoff),
+          ),
+        ),
         inArray(fixturesTable.status, ["scheduled", "live"]),
         lt(fixturesTable.kickoff, nowDate),
         notExists(

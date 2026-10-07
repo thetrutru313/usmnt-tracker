@@ -46,6 +46,7 @@ export type FixtureCardFixture = {
   isNationalTeam: boolean;
   competition: string;
   kickoff: Date | string;
+  kickoffTimeTbd?: boolean;
   venue: string;
   homeTeam: string;
   awayTeam: string;
@@ -153,7 +154,7 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
                   {formatDate(fixture.kickoff)}
                 </span>
               )}
-              <span className="text-xs text-muted-foreground font-mono shrink-0">{formatTime(fixture.kickoff)}</span>
+              <span className="text-xs text-muted-foreground font-mono shrink-0">{fixture.kickoffTimeTbd ? "Time TBD" : formatTime(fixture.kickoff)}</span>
             </div>
           )}
         </div>

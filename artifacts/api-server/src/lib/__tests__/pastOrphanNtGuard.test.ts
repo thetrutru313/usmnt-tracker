@@ -22,10 +22,12 @@ vi.mock("@workspace/db", async (importOriginal) => {
 
 describe("past orphan purge — national-team protection", () => {
   it.each([
-    { label: "unbound senior NT sentinel survives", isNationalTeam: true, afId: -920005, survives: true },
-    { label: "otherwise identical club fixture is purged", isNationalTeam: false, afId: -920006, survives: false },
-    { label: "positive-ID past NT fixture survives", isNationalTeam: true, afId: 9920007, survives: true },
-  ])("$label", async ({ isNationalTeam, afId, survives }) => {
+    { label: "unbound senior NT sentinel at 2 days survives", isNationalTeam: true, afId: -920005, daysAgo: 2, survives: true },
+    { label: "unbound senior NT sentinel at 10 days is purged", isNationalTeam: true, afId: -920008, daysAgo: 10, survives: false },
+    { label: "otherwise identical club fixture at 2 days is purged", isNationalTeam: false, afId: -920006, daysAgo: 2, survives: false },
+    { label: "positive-ID past NT fixture at 10 days survives", isNationalTeam: true, afId: 9920007, daysAgo: 10, survives: true },
+    { label: "unbound senior NT sentinel at exactly 7 days survives", isNationalTeam: true, afId: -920009, daysAgo: 7, survives: true },
+  ])("$label", async ({ isNationalTeam, afId, daysAgo, survives }) => {
     const rollback = new Error("intentional test rollback");
     try {
       await db.transaction(async (tx) => {
@@ -34,14 +36,14 @@ describe("past orphan purge — national-team protection", () => {
           homeTeam: "__Past Orphan Guard__",
           awayTeam: "__Opponent__",
           competition: "International Friendly",
-          kickoff: new Date("2026-01-01T00:00:00Z"),
+          kickoff: new Date(Date.parse("2026-01-15T00:00:00Z") - daysAgo * 86_400_000),
           venue: "Test Stadium",
           status: "scheduled",
           isNationalTeam,
           ntLevel: isNationalTeam ? "SENIOR" : null,
           apiFootballFixtureId: afId,
         }).returning();
-        await purgeStaleOrphanedPastFixtures(Date.parse("2026-01-02T00:00:00Z"));
+        await purgeStaleOrphanedPastFixtures(Date.parse("2026-01-15T00:00:00Z"));
         const remaining = await tx.select().from(fixturesTable).where(eq(fixturesTable.id, fixture!.id));
         expect(remaining).toHaveLength(survives ? 1 : 0);
         throw rollback;

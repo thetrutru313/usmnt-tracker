@@ -47,16 +47,16 @@ async function runCriticalStartupSeeds(): Promise<void> {
   // change announced between restarts won't be reflected until the next boot.
   // This logic belongs in the sync schedule — moving it is a separate change.
   //
-  // Seed the 4 announced Sept/Oct 2026 USMNT friendlies. Idempotency is keyed
+  // Seed the announced November 2026 Nations League quarterfinals.
+  // Played Sept/Oct friendlies are retired from this list, not recreated.
+  // Idempotency is keyed
   // on (home_team, away_team, competition, is_national_team, kickoff ±2 days) —
   // NOT on api_football_fixture_id — so the seed is safe across the full
   // fixture lifecycle (see friendlySeedLifecycle.test.ts for the contract).
   //
-  // Kickoffs converted from EDT (UTC-4) — the offset in Sept/Oct 2026:
-  //   Sept 26 USA vs Peru  : 4:30 PM ET = 20:30 UTC same day
-  //   Sept 29 USA vs Chile : 8:00 PM ET = 00:00 UTC next day (Sept 30)
-  //   Oct  3  USA vs Mexico: 10:00 PM ET = 02:00 UTC next day (Oct 4)
-  //   Oct  6  USA vs Canada: 8:00 PM ET  = 00:00 UTC next day (Oct 7)
+  // November uses EST (UTC-5). Leg 1's time is a placeholder, displayed TBD:
+  //   Nov 14 Haiti vs USA: time TBD; 00:00 UTC Nov 15 preserves Nov 14 in US time.
+  //   Nov 17 USA vs Haiti: 7:00 PM EST = 00:00 UTC Nov 18.
   try {
     type MatchDef = {
       sentinelId: number;
@@ -66,40 +66,35 @@ async function runCriticalStartupSeeds(): Promise<void> {
       awayLogoUrl: string;
       kickoffUtc: string;
       venue: string;
-      city: string;
+      city: string | null;
+      competition: string;
+      kickoffTimeTbd: boolean;
+      tvNetwork: string;
+      streamingService: string;
       windowStart: string;
       windowEnd: string;
     };
     // Logo URLs from the API-Football CDN: media.api-sports.io/football/teams/{id}.png
-    // USA=2384, Peru=30, Chile=2383, Mexico=16, Canada=5529
+    // Verified via API-Football /teams?name=Haiti: USA=2384, Haiti=2386.
+    // /leagues?search=CONCACAF Nations League: league 536, exact name below.
     const matches: MatchDef[] = [
       {
-        sentinelId: -2001, homeTeam: "USA", awayTeam: "Peru",
-        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
-        awayLogoUrl: "https://media.api-sports.io/football/teams/30.png",
-        kickoffUtc: "2026-09-26 20:30:00+00", venue: "Inter&Co Stadium", city: "Orlando, FL",
-        windowStart: "2026-09-24 00:00:00+00", windowEnd: "2026-09-28 23:59:59+00",
+        sentinelId: -2005, homeTeam: "Haiti", awayTeam: "USA",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2386.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        competition: "CONCACAF Nations League",
+        kickoffUtc: "2026-11-15 00:00:00+00", kickoffTimeTbd: true,
+        venue: "TBD", city: null, tvNetwork: "TNT", streamingService: "HBO Max",
+        windowStart: "2026-11-13 00:00:00+00", windowEnd: "2026-11-17 23:59:59+00",
       },
       {
-        sentinelId: -2002, homeTeam: "USA", awayTeam: "Chile",
+        sentinelId: -2006, homeTeam: "USA", awayTeam: "Haiti",
         homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
-        awayLogoUrl: "https://media.api-sports.io/football/teams/2383.png",
-        kickoffUtc: "2026-09-30 00:00:00+00", venue: "Energizer Park", city: "St. Louis, MO",
-        windowStart: "2026-09-28 00:00:00+00", windowEnd: "2026-10-01 23:59:59+00",
-      },
-      {
-        sentinelId: -2003, homeTeam: "USA", awayTeam: "Mexico",
-        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
-        awayLogoUrl: "https://media.api-sports.io/football/teams/16.png",
-        kickoffUtc: "2026-10-04 02:00:00+00", venue: "State Farm Stadium", city: "Glendale, AZ",
-        windowStart: "2026-10-02 00:00:00+00", windowEnd: "2026-10-06 23:59:59+00",
-      },
-      {
-        sentinelId: -2004, homeTeam: "USA", awayTeam: "Canada",
-        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
-        awayLogoUrl: "https://media.api-sports.io/football/teams/5529.png",
-        kickoffUtc: "2026-10-07 00:00:00+00", venue: "Allianz Field", city: "St. Paul, MN",
-        windowStart: "2026-10-05 00:00:00+00", windowEnd: "2026-10-09 23:59:59+00",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/2386.png",
+        competition: "CONCACAF Nations League",
+        kickoffUtc: "2026-11-18 00:00:00+00", kickoffTimeTbd: false,
+        venue: "TQL Stadium", city: "Cincinnati, OH", tvNetwork: "TNT", streamingService: "HBO Max",
+        windowStart: "2026-11-16 00:00:00+00", windowEnd: "2026-11-20 23:59:59+00",
       },
     ];
 
@@ -113,18 +108,18 @@ async function runCriticalStartupSeeds(): Promise<void> {
         INSERT INTO fixtures (
           api_football_fixture_id, home_team, away_team,
           competition, kickoff, venue, city, is_national_team, nt_level, status,
-          home_logo_url, away_logo_url
+          home_logo_url, away_logo_url, kickoff_time_tbd, tv_network, streaming_service
         )
         SELECT ${m.sentinelId}, ${m.homeTeam}, ${m.awayTeam},
-               'International Friendly', ${m.kickoffUtc}::timestamptz,
+               ${m.competition}, ${m.kickoffUtc}::timestamptz,
                ${m.venue}, ${m.city}, true, 'SENIOR', 'scheduled',
-               ${m.homeLogoUrl}, ${m.awayLogoUrl}
+               ${m.homeLogoUrl}, ${m.awayLogoUrl}, ${m.kickoffTimeTbd}, ${m.tvNetwork}, ${m.streamingService}
         WHERE NOT EXISTS (
           SELECT 1 FROM fixtures
           WHERE home_team       = ${m.homeTeam}
             AND away_team       = ${m.awayTeam}
             AND is_national_team = true
-            AND competition      = 'International Friendly'
+            AND competition      = ${m.competition}
             AND kickoff BETWEEN ${m.windowStart}::timestamptz
                             AND ${m.windowEnd}::timestamptz
         )
@@ -139,6 +134,10 @@ async function runCriticalStartupSeeds(): Promise<void> {
         SET kickoff        = ${m.kickoffUtc}::timestamptz,
             venue          = ${m.venue},
             city           = ${m.city},
+            competition    = ${m.competition},
+            kickoff_time_tbd = ${m.kickoffTimeTbd},
+            tv_network     = ${m.tvNetwork},
+            streaming_service = ${m.streamingService},
             home_logo_url  = ${m.homeLogoUrl},
             away_logo_url  = ${m.awayLogoUrl}
         WHERE api_football_fixture_id = ${m.sentinelId}
@@ -146,6 +145,10 @@ async function runCriticalStartupSeeds(): Promise<void> {
             kickoff        IS DISTINCT FROM ${m.kickoffUtc}::timestamptz
             OR venue       IS DISTINCT FROM ${m.venue}
             OR city        IS DISTINCT FROM ${m.city}
+            OR competition IS DISTINCT FROM ${m.competition}
+            OR kickoff_time_tbd IS DISTINCT FROM ${m.kickoffTimeTbd}
+            OR tv_network IS DISTINCT FROM ${m.tvNetwork}
+            OR streaming_service IS DISTINCT FROM ${m.streamingService}
             OR home_logo_url IS DISTINCT FROM ${m.homeLogoUrl}
             OR away_logo_url IS DISTINCT FROM ${m.awayLogoUrl}
           )
@@ -163,7 +166,7 @@ async function runCriticalStartupSeeds(): Promise<void> {
             WHERE f2.home_team       = ${m.homeTeam}
               AND f2.away_team       = ${m.awayTeam}
               AND f2.is_national_team = true
-              AND f2.competition      = 'International Friendly'
+              AND f2.competition      = ${m.competition}
               AND f2.api_football_fixture_id > 0
               AND f2.kickoff BETWEEN ${m.windowStart}::timestamptz
                              AND ${m.windowEnd}::timestamptz
@@ -172,9 +175,9 @@ async function runCriticalStartupSeeds(): Promise<void> {
       totalDeduped += (dedupResult as unknown as { rowCount?: number }).rowCount ?? 0;
     }
 
-    if (totalInserted > 0) logger.info({ totalInserted }, "Startup: seeded Sept/Oct 2026 USMNT friendly fixtures");
-    if (totalCorrected > 0) logger.info({ totalCorrected }, "Startup: corrected Sept/Oct 2026 USMNT friendly fixture fields");
-    if (totalDeduped > 0) logger.info({ totalDeduped }, "Startup: removed duplicate Sept/Oct 2026 USMNT friendly sentinel rows");
+    if (totalInserted > 0) logger.info({ totalInserted }, "Startup: seeded November 2026 USMNT Nations League fixtures");
+    if (totalCorrected > 0) logger.info({ totalCorrected }, "Startup: corrected November 2026 USMNT Nations League fixture fields");
+    if (totalDeduped > 0) logger.info({ totalDeduped }, "Startup: removed duplicate November 2026 USMNT Nations League sentinel rows");
 
     // Enforce the seed list as the authoritative set: delete any national-team
     // fixture (NULL or negative api_football_fixture_id) whose (home_team, away_team)
@@ -197,7 +200,7 @@ async function runCriticalStartupSeeds(): Promise<void> {
       logger.info({ retiredCount: retiredIds.length, retiredIds }, "Startup: purged retired national-team sentinel fixtures (and their fixture_players links)");
     }
   } catch (err) {
-    logger.warn({ err }, "Startup: Sept/Oct 2026 friendly fixture seed failed (non-fatal)");
+    logger.warn({ err }, "Startup: November 2026 Nations League fixture seed failed (non-fatal)");
   }
 }
 
@@ -230,9 +233,9 @@ app.listen(port, async (err) => {
   // idempotent — and ensures promotion still happens promptly after a deploy
   // rather than waiting up to an hour for the first scheduled tick.
   //
-  // Removable when: all sentinel rows seeded above have positive
-  // api_football_fixture_id values (i.e. all 4 Sept/Oct friendlies have been
-  // played and their match logs synced). When that point arrives,
+  // Keep until the new November sentinels -2005 and -2006 have positive
+  // api_football_fixture_id values. The played Sept/Oct friendlies no longer
+  // determine when this backfill can be retired. When both legs bind,
   // promoteNtSentinelIds() can also be removed from the schedule in
   // startUsmntStatsSyncSchedule().
   (async () => {

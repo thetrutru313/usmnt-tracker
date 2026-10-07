@@ -1,0 +1,1 @@
+ALTER TABLE "fixtures" ADD COLUMN "kickoff_time_tbd" boolean DEFAULT false NOT NULL;

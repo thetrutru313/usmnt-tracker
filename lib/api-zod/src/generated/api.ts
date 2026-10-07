@@ -60,6 +60,8 @@ export const GetPlayerQueryParams = zod.object({
   "cycle": zod.coerce.string().optional().describe('World Cup cycle label (e.g. \"2026 World Cup\") to show USMNT stats for. Defaults to the most recent cycle with synced data.')
 })
 
+export const getPlayerResponseUpcomingFixturesItemKickoffTimeTbdDefault = false;
+
 export const GetPlayerResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -220,6 +222,7 @@ export const GetPlayerResponse = zod.object({
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(getPlayerResponseUpcomingFixturesItemKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -273,11 +276,14 @@ export const ListFixturesQueryParams = zod.object({
   "playerId": zod.coerce.number().optional()
 })
 
+export const listFixturesResponseKickoffTimeTbdDefault = false;
+
 export const ListFixturesResponseItem = zod.object({
   "id": zod.number(),
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(listFixturesResponseKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -311,11 +317,14 @@ export const GetFixtureParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getFixtureResponseOneKickoffTimeTbdDefault = false;
+
 export const GetFixtureResponse = zod.object({
   "id": zod.number(),
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(getFixtureResponseOneKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -468,12 +477,17 @@ export const ListTransfersResponse = zod.array(ListTransfersResponseItem)
 /**
  * @summary Get dashboard summary
  */
+export const getDashboardResponseTodaysGamesItemKickoffTimeTbdDefault = false;
+export const getDashboardResponseUpcomingGamesItemKickoffTimeTbdDefault = false;
+export const getDashboardResponseNextScheduleEventFixturesItemKickoffTimeTbdDefault = false;
+
 export const GetDashboardResponse = zod.object({
   "todaysGames": zod.array(zod.object({
   "id": zod.number(),
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(getDashboardResponseTodaysGamesItemKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -502,6 +516,7 @@ export const GetDashboardResponse = zod.object({
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(getDashboardResponseUpcomingGamesItemKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -655,6 +670,7 @@ export const GetDashboardResponse = zod.object({
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(getDashboardResponseNextScheduleEventFixturesItemKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),
@@ -807,6 +823,8 @@ export const GetRankingsResponse = zod.object({
 /**
  * @summary List USMNT schedule events
  */
+export const listScheduleEventsResponseEventsItemFixturesItemKickoffTimeTbdDefault = false;
+
 export const ListScheduleEventsResponse = zod.object({
   "events": zod.array(zod.object({
   "id": zod.number(),
@@ -826,6 +844,7 @@ export const ListScheduleEventsResponse = zod.object({
   "isNationalTeam": zod.boolean(),
   "competition": zod.string(),
   "kickoff": zod.coerce.date(),
+  "kickoffTimeTbd": zod.boolean().default(listScheduleEventsResponseEventsItemFixturesItemKickoffTimeTbdDefault).describe('Only the kickoff time is unknown; the date remains known.'),
   "venue": zod.string(),
   "city": zod.string().nullish(),
   "homeTeam": zod.string(),

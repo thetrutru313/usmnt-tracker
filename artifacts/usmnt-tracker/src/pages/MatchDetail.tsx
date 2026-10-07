@@ -264,7 +264,9 @@ export default function MatchDetail() {
         <div className="border-t border-border px-6 py-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock size={12} />
-            {format(new Date(fixture.kickoff), "EEEE, MMMM d, yyyy · h:mm a")}
+            {fixture.kickoffTimeTbd
+              ? `${format(new Date(fixture.kickoff), "EEEE, MMMM d, yyyy")} · Time TBD`
+              : format(new Date(fixture.kickoff), "EEEE, MMMM d, yyyy · h:mm a")}
           </span>
           <span className="flex items-center gap-1.5">
             <MapPin size={12} />

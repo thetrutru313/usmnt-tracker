@@ -20,6 +20,7 @@ export const fixturesTable = pgTable("fixtures", {
   ntLevel: text("nt_level"),
   competition: text("competition").notNull(),
   kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),
+  kickoffTimeTbd: boolean("kickoff_time_tbd").notNull().default(false),
   venue: text("venue").notNull(),
   homeTeam: text("home_team").notNull(),
   awayTeam: text("away_team").notNull(),

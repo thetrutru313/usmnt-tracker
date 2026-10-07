@@ -671,6 +671,10 @@ components:
         isNationalTeam: { type: boolean }
         competition: { type: string }
         kickoff: { type: string, format: date-time }
+        kickoffTimeTbd:
+          type: boolean
+          default: false
+          description: Only the kickoff time is unknown; the date remains known.
         venue: { type: string }
         # City/state display string, e.g. "Orlando, FL". Null for club fixtures
         # and for NT fixtures where the venue city is not yet announced.

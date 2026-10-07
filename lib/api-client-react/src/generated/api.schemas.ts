@@ -198,6 +198,8 @@ export interface Fixture {
   isNationalTeam: boolean;
   competition: string;
   kickoff: string;
+  /** Only the kickoff time is unknown; the date remains known. */
+  kickoffTimeTbd?: boolean;
   venue: string;
   /** @nullable */
   city?: string | null;
