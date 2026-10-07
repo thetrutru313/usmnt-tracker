@@ -742,3 +742,17 @@ mtime_ms = 1791405971394
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/89e35028-31a2-44a2-a78f-9b31da58f716/bbd8a52e-0cc9-47cb-aac4-bfac00f3df8e"
 storage_version_token = "1791405976591710"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "_1BHyWVsHwJZLlEuUJkDC"
+uri = "file://reports/schedule-rebuild-report.md"
+type = "text"
+title = "USMNT Schedule Rebuild — Report and Production SQL"
+description = "Complete Markdown report with verified dev rows, read-only production snapshot, guarded SQL for user execution, test and CI evidence, race diagnosis, and hero-selection reasoning."
+logical_id = "78c1413b-c460-4daa-b3ca-3ec68391f406"
+content_hash = "sha256:52a76dc5c62acd49394b28b228f96f427fe961f28b12a21a9504a0d8044c1f84"
+size = 31538
+mtime_ms = 1791407093021
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/78c1413b-c460-4daa-b3ca-3ec68391f406/a013c011-ad87-475f-9d74-5715f4610a4c"
+storage_version_token = "1791407182031297"
+content_type = "text/markdown"

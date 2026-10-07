@@ -1,17 +1,19 @@
 ---
-name: CI api-server test seeding blocker
-description: Three integration test files fail in a schema-only CI database and need seed rows before the api-server test step can be green.
+name: CI seed assumptions
+description: Distinguishing historical fresh-database test failures from current CI evidence
 ---
 
-Three test files in `artifacts/api-server/src/lib/__tests__/` fail on a fresh schema-only DB (no seeded rows).
-They pass on the Replit dev database which has real seed data.
+Do not treat an old fresh-database seeding failure as a standing CI blocker.
+Inspect the current tests and current run before recommending a seed step.
+Integration tests should own their required rows rather than silently depend on
+the sports data present in development.
 
-| File | Failure | Needs |
-|---|---|---|
-| `coleCampbellNoStatsGraceful.test.ts` | "Cole Campbell not found in players table" | A seeded `players` row for Cole Campbell |
-| `recoveryRoundTrip.test.ts` | "No players found in the database" | At least one seeded `players` row |
-| `rescoreCapOrderingIntegration.test.ts` | FK violation on `clubs` table (`club_id=1`) | A seeded `clubs` row (id=1) |
+**Why:** Earlier fresh-database runs failed on player/club assumptions hidden by
+seeded development data. A later verified run passed with the existing
+schema-only workflow, disproving the earlier claim that seeding was always
+required. A green parallel run alone does not prove every historical data
+dependency has been removed.
 
-**Why:** These tests were written against the dev DB and rely on pre-existing rows rather than inserting their own fixtures.
-
-**How to apply:** When adding a CI seed step or deciding to convert these tests to self-contained fixtures, address all three together. The CI workflow at `.github/workflows/codegen-drift.yml` includes the api-server test step with a comment noting these files as the blocker.
+**How to apply:** If missing data causes a current CI failure, inspect the failing
+test's fixture setup and shared-database writers. Do not add unrequested seeding
+or change CI solely because this historical note once described a blocker.
