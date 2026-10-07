@@ -728,3 +728,17 @@ mtime_ms = 1791403558650
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a475613c-b41d-4eba-afbe-a68797f13e9d/d6e5e6bb-28e2-4d72-92df-50db3532346f"
 storage_version_token = "1791403564846598"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "ZMJb2pFuZJi7d-FP8MFLV"
+uri = "file://reports/schedule-rebuild-stopped-report.md"
+type = "text"
+title = "USMNT Schedule Rebuild — Stopped-Work Report"
+description = "Downloadable Markdown report of completed changes, verification results, blocking failures, and pending work."
+logical_id = "89e35028-31a2-44a2-a78f-9b31da58f716"
+content_hash = "sha256:13ed9d7e43acdc7714ce0b58079fed86d2d75179e6481dfe476dfa98340d1f7a"
+size = 4813
+mtime_ms = 1791405971394
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/89e35028-31a2-44a2-a78f-9b31da58f716/bbd8a52e-0cc9-47cb-aac4-bfac00f3df8e"
+storage_version_token = "1791405976591710"
+content_type = "text/markdown"
