@@ -7,6 +7,7 @@ uri = "file://verification-report-2026-08-05.md"
 type = "text"
 title = "Verification Report — Aug 5 2026"
 description = "Read-only audit: install, typecheck, build, tests, db filter, sync_metadata, and pnpm audit results."
+logical_id = "34eb5588-66d5-4d36-8df8-72bac98cfe48"
 
 [[outputs]]
 id = "ElsInmI86L9wkCawP5qLD"
@@ -14,6 +15,7 @@ uri = "file://audit-fix-report-2026-08-05.md"
 type = "text"
 title = "Audit Fix Report — 2026-08-05"
 description = "Before/after vulnerability counts, overrides applied, remaining 15 out-of-scope findings, and test results."
+logical_id = "63daab55-0190-472d-9eb0-0902605cbabf"
 
 [[outputs]]
 id = "BreXf8YOYVbWF0MjSpR4a"
@@ -21,6 +23,7 @@ uri = "file://audit-uuid-revert-report-2026-08-05.md"
 type = "text"
 title = "uuid Revert & Verification Report — 2026-08-05"
 description = "gaxios uuid analysis, three runtime verification tests, and final pnpm audit counts."
+logical_id = "7c980680-b9d9-488e-8e9d-9d070637792b"
 
 [[outputs]]
 id = "AeJHp2tMYH0qdKtHf517Y"
@@ -28,6 +31,7 @@ uri = "file://security-fix-report-2026-08-06.md"
 type = "text"
 title = "Security Fix Report — 2026-08-06"
 description = "Brute-force rate limit on admin login + invoice path authorisation fix. Diffs, test results, and file inventory."
+logical_id = "d0884ec9-78b1-4bcf-a904-9fa3d2097369"
 
 [[outputs]]
 id = "p0kZ3NSUtIZLXj9hkX-I1"
@@ -35,6 +39,7 @@ uri = "file://task-a-findings.md"
 type = "text"
 title = "Task A Findings — Test Suite Analysis"
 description = "API-server mocked vs. integration split, frontend date-drift failures, and UTC vs. local timezone mismatch in Fixtures.test.tsx. Includes CI decisions needed before Task C."
+logical_id = "c2ca14d4-f0c7-449b-b6be-8bfbd9e21559"
 
 [[outputs]]
 id = "czyGG2_QQULZVxDiXKZX-"
@@ -42,6 +47,7 @@ uri = "file://reports/ci-lint-report.md"
 type = "text"
 title = "CI & Lint Setup Report"
 description = "Full report covering ESLint/Prettier setup, lint counts by rule, CI workflow changes, and the 3 api-server test files that need seed data before CI goes fully green."
+logical_id = "d3c8a345-e7dc-43c9-b88c-b82ecf1e00fc"
 
 [[outputs]]
 id = "stHq6ltD62Q1exuHxP3X_"
@@ -49,6 +55,7 @@ uri = "file://reports/ci-lint-tasks-results.md"
 type = "text"
 title = "CI / Lint Task Results"
 description = "Full results for all four tasks: canary verification, Decision 2 & 3 documentation, self-contained fixtures, and CI workflow corrections."
+logical_id = "2b6b5f14-6136-44f7-b09c-af66577644a4"
 
 [[outputs]]
 id = "ewjagPlnL7yLloZdmpPDF"
@@ -56,6 +63,7 @@ uri = "file://reports/six-fixes-results.md"
 type = "text"
 title = "Six Independent Fixes — Results"
 description = "Full results for all six fixes: static import, list rate limits, DB indexes, RSS https, loud WebKit skip, unused deps."
+logical_id = "5222e83c-ec2e-4948-9bac-6b99dfab061e"
 
 [[outputs]]
 id = "jgQ9yKUWaQrh5HI-_i0n7"
@@ -63,6 +71,7 @@ uri = "file://reports/three-followup-fixes-results.md"
 type = "text"
 title = "Three Follow-Up Fixes — Results"
 description = "Migration collision rename (0010_add_missing_indexes), explicit limits on Injuries/Transfers pages, lint + frontend test results."
+logical_id = "102a32a1-1d78-4552-bb85-1fc8f70ba74a"
 
 [[outputs]]
 id = "mkfl63_MnT7AGOuz7eJy7"
@@ -70,6 +79,7 @@ uri = "file://reports/time-bomb-scan-results.md"
 type = "text"
 title = "Time-Bomb Scan Results"
 description = "Full classification of every Date.now() hit across both test suites, root-cause write-up for both time bombs, and 5-run verification data."
+logical_id = "77c4cc37-dc94-4fab-b322-c787bd5528ea"
 
 [[outputs]]
 id = "QQYTyS9BmAnEr4_D2PD6Z"
@@ -77,6 +87,7 @@ uri = "file://reports/full-suite-runs-and-upper-bound-check.md"
 type = "text"
 title = "Full-Suite Runs & Upper-Bound Check"
 description = "Three consecutive full-suite results (712/712 each) and a precise analysis of why the +30d–+50d date constants in Suites A/B are safe indefinitely."
+logical_id = "51639b4a-9a5a-487f-9ab1-036c52a551ad"
 
 [[outputs]]
 id = "DXo2B5QJe7cElFFL2cUJd"
@@ -84,6 +95,7 @@ uri = "file://reports/checkpoint-verification-2026-08-06.md"
 type = "text"
 title = "Checkpoint Verification — 2026-08-06"
 description = "Working tree status, last 20 commits, per-file history for 7 key files, and HEAD typecheck + test results."
+logical_id = "7af30e6e-36e2-42fa-b1a7-5cee539a1ebd"
 
 [[outputs]]
 id = "RjnPwDtJW1u85ATjMdpPt"
@@ -91,6 +103,7 @@ uri = "file://reports/migration-diagnostic-2026-08-06.md"
 type = "text"
 title = "Migration Diagnostic — 2026-08-06"
 description = "Read-only audit of the Drizzle migration system: access paths, backup status, inventory, scratch-DB apply results, prod/dev schema diff, and six staged index check."
+logical_id = "77b1a131-180c-48a9-88c5-1cf56def1360"
 
 [[outputs]]
 id = "jzBvwDtTLfjXli1pIW67m"
@@ -98,6 +111,7 @@ uri = "file://reports/step-0-backup-report-2026-08-06.md"
 type = "text"
 title = "Step 0 — Backup Report — 2026-08-06"
 description = "Dev backup status, all three production backup options (a/b/c), PITR findings, and disclosure of unauthorized Step 1 actions."
+logical_id = "1c97aacc-d308-4fdf-9be3-4a827452cf52"
 
 [[outputs]]
 id = "J1ikhGOXnxkcywnKWkWxY"
@@ -105,6 +119,7 @@ uri = "file://reports/step-1-index-report-2026-08-06.md"
 type = "text"
 title = "Step 1 — Index Application Report — 2026-08-06"
 description = "CSV backup verification (all 21 tables), 0010 fix, scratch/dev apply results, exact production SQL, and the production blocker with options."
+logical_id = "761a7a65-441a-4070-84b3-ca01afb10724"
 
 [[outputs]]
 id = "XgZvOlOXgVWQ4I3pQsaxp"
@@ -112,6 +127,7 @@ uri = "file://reports/step-2-3-baseline-report-2026-08-06.md"
 type = "text"
 title = "Steps 2–3.5a — Baseline Migration Report — 2026-08-06"
 description = "Archive, baseline generation, full scratch-vs-production comparison, dev migration table setup, hash derivation, and Publish evidence. Stopped at Step 3.5b."
+logical_id = "ea360fed-07e6-4b58-8164-4d660f66fd84"
 
 [[outputs]]
 id = "xtDAm0qh1romIc7qRJhTB"
@@ -119,6 +135,7 @@ uri = "file://reports/step-4-5-completion-report-2026-08-06.md"
 type = "text"
 title = "Steps 3.5b–5 — Completion Report — 2026-08-06"
 description = "Publish index verification, migrate proof (scratch + dev + throwaway round-trip), documentation (lib/db/README.md + replit.md), and final verification suite results."
+logical_id = "a0b2696e-232e-41b8-8c93-933686f5189f"
 
 [[outputs]]
 id = "U1SxtlbyORt-6DJ8IFpH_"
@@ -126,6 +143,7 @@ uri = "file://reports/index-ts-startup-cleanup-2026-08-06.md"
 type = "text"
 title = "index.ts startup block cleanup — 2026-08-06"
 description = "Inventory, recurrence analysis, classification table, and verification results for the api-server startup block audit."
+logical_id = "71004069-ae94-4522-820b-50a3fd144fd1"
 
 [[outputs]]
 id = "e-LCS_zCqijx-uhsvQbcH"
@@ -133,6 +151,7 @@ uri = "file://reports/admin-session-auth-migration.md"
 type = "text"
 title = "Admin Session Auth Migration Report"
 description = "Full writeup of the password-as-token → server-side session token change: schema, backend, frontend, tests, security properties, and operational notes."
+logical_id = "9f4458f7-e71e-4ed9-a1ce-95e72307f1b7"
 
 [[outputs]]
 id = "NQEk84grguVDXukMheGMl"
@@ -140,6 +159,7 @@ uri = "file://reports/pre-publish-cleanup.md"
 type = "text"
 title = "Pre-Publish Cleanup Report"
 description = "adminSession.test.ts rewrite, lint fixes, expiry alignment check, transparency test row cleanup, and production verification."
+logical_id = "5231df1a-039f-4718-8484-0d17a3d3592d"
 
 [[outputs]]
 id = "yLjjUBHp7dvtgrVk_tuzs"
@@ -147,6 +167,7 @@ uri = "file://admin-login-diagnostic-2026-08-06.md"
 type = "text"
 title = "Admin Login Diagnostic — 2026-08-06"
 description = "Full diagnostic report: root cause analysis, verbatim log excerpts, code evidence, and recommended fix sequence for the production admin login loop."
+logical_id = "2ba49e11-f3bd-4b1b-b68b-1519f2cfa926"
 
 [[outputs]]
 id = "F_CoW_DUF5ci2DbuH_aXm"
@@ -154,6 +175,7 @@ uri = "file://reports/admin-auth-fix-report.md"
 type = "text"
 title = "Admin Auth Fix — Implementation Report"
 description = "Covers Fix A (token propagation), Fix B (race guard), rate-limit UX, regression tests, verification results, and the healthcheck 500 investigation."
+logical_id = "ccd87cb9-5ab4-4103-b07a-4c21e42a72b8"
 
 [[outputs]]
 id = "ar0E8mlLvwM-gKjgI3Lbn"
@@ -161,6 +183,7 @@ uri = "file://reports/post-publish-verification-report.md"
 type = "text"
 title = "Post-Publish Verification Report — Admin Auth Fix"
 description = "Full production log analysis for all four scenarios (fresh login, session persistence, re-auth modal, rate-limit UX), outage timeline, and manual browser steps for post-publish confirmation."
+logical_id = "8954dd21-2bb8-4db9-a439-9a65e753e5da"
 
 [[outputs]]
 id = "-kvPCp2YxLRUc5k1oX-fX"
@@ -168,6 +191,7 @@ uri = "file://reports/invoice-upload-diagnosis-report.md"
 type = "text"
 title = "Invoice Upload Diagnosis Report"
 description = "Root cause analysis of the transparency invoice upload failure — CSP connect-src blocks the GCS PUT, timeline of the 8-day open window, server-side health check, and production log evidence."
+logical_id = "b10fb051-db0d-426c-93ed-331e82af812a"
 
 [[outputs]]
 id = "ugJf6ZjpmzVc2_-NjSzR_"
@@ -175,6 +199,7 @@ uri = "file://e2e/docs/upload-e2e-analysis.md"
 type = "text"
 title = "Upload Round-Trip E2E Analysis"
 description = "Obstacles encountered, fixes applied, and what CI promotion requires."
+logical_id = "b7660a4d-e1ef-4b56-8c03-1f80cadca408"
 
 [[outputs]]
 id = "cihYaM1gm3GSPWYIqMAJr"
@@ -182,6 +207,7 @@ uri = "file://e2e/docs/csp-cors-upload-fix-report.md"
 type = "text"
 title = "CSP & CORS Upload Fix Report"
 description = "Full write-up of the connect-src fix, CORS localhost change, duplicate-month 409 fix, new unit test, and e2e round-trip test — including CI promotion requirements and verification results."
+logical_id = "556521a4-9569-4840-83eb-e46b969a5b16"
 
 [[outputs]]
 id = "HstsGMme0ZaY_kjPzl734"
@@ -189,6 +215,7 @@ uri = "file://e2e/docs/commit-2b705af.md"
 type = "text"
 title = "Commit 2b705af — record"
 description = "Commit hash, full message, diff stat, squash note, and verification results."
+logical_id = "1474bc89-ca85-4af6-8548-3605ef040ee8"
 
 [[outputs]]
 id = "TfEWvQREG6N11kPVY_C-N"
@@ -196,6 +223,7 @@ uri = "file://reports/background-job-reliability-eval.md"
 type = "text"
 title = "Background Job Reliability — Read-Only Evaluation"
 description = "Answers to all four questions: multi-deployment feasibility, Reserved VM tradeoffs, scheduled deployments, and worker.ts inventory. Includes recommendation."
+logical_id = "6ef11e6d-e519-4a01-b771-d73b5cd02cdf"
 
 [[outputs]]
 id = "XFACfvFWUF9yhaEUjiKtM"
@@ -203,6 +231,7 @@ uri = "file://reports/nt-sentinel-promotion-report.md"
 type = "text"
 title = "NT Sentinel Promotion — Implementation Report"
 description = "Full write-up: architecture, files changed, overlap-window fix, tests, and cleanup guidance."
+logical_id = "c1934fee-4b55-4718-a26b-7ac05f22c8bb"
 
 [[outputs]]
 id = "Vvg1RX0QSTwNRb4PESg0S"
@@ -210,6 +239,7 @@ uri = "file://reports/task-7c-step1-report.md"
 type = "text"
 title = "Task 7C — Reserved VM Switch: Step 1 Pre-Flight Report"
 description = "deploymentTarget value, cost delta, URL/downtime/secrets/sidecar analysis. Awaiting approval before Step 2."
+logical_id = "466a4c25-8342-4941-b2c5-47d8abc6cb6d"
 
 [[outputs]]
 id = "DYDYY4we06yB3I44vOUAA"
@@ -217,6 +247,7 @@ uri = "file://reports/ci-first-run-2026-08-07.md"
 type = "text"
 title = "CI First Run Report — 2026-08-07"
 description = "Verbatim failure output, root cause, and step-by-step results from the first GitHub Actions run."
+logical_id = "2eaff1f0-9f80-412f-9c4d-5ca9f8049a9c"
 
 [[outputs]]
 id = "hvlBjOvUDQ8P1y3vhNCy6"
@@ -224,6 +255,7 @@ uri = "file://reports/ci-green-repo-hygiene-2026-08-07.md"
 type = "text"
 title = "CI Green + Repo Hygiene — 2026-08-07"
 description = "All 7 tasks, placeholder-key test counts, final env block, README, and CI step-by-step."
+logical_id = "aeafbe7d-124f-4690-9606-8bf5bdf729f7"
 
 [[outputs]]
 id = "s23H0RckvJSXu5QLcr3fN"
@@ -231,6 +263,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q1_duplicate_player_stats.csv"
 type = "table"
 title = "Q1_duplicate_player_stats"
 description = "Q1: Duplicate player_stats rows — groups, total rows, worst-case copies by period_type"
+logical_id = "d749ed46-7186-4df5-b5ff-1f04070753b2"
 
 [[outputs]]
 id = "QGAmD03noln5j8HHtFfSj"
@@ -238,6 +271,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q1b_disagree_duplicates.csv"
 type = "table"
 title = "Q1b_disagree_duplicates"
 description = "Q1b: Duplicates that DISAGREE on minutes or avg_rating — non-deterministic badge players"
+logical_id = "107f04e3-b24b-4889-9dd7-004fb27df22f"
 
 [[outputs]]
 id = "PkwnQC8BbqmWmlLZfxVq3"
@@ -245,6 +279,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q1c_constraint_preflight.csv"
 type = "table"
 title = "Q1c_constraint_preflight"
 description = "Q1c: Pre-flight count — rows that would block adding UNIQUE(player_id, period_type)"
+logical_id = "dfeabbe5-0231-4b78-ac69-4ffad0f20b27"
 
 [[outputs]]
 id = "p3imFbkwZe0gMWvM-fSd0"
@@ -252,6 +287,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q2_transfer_vs_profile_mismatch.csv
 type = "table"
 title = "Q2_transfer_vs_profile_mismatch"
 description = "Q2: Transfer page vs profile club mismatch — players where to_club ≠ current club name"
+logical_id = "ea087679-c713-4526-937a-8af0042018b0"
 
 [[outputs]]
 id = "FLIQJlQvNa49CnyjW0fjx"
@@ -259,6 +295,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q2b_guard_skip_reason.csv"
 type = "table"
 title = "Q2b_guard_skip_reason"
 description = "Q2b: Guard skip reason for each mismatch — which of the 3 silent skip paths fired"
+logical_id = "8c34a860-7eed-471a-bc22-6ac2eadb17b1"
 
 [[outputs]]
 id = "1aNik65ARcSPsxQvka9oY"
@@ -266,6 +303,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q3_duplicate_transfer_rows.csv"
 type = "table"
 title = "Q3_duplicate_transfer_rows"
 description = "Q3: Duplicate transfer rows for the same move — null-date daily-duplicate exposure"
+logical_id = "e66333a0-bad1-436a-8015-baf18b5dc735"
 
 [[outputs]]
 id = "I2v6oFUNamqFB5DS1u_xU"
@@ -273,6 +311,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q3b_transfer_date_source.csv"
 type = "table"
 title = "Q3b_transfer_date_source"
 description = "Q3b: Transfer date source split — real API midnight dates vs wall-clock fallback"
+logical_id = "f5fc9833-af1c-4186-b9d6-85b695cc8053"
 
 [[outputs]]
 id = "oTHGb-gDkM9GSgSlqjsVj"
@@ -280,6 +319,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q4_transfer_buzz_panel.csv"
 type = "table"
 title = "Q4_transfer_buzz_panel"
 description = "Q4: Transfer Buzz panel contents — status distribution and probability_score coverage"
+logical_id = "255cb081-79b1-4ff4-b74c-36cf41c4baf8"
 
 [[outputs]]
 id = "eVSgz0JiBxC0ixOfoVLtI"
@@ -287,6 +327,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q5_untagged_fixtures_why.csv"
 type = "table"
 title = "Q5_untagged_fixtures_why"
 description = "Q5: Untagged fixtures and why each is visible — NT bypass vs past-kickoff vs unexpected"
+logical_id = "f243900d-1d4e-4e4c-9c2e-450e6c4c5cea"
 
 [[outputs]]
 id = "YZ2dvZt5P7wxKYUaXg3Ib"
@@ -294,6 +335,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q5b_untagged_fixtures_on_screen.csv
 type = "table"
 title = "Q5b_untagged_fixtures_on_screen"
 description = "Q5b: Untagged fixtures currently on screen — upcoming + finished in last 7 days"
+logical_id = "a4f0e138-f03e-4ada-93e6-5c0f4ebd2235"
 
 [[outputs]]
 id = "bH6JzZU6cwZzqrFw_zKdC"
@@ -301,6 +343,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q6_tagged_but_zero_chips.csv"
 type = "table"
 title = "Q6_tagged_but_zero_chips"
 description = "Q6: Tagged fixtures with zero chips — all links stale (club_id mismatch) on scheduled"
+logical_id = "dccb7618-ef02-49e8-af2f-954d90b39c42"
 
 [[outputs]]
 id = "5ZsB_nh000ZpiD-VQI_GR"
@@ -308,6 +351,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q6b_null_club_id_links.csv"
 type = "table"
 title = "Q6b_null_club_id_links"
 description = "Q6b: NULL club_id links — permanently immune to purge and chip filter"
+logical_id = "a0bd1cca-c08a-4d65-a104-ce8ea9702671"
 
 [[outputs]]
 id = "vQfbpbmxWqrOQ6QQzsA2g"
@@ -315,6 +359,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q7_pool_tier_badge_mismatch.csv"
 type = "table"
 title = "Q7_pool_tier_badge_mismatch"
 description = "Q7: Pool-tier badge mismatch — list/dashboard badge vs profile badge per player"
+logical_id = "30558baa-c22c-4f6d-8ee2-a4285d4141b4"
 
 [[outputs]]
 id = "UsXVA7JOTtchwMSGIuqvz"
@@ -322,6 +367,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q8_season_aggregate_split.csv"
 type = "table"
 title = "Q8_season_aggregate_split"
 description = "Q8: Season aggregate split — rankings (current club) vs profile (all clubs) divergence"
+logical_id = "3f2ca771-945f-43f3-865f-449427da4aea"
 
 [[outputs]]
 id = "_WthyBp422SwVB04zqCxk"
@@ -329,6 +375,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q9_orphaned_fixture_links.csv"
 type = "table"
 title = "Q9_orphaned_fixture_links"
 description = "Q9: Orphaned fixture_players rows pointing at deleted players"
+logical_id = "01d225ee-de03-4d3f-b32d-95eaefe8df6f"
 
 [[outputs]]
 id = "6lcqw_m8e5_QfzyO-xr0C"
@@ -336,6 +383,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q10_dead_denormalized_columns.csv"
 type = "table"
 title = "Q10_dead_denormalized_columns"
 description = "Q10: Dead denormalised columns — performance_trend and trending distribution"
+logical_id = "d8f19e13-b88f-4d88-bb85-6dcd5d887605"
 
 [[outputs]]
 id = "nkcuqX1c7bidpl-rxNnuG"
@@ -343,6 +391,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q11_admin_club_overrides.csv"
 type = "table"
 title = "Q11_admin_club_overrides"
 description = "Q11: Admin club overrides currently in force and drift state"
+logical_id = "9c5f2a04-f399-47e6-ac6d-228b87387193"
 
 [[outputs]]
 id = "2SaAbgShvsXfc8U1rchAw"
@@ -350,6 +399,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q12_match_log_result_format.csv"
 type = "table"
 title = "Q12_match_log_result_format"
 description = "Q12: Match-log result format — bare-letter vs scoreline rows confirming colour-bug"
+logical_id = "3dd8c4c9-73aa-49c9-b623-8c00fd82cd65"
 
 [[outputs]]
 id = "EhvZBtq4D_P5SNlUvImdd"
@@ -357,6 +407,7 @@ uri = "file://reports/diagnostics-2026-08-07/Q13_sync_freshness.csv"
 type = "table"
 title = "Q13_sync_freshness"
 description = "Q13: Sync freshness — last_run_at and age for all sync jobs"
+logical_id = "a1dfbc89-3a2a-4d6e-82e8-b53e02819d3d"
 
 [[outputs]]
 id = "0p5DWyXeuW3iJe-OlAKKd"
@@ -364,6 +415,7 @@ uri = "file://reports/diagnostics-2026-08-07/DIAGNOSTIC_RESULTS.md"
 type = "text"
 title = "DIAGNOSTIC_RESULTS — 8 August 2026"
 description = "Full write-up of all 19 production diagnostic queries with findings, priority ranking, and per-query analysis."
+logical_id = "4fda8945-a364-4df2-9630-c96ca7e0ebf8"
 
 [[outputs]]
 id = "E2PJ5fNJ2qAmSOU2CxaKx"
@@ -371,6 +423,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q14_duplicate_player_stats_c
 type = "table"
 title = "Q14_duplicate_player_stats_corrected"
 description = "Q14 — Duplicate player_stats (corrected) — groups by real key (player_id, period_type, season)"
+logical_id = "f59c47f0-447c-4c0b-a6e6-874e4c8cf9a0"
 
 [[outputs]]
 id = "tXWwmYdwE7lt9gv7Hco7O"
@@ -378,6 +431,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q15_real_duplicates_that_dis
 type = "table"
 title = "Q15_real_duplicates_that_disagree"
 description = "Q15 — Real duplicates that disagree on minutes/goals/rating — currently non-deterministic values"
+logical_id = "fa29a0ce-efc9-4b8c-95e6-fc54241597b2"
 
 [[outputs]]
 id = "hmlI1fdgvrD7aI54mE8up"
@@ -385,6 +439,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q16_correct_constraint_prefl
 type = "table"
 title = "Q16_correct_constraint_preflight"
 description = "Q16 — Pre-flight for UNIQUE(player_id, period_type, season) — rows that would block it"
+logical_id = "08e23cc4-9a85-4f37-9f74-a68cf05dca0b"
 
 [[outputs]]
 id = "UH6SOvSMmYR5IJBeweab9"
@@ -392,6 +447,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q17_season_all_row_distribut
 type = "table"
 title = "Q17_season_all_row_distribution"
 description = "Q17 — season_all row distribution — confirms multi-row history is normal, not duplication"
+logical_id = "8fe6d505-732f-4755-8ace-33700c0d98fa"
 
 [[outputs]]
 id = "2H2U7XsZ0VqTioYlmaF5R"
@@ -399,6 +455,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q18_orphaned_fixture_players
 type = "table"
 title = "Q18_orphaned_fixture_players_detail"
 description = "Q18 — 8 orphaned fixture_players rows detail — all point at player_id 23, valid_links per fixture"
+logical_id = "37808160-be97-451f-9a38-f957a55142d6"
 
 [[outputs]]
 id = "5_unW9wEf4wKIzYNyfu4t"
@@ -406,6 +463,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q19_future_orphan_fixtures_b
 type = "table"
 title = "Q19_future_orphan_fixtures_by_competition"
 description = "Q19 — 44 future orphan fixtures by competition — 20 MLS Next Pro (all reserve), 6 friendlies, etc."
+logical_id = "0d64ce4a-f720-4daf-b02d-e901933ade20"
 
 [[outputs]]
 id = "2f024B-NOULBrB6sNMFa9"
@@ -413,6 +471,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q20_past_orphan_survival.csv
 type = "table"
 title = "Q20_past_orphan_survival"
 description = "Q20 — Past orphan fixture survival — how many finished orphans have accumulated"
+logical_id = "4357686a-d235-4ea8-a4c2-d72cff5c9a79"
 
 [[outputs]]
 id = "_4eGBXLeMakFwnwWYvrbz"
@@ -420,6 +479,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q11_admin_club_overrides_rer
 type = "table"
 title = "Q11_admin_club_overrides_rerun"
 description = "Q11 rerun — Admin club overrides currently in force"
+logical_id = "7fd24cdf-669e-4782-b4b1-c0150e9ffe6f"
 
 [[outputs]]
 id = "G9YvgJOsqgpXsYQdSjGp6"
@@ -427,6 +487,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q12_match_log_result_format_
 type = "table"
 title = "Q12_match_log_result_format_rerun"
 description = "Q12 rerun — Match-log result format (confirms colour-coding bug)"
+logical_id = "4f287901-0a3d-45c8-bf57-f7e66b315a2b"
 
 [[outputs]]
 id = "YJ-8iGpSP3DkpVM9kS1e7"
@@ -434,6 +495,7 @@ uri = "file://reports/diagnostics-round2-2026-08-08/Q13_sync_freshness_rerun.csv
 type = "table"
 title = "Q13_sync_freshness_rerun"
 description = "Q13 rerun — Sync freshness — last_run_at and age for all sync jobs"
+logical_id = "f1b975ab-593d-4624-9757-dc6a1b994bd5"
 
 [[outputs]]
 id = "Az3h41ZmPubGLPdoV8S5Q"
@@ -441,6 +503,7 @@ uri = "file://reports/prompt-11-report.md"
 type = "text"
 title = "Prompt 11 Report"
 description = "Display consistency fixes (Tasks A–D): result colour coding, poolTier unification, season_all rankings, Transfer Buzz removal."
+logical_id = "4e8fd51f-3457-451e-94a0-3a0ae649de35"
 
 [[outputs]]
 id = "Dk-XV7PEbv2l9CcYr3OFv"
@@ -448,6 +511,7 @@ uri = "file://reports/prompt-11-fix-report.md"
 type = "text"
 title = "Prompt 11-FIX Report"
 description = "Data-driven rankings season-year resolver — recorded failures, full implementation, production counts, and verification checklist."
+logical_id = "630decb9-514a-4ad2-8bc4-b8f191135c83"
 
 [[outputs]]
 id = "oxRDL6cYLplnmsVlNPnJB"
@@ -455,6 +519,7 @@ uri = "file://reports/player_stats_season_all_production_2026-08-08.csv"
 type = "table"
 title = "player_stats season_all — production (2026-08-08)"
 description = "COUNT(DISTINCT player_id), SUM(minutes), SUM(goals) grouped by season where period_type='season_all'. Queried from production (neondb) replica."
+logical_id = "af572a2f-faf2-41b5-a303-b0aeab9d1394"
 
 [[outputs]]
 id = "Fg8uhmWwgRPpDUpYoapDO"
@@ -462,6 +527,7 @@ uri = "file://reports/prompt-12-delivery-report.md"
 type = "text"
 title = "Prompt 12 Delivery Report"
 description = "Schema fixes: FK, unique indexes, deterministic badge, column drop — full report with migration SQL, test counts, and post-publish checklist."
+logical_id = "42d38137-0e03-4f4f-8cea-9001cb2934b0"
 
 [[outputs]]
 id = "ylhJFiwYiJTjiQiofvWRb"
@@ -469,6 +535,7 @@ uri = "file://reports/prompt-13-step0-report.md"
 type = "text"
 title = "Prompt 13 — Step 0 Report"
 description = "Production orphan count, write-path findings, and next steps awaiting your input."
+logical_id = "e39f427f-0cbd-406b-9f75-1d742c2d5779"
 
 [[outputs]]
 id = "DsX2niNt_knfOSNsQmp4z"
@@ -476,6 +543,7 @@ uri = "file://reports/u17-u20-fixture-leakage-diagnostic.md"
 type = "text"
 title = "U17/U20 Fixture Leakage Diagnostic"
 description = "Read-only audit of every fixture query, write path, and existing team-name workaround related to youth national-team fixtures appearing on the Dashboard and Schedule pages."
+logical_id = "20193d4b-c717-4024-91dd-c8b696cdcaf1"
 
 [[outputs]]
 id = "CAHgeUYz7dEu2FEiR2IBK"
@@ -483,6 +551,7 @@ uri = "file://reports/dashboard-fixture-render-trace.md"
 type = "text"
 title = "Dashboard Fixture Render Trace"
 description = "Read-only trace of every fixture-rendering element in Dashboard.tsx back to its API field and server query, confirming the hero and upcoming-games list are fed by independent queries."
+logical_id = "5805c0ad-8c4e-4d2e-847f-625a47d7aa9c"
 
 [[outputs]]
 id = "5xHJxHFjVNb9CDO5Yza8W"
@@ -490,6 +559,7 @@ uri = "file://reports/nt-level-fix-report.md"
 type = "text"
 title = "U17/U20 Fixture Leak Fix — Implementation Report"
 description = "Full implementation report: schema change, write-path updates, predicate design, test coverage, verification results, and the production backfill SQL to run by hand."
+logical_id = "67aae2fa-013e-406a-88ca-85fbdb601c9c"
 
 [[outputs]]
 id = "wfJtOc9cn57c4crUFjIVE"
@@ -497,6 +567,7 @@ uri = "file://reports/eligibility-correctness-fixes-report.md"
 type = "text"
 title = "Eligibility Correctness Fixes — Report"
 description = "Report on the three eligibility/discovery bugs fixed: birthplace false positives, duplicated senior-caps logic, and stale candidate age."
+logical_id = "07bd83ec-0b18-4ff5-ac28-9f0f5e6cbdc3"
 
 [[outputs]]
 id = "54-EVFUZrPywSfi-6YzDJ"
@@ -504,6 +575,7 @@ uri = "file://reports/dual-national-false-positive-investigation.md"
 type = "text"
 title = "Dual-National False-Positive Investigation"
 description = "Investigation into detectSeniorNonUsCaps flagging capped USMNT internationals as DUAL_NATIONAL due to club competitions matching national-team keywords."
+logical_id = "32377da5-ab98-4f48-ad1b-d311877c4ab5"
 
 [[outputs]]
 id = "QSesCVofKHwk_fR2L0vsZ"
@@ -511,6 +583,7 @@ uri = "file://reports/dual-national-team-identity-gate-fix.md"
 type = "text"
 title = "DUAL_NATIONAL team-identity gate fix"
 description = "Root cause, fix details, test coverage, and the read-only impact dry-run (31 flagged, 5 still qualify, 26 would clear)."
+logical_id = "ad29a425-d275-4854-9585-d96d4bcff2f7"
 
 [[outputs]]
 id = "bka1qy4VGCc9mnFN36kMW"
@@ -518,6 +591,7 @@ uri = "file://reports/prior-caps-staleness-investigation.md"
 type = "text"
 title = "Prior caps staleness investigation"
 description = "Read-only findings: rescore does write both cap columns, but candidate 137 is not Stas Kornzeniowski (that's id 963), and review-queue numbers with a null last_scored_at are stale, not current."
+logical_id = "d42093d0-5cee-4d34-952a-1b3cd103794e"
 
 [[outputs]]
 id = "T66GfbxrUp_TxCTcWZhw9"
@@ -525,6 +599,7 @@ uri = "file://reports/prospect-quality-score-report.md"
 type = "text"
 title = "Prospect Quality Score — Implementation & Dry-Run Report"
 description = "Formula design, verification results, and the top-20 dry-run ranking for the new prospect quality score feature."
+logical_id = "68c1f6ef-c4d4-42df-b76a-a410a2923da2"
 
 [[outputs]]
 id = "rrXJO5KR4tKo_z5gCHkLc"
@@ -532,6 +607,7 @@ uri = "file://reports/prospect-quality-score-tuning-report.md"
 type = "text"
 title = "Prospect Quality Score — Tuning Pass Report"
 description = "Age-curve fix, rescaled 0-100 mapping, cup-league exclusion, club-display fix, and the item-2 investigation (dev DB only), plus a re-run dry run with the new top-20."
+logical_id = "828b92b4-018c-43ff-9776-b2a8fa7ee0e1"
 
 [[outputs]]
 id = "BGlnKAkNkutDv2dZgPy0T"
@@ -539,3 +615,32 @@ uri = "file://reports/womens-scope-fix-2026-08-26.md"
 type = "text"
 title = "Men's-Only Scope Fix — Report"
 description = "Investigation, fix, tests, and cleanup SQL for the women's-data exclusion bug."
+logical_id = "030183f5-41c1-40f2-942c-f1f9e265c90f"
+
+[[outputs]]
+id = "1Z25SSadGtt7svRrMiVBK"
+uri = "file://attached_assets/november-fixtures-frontend-baseline.txt"
+type = "text"
+title = "November frontend tests — unchanged-code baseline"
+description = "Complete recorded output: tests 1, 3 and 5 failed; test 4 and controls passed."
+logical_id = "4f08ea83-a0e3-4942-8d01-3bb253fad7ad"
+content_hash = "sha256:8da2c7cfd34ce7324a603d8bae573fab3c2900811e072119c4d3d0f3cb02b92d"
+size = 26431
+mtime_ms = 1791342865568
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/4f08ea83-a0e3-4942-8d01-3bb253fad7ad/2c2f0e31-96e9-46b6-b6aa-951f0db768eb"
+storage_version_token = "1791342878188616"
+content_type = "text/plain"
+
+[[outputs]]
+id = "0I2yVtlP5JmAHTC0uGY7A"
+uri = "file://attached_assets/sentinel-seven-day-baseline.txt"
+type = "text"
+title = "Seven-day retention — failing baseline"
+description = "Recorded failure before the grace-period change: the ten-day-old unbound senior sentinel was not purged."
+logical_id = "75f8c8c0-9aef-4151-9a3c-9db1837f54da"
+content_hash = "sha256:25e70b56386f6ed0d17889d51aa0b0f36419e44277de6d0eea8fa58b16407ba6"
+size = 1899
+mtime_ms = 1791342865581
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/75f8c8c0-9aef-4151-9a3c-9db1837f54da/31b9b6e3-0ee4-42f0-89e7-dee3e467d4b1"
+storage_version_token = "1791342878921207"
+content_type = "text/plain"
