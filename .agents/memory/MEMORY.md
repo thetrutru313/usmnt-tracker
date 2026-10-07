@@ -12,3 +12,4 @@
 - [Men's-only scope exclusion](womens-scope-exclusion.md) — women's-team name/league patterns, both admission points that need independent filtering, and the exported-but-unwired-filter trap.
 - [National-team retention](national-team-retention.md) — curated NT fixtures lack player links; unbound senior sentinels get seven days, bound NT rows stay protected.
 - [Test integrity](test-integrity.md) — truthful baselines; fix frontend timer lifecycle errors without suppression or fake timers that conceal defects.
+- [Shared-database test writers](shared-db-test-writers.md) — global NT repair can change another parallel test's fixtures; post-run cleanup can erase the history that enabled it.

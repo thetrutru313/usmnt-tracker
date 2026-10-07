@@ -5,6 +5,7 @@ import request from "supertest";
 import { db, fixturesTable, scheduleEventsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import app from "../../app.js";
+import { events } from "../../../../../lib/db/src/seeds/scheduleEventsData";
 
 const clock = vi.hoisted(() => ({
   transaction: null as unknown,
@@ -70,10 +71,6 @@ async function seededSandbox(check: (tx: Tx) => Promise<void>) {
       await tx.execute(sql`CREATE TEMP TABLE fixtures (LIKE public.fixtures INCLUDING ALL) ON COMMIT DROP`);
       await tx.execute(sql`CREATE TEMP TABLE fixture_players (LIKE public.fixture_players INCLUDING ALL) ON COMMIT DROP`);
       await tx.execute(sql`CREATE TEMP TABLE schedule_events (LIKE public.schedule_events INCLUDING ALL) ON COMMIT DROP`);
-      const source = await readFile(new URL("../../../../../lib/db/src/seeds/scheduleEvents.ts", import.meta.url), "utf8");
-      const data = source.slice(source.indexOf("const events"), source.indexOf("async function seed()"));
-      const { code } = await transform(`${data}\n`, { loader: "ts", target: "es2022" });
-      const events = new Function(`${code}; return events;`)() as (typeof scheduleEventsTable.$inferInsert)[];
       await tx.insert(scheduleEventsTable).values(events);
       await startupSeed(tx);
       await check(tx);
