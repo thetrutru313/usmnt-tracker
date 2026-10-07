@@ -756,3 +756,17 @@ mtime_ms = 1791407093021
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/78c1413b-c460-4daa-b3ca-3ec68391f406/a013c011-ad87-475f-9d74-5715f4610a4c"
 storage_version_token = "1791407182031297"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "h1nSGSjwIX0ke8FIJsVEy"
+uri = "file://reports/schedule-production-verification.md"
+type = "text"
+title = "Production Schedule Verification"
+description = "Markdown report covering production rows, schedule API fixture counts, dashboard hero, and the single disallowed-Origin request result."
+logical_id = "0d05d861-c109-4b8d-ae05-3a9333a18f0b"
+content_hash = "sha256:9ab4b31b63d7c22619aa3f25094fc200c00531adda251d0ba8c156989fa9d184"
+size = 2625
+mtime_ms = 1791407612609
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/0d05d861-c109-4b8d-ae05-3a9333a18f0b/91c46edc-b426-4272-977c-f629be2f38ce"
+storage_version_token = "1791407618466900"
+content_type = "text/markdown"
