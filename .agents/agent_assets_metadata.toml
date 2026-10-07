@@ -798,3 +798,17 @@ mtime_ms = 1791414353743
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/e2488feb-d05d-4d6f-96ff-132a0ff1faa4/b115073a-929a-4b84-8026-97d0c7b8cc3f"
 storage_version_token = "1791414359023283"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "Ga_v34JLPNt3a46-RV8or"
+uri = "file://reports/senior-usmnt-squads-and-pool.md"
+type = "text"
+title = "Senior USMNT squads and pool report"
+description = "Step 0 evidence, dev verification, production squad-versus-pool tables, and test results. Commit cb4203d; GitHub CI passed."
+logical_id = "ff1a50e7-8996-4e94-927b-e0e21c3ec371"
+content_hash = "sha256:65a3a7fedfae5e893813462c3b575d8a446b93161f04a095aaf61f1f7f0b189d"
+size = 9946
+mtime_ms = 1791415758426
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/ff1a50e7-8996-4e94-927b-e0e21c3ec371/7f9a25ed-e05f-4001-9595-17ce8eaead24"
+storage_version_token = "1791415984473146"
+content_type = "text/markdown"
