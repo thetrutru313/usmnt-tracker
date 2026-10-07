@@ -1,13 +1,16 @@
-import { MapPin } from "lucide-react";
+import { MapPin, MonitorPlay } from "lucide-react";
+import { Link } from "wouter";
 import { formatDate, formatTime } from "@/lib/formatTime";
 import type { Fixture } from "@workspace/api-client-react";
 
 /**
  * Compact match row for use inside Schedule event cards and Dashboard Hero.
  *
- * Shows: USMNT crest vs opponent, kickoff date + time, venue/city.
+ * Shows: USMNT crest vs opponent, kickoff date + time, venue/city,
+ * and broadcast information for scheduled/live matches.
  * Renders scores when homeScore/awayScore are present.
- * Self-contained — no navigation or click handler; wrap in a <Link> from the parent.
+ * Finished/live rows link to match details; other rows are non-interactive.
+ * Do not wrap this component in a parent link.
  */
 export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
   // Determine which side is USMNT so we can label "vs <Opponent>" cleanly
@@ -29,9 +32,16 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
 
   const isFinished = fixture.status === "finished";
   const isLive = fixture.status === "live";
+  const isLinked = isFinished || isLive;
+  const broadcast = fixture.status === "scheduled" || isLive
+    ? [fixture.tvNetwork, fixture.streamingService]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .join(" · ")
+    : "";
+  const rowClassName = "flex items-center gap-3 py-2.5 border-b border-border/50 last:border-0";
 
-  return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-border/50 last:border-0">
+  const content = (
+    <>
       {/* Date column */}
       <div className="w-16 shrink-0 text-center">
         <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider leading-none mb-0.5">
@@ -81,13 +91,33 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
         <span className="font-semibold text-sm truncate">{opponent}</span>
       </div>
 
-      {/* Venue / city */}
-      <div className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground shrink-0 max-w-[140px]">
-        <MapPin size={10} className="shrink-0" />
-        <span className="truncate">
-          {fixture.city ? fixture.city : fixture.venue}
-        </span>
+      {/* Venue stays desktop-only; broadcast is a single responsive element. */}
+      <div className={`${broadcast ? "flex" : "hidden sm:flex"} flex-col items-end gap-1 text-[10px] text-muted-foreground shrink-0 max-w-[140px]`}>
+        <div className="hidden sm:flex items-center gap-1 max-w-full">
+          <MapPin size={10} className="shrink-0" />
+          <span className="truncate">
+            {fixture.city ? fixture.city : fixture.venue}
+          </span>
+        </div>
+        {broadcast && (
+          <div data-testid="match-row-broadcast" className="flex items-center justify-end gap-1 whitespace-nowrap">
+            <MonitorPlay size={10} className="shrink-0" />
+            <span>{broadcast}</span>
+          </div>
+        )}
       </div>
-    </div>
+    </>
+  );
+
+  return isLinked ? (
+    <Link
+      href={`/matches/${fixture.id}`}
+      aria-label={`${fixture.homeTeam} vs ${fixture.awayTeam} — match details`}
+      className={`${rowClassName} cursor-pointer hover:bg-primary/15 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={rowClassName}>{content}</div>
   );
 }

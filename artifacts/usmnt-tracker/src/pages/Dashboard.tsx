@@ -63,8 +63,7 @@ export default function Dashboard() {
     <div className="space-y-8 pb-10">
       {/* Next Window Hero — USMNT away jersey theme */}
       {nextEvent && (
-        <Link href="/schedule">
-          <section className="relative overflow-hidden rounded-2xl bg-[#001a3a] border border-[#002868] border-t-2 border-t-red-600 shadow-xl cursor-pointer hover:brightness-110 transition-all group">
+          <section className="relative overflow-hidden rounded-2xl bg-[#001a3a] border border-[#002868] border-t-2 border-t-red-600 shadow-xl hover:brightness-110 transition-all group">
             {/* Jersey star layer */}
             <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
               {JERSEY_STARS.map((star, i) => (
@@ -123,14 +122,13 @@ export default function Dashboard() {
                       <span className="text-xl font-bold data-value">{nextEvent.dateLabel}</span>
                     </div>
                   )}
-                  <div className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary group-hover:gap-2 transition-all">
+                  <Link href="/schedule" className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary group-hover:gap-2 transition-all">
                     VIEW FULL SCHEDULE <ChevronRight size={13} />
-                  </div>
+                  </Link>
                 </div>
               </div>
             </div>
           </section>
-        </Link>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
