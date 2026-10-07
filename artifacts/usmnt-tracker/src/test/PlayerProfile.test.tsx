@@ -174,6 +174,26 @@ describe("PlayerProfile — follow button fires toast notifications", () => {
     currentPlayerData = PLAYER;
   });
 
+  it("unmounts safely while its 300ms star animation is in flight", async () => {
+    const scheduled = vi.spyOn(globalThis, "setTimeout");
+    const cleared = vi.spyOn(globalThis, "clearTimeout");
+    try {
+      const user = userEvent.setup();
+      const { unmount } = renderProfile();
+      await user.click(followBtn());
+      expect(followBtn()).toHaveClass("scale-125");
+      const timerIndex = scheduled.mock.calls.findIndex((call) => call[1] === 300);
+      expect(timerIndex).toBeGreaterThanOrEqual(0);
+      const timer = scheduled.mock.results[timerIndex]!.value;
+      expect(() => unmount()).not.toThrow();
+      expect(cleared).toHaveBeenCalledWith(timer);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    } finally {
+      scheduled.mockRestore();
+      cleared.mockRestore();
+    }
+  });
+
   it('shows "Added to My Players" toast when the player is not yet followed', async () => {
     mockIsFollowing.mockReturnValue(false);
     mockToggle.mockResolvedValue("added");

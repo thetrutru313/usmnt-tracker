@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
@@ -22,13 +22,25 @@ export function PlayerCard({ player }: { player: PlayerCardPlayer }) {
   const { isFollowing, toggle } = useMyPlayers();
   const following = isFollowing(player.id);
   const [animating, setAnimating] = useState(false);
+  const animationTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = animationTimers.current;
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
 
   async function handleStarClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
 
     setAnimating(true);
-    setTimeout(() => setAnimating(false), 300);
+    const timer = setTimeout(() => {
+      animationTimers.current.delete(timer);
+      setAnimating(false);
+    }, 300);
+    animationTimers.current.add(timer);
 
     const result = await toggle(player.id);
     if (result === "added") {

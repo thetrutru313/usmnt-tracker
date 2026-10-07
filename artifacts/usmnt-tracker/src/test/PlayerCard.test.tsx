@@ -78,7 +78,7 @@ function renderCard(
 ) {
   const { hook } = memoryLocation({ path: startPath, record: true });
 
-  render(
+  const view = render(
     <MyPlayersContext.Provider value={ctx}>
       <Router hook={hook}>
         <LocationReader />
@@ -99,7 +99,7 @@ function renderCard(
    */
   const cardAnchor = () => screen.getByText(PLAYER.name).closest("a")!;
 
-  return { getPath, starBtn, cardAnchor };
+  return { getPath, starBtn, cardAnchor, unmount: view.unmount };
 }
 
 // ─── Star click must not navigate ─────────────────────────────────────────────
@@ -109,6 +109,28 @@ describe("PlayerCard — star click isolation", () => {
 
   beforeEach(() => {
     ctx = makeCtx();
+  });
+
+  it("unmounts safely during an animation and cancels every pending 300ms reset", async () => {
+    const scheduled = vi.spyOn(globalThis, "setTimeout");
+    const cleared = vi.spyOn(globalThis, "clearTimeout");
+    try {
+      const user = userEvent.setup();
+      const { starBtn, unmount } = renderCard(ctx);
+      await user.click(starBtn());
+      await user.click(starBtn());
+      expect(starBtn()).toHaveClass("scale-125");
+      const timers = scheduled.mock.calls.flatMap((call, index) =>
+        call[1] === 300 ? [scheduled.mock.results[index]!.value] : []);
+      expect(timers).toHaveLength(2);
+      expect(() => unmount()).not.toThrow();
+      for (const timer of timers) expect(cleared).toHaveBeenCalledWith(timer);
+      // Real elapsed time: no fake timers or filters for unhandled errors.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    } finally {
+      scheduled.mockRestore();
+      cleared.mockRestore();
+    }
   });
 
   it("calls toggle with the player id when the star is clicked", async () => {

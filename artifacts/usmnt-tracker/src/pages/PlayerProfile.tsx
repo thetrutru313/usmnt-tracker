@@ -1,6 +1,6 @@
 import { useGetPlayer, useListNews } from "@workspace/api-client-react";
 import { useParams } from "wouter";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ArrowUpRight, Activity, Calendar, Info, Clock, AlertTriangle, Shield, TrendingUp, TrendingDown, Minus, Loader2, ExternalLink, Newspaper, Star } from "lucide-react";
@@ -29,6 +29,14 @@ export default function PlayerProfile() {
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const [matchFilter, setMatchFilter] = useState<"all" | "club" | "usmnt">("all");
   const [starAnimating, setStarAnimating] = useState(false);
+  const animationTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = animationTimers.current;
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   const [, navigate] = useLocation();
   const { isFollowing, toggle } = useMyPlayers();
 
@@ -36,7 +44,11 @@ export default function PlayerProfile() {
     e.preventDefault();
     e.stopPropagation();
     setStarAnimating(true);
-    setTimeout(() => setStarAnimating(false), 300);
+    const timer = setTimeout(() => {
+      animationTimers.current.delete(timer);
+      setStarAnimating(false);
+    }, 300);
+    animationTimers.current.add(timer);
     const result = await toggle(playerId);
     if (result === "added") {
       toast("Added to My Players");
