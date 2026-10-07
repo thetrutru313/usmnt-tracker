@@ -317,6 +317,7 @@ export async function purgeStaleOrphanedPastFixtures(
     .from(fixturesTable)
     .where(
       and(
+        eq(fixturesTable.isNationalTeam, false),
         inArray(fixturesTable.status, ["scheduled", "live"]),
         lt(fixturesTable.kickoff, nowDate),
         notExists(

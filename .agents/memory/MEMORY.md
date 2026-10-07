@@ -10,3 +10,4 @@
 - [DUAL_NATIONAL team-identity gate](dual-national-team-identity-gate.md) — league-name matching alone can't decide a national-team cap; must confirm via API-Football team.national (DB-cached).
 - [Prospect quality score design](quality-score-design.md) — league-id keying, insert-if-missing coefficient seeding, multiplicative formula shape, and try/catch isolation from eligibility scoring.
 - [Men's-only scope exclusion](womens-scope-exclusion.md) — women's-team name/league patterns, both admission points that need independent filtering, and the exported-but-unwired-filter trap.
+- [National-team retention](national-team-retention.md) — curated NT fixtures intentionally lack player links; general club-orphan purges must exclude them.
