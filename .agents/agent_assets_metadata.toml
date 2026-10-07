@@ -644,3 +644,17 @@ mtime_ms = 1791342865581
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/75f8c8c0-9aef-4151-9a3c-9db1837f54da/31b9b6e3-0ee4-42f0-89e7-dee3e467d4b1"
 storage_version_token = "1791342878921207"
 content_type = "text/plain"
+
+[[outputs]]
+id = "aZ_-_RvA3qpJDwe1ewhKj"
+uri = "file://attached_assets/dev-read-only-report-2026-10-07.md"
+type = "text"
+title = "DEV read-only report — October 7, 2026"
+description = "Markdown download of the original read-only report, unchanged."
+logical_id = "f58fc294-5489-4f3e-b713-d3a03ced2b6f"
+content_hash = "sha256:2a11bd288a0dd3ea1f636319f66fddbf27b222195f4e20680ea145c3d199a110"
+size = 4799
+mtime_ms = 1791400666838
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f58fc294-5489-4f3e-b713-d3a03ced2b6f/86e325a4-671c-4376-9dfd-c72435552c7a"
+storage_version_token = "1791400672309385"
+content_type = "text/markdown"
