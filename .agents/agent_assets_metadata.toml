@@ -784,3 +784,17 @@ mtime_ms = 1791408003653
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/1afecaba-609a-4896-a066-59b030174484/9a6d4906-30ac-4304-9bfc-d3bf21c9b61c"
 storage_version_token = "1791408007505650"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "yEspL3qHTvJzmhiGsF3Ne"
+uri = "file://reports/match-row-broadcasts-and-results.md"
+type = "text"
+title = "Match Row Broadcasts and Clickable Results — Report"
+description = "Markdown report covering files changed, red-then-green tests, regression guards, responsive visual checks, verification limits, and green CI."
+logical_id = "e2488feb-d05d-4d6f-96ff-132a0ff1faa4"
+content_hash = "sha256:878aed8d5e3abf782c2566895213ee7be56e6c9c51eb695f919e1b68cc85d141"
+size = 5444
+mtime_ms = 1791414353743
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/e2488feb-d05d-4d6f-96ff-132a0ff1faa4/b115073a-929a-4b84-8026-97d0c7b8cc3f"
+storage_version_token = "1791414359023283"
+content_type = "text/markdown"
