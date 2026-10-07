@@ -672,3 +672,31 @@ mtime_ms = 1791401466709
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/5d2a18b6-69e9-4c02-8e5c-85850ddce980/1c0937fb-917d-490b-8b3e-6e2ab064c1ef"
 storage_version_token = "1791401472712013"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "I5ocEi1-MWdFbyH1OQ4-6"
+uri = "file://attached_assets/cors-policy-focused-baseline.txt"
+type = "text"
+title = "CORS baseline — before fixes"
+description = "Actual failures for tests 1, 2, 4 and 5; passing controls retained."
+logical_id = "1ef07905-9657-4e82-ba15-74126a83d429"
+content_hash = "sha256:e0c1a998122e6321f843ec6372b6de6a761580ba976fe82bc9519900e4a0f14f"
+size = 7566
+mtime_ms = 1791402119709
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/1ef07905-9657-4e82-ba15-74126a83d429/81efbf6d-c36c-4e36-bf98-885c57eb2a38"
+storage_version_token = "1791402683920048"
+content_type = "text/plain"
+
+[[outputs]]
+id = "lcnSh0Y23_yh6bsNRSGN4"
+uri = "file://attached_assets/timezone-abbreviation-focused-baseline.txt"
+type = "text"
+title = "Timezone baseline — before fix"
+description = "Frozen-clock failures for tests 8 and 9; Phoenix control passed."
+logical_id = "f65bdc2c-aaad-4987-859c-296d92eb5ae6"
+content_hash = "sha256:9784db030453b67e0791f7291b458ff3ec990f30b53da106dcc7aa15b94839f2"
+size = 2250
+mtime_ms = 1791402126477
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f65bdc2c-aaad-4987-859c-296d92eb5ae6/0e191383-6a0e-43b4-92b0-75a85da9b979"
+storage_version_token = "1791402684751776"
+content_type = "text/plain"
