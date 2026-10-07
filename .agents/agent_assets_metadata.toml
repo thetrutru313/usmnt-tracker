@@ -770,3 +770,17 @@ mtime_ms = 1791407612609
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/0d05d861-c109-4b8d-ae05-3a9333a18f0b/91c46edc-b426-4272-977c-f629be2f38ce"
 storage_version_token = "1791407618466900"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "AmLo8987pAs1_ZaVKUb8f"
+uri = "file://reports/post-publish-check.md"
+type = "text"
+title = "Post-Publish Check"
+description = "Markdown report with repository and push results, production CORS rejection, and verified kickoff formatting."
+logical_id = "1afecaba-609a-4896-a066-59b030174484"
+content_hash = "sha256:180e6186e01dabe6362f52099e7f70a6b70d6275acfdd39228e91bb563ba3fb8"
+size = 2414
+mtime_ms = 1791408003653
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/1afecaba-609a-4896-a066-59b030174484/9a6d4906-30ac-4304-9bfc-d3bf21c9b61c"
+storage_version_token = "1791408007505650"
+content_type = "text/markdown"
