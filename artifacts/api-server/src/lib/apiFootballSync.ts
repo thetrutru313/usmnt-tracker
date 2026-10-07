@@ -1,5 +1,5 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, transfersTable } from "@workspace/db";
-import { eq, and, inArray, isNotNull, sql, desc } from "drizzle-orm";
+import { eq, and, inArray, isNotNull, isNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { claimSyncRun } from "./syncGuard.js";
 import {
@@ -700,13 +700,12 @@ export async function runRepairPass({
  * Repair pass for national-team fixtures: ensures every player who has a
  * `fixture_players` link on a *finished* national-team fixture in a given
  * competition is also linked to all *upcoming* national-team fixtures in the
- * same competition.
+ * same competition and national-team age level.
  *
  * ## Why this is safe and future-proof
- * Currently there are no tracked youth national-team players, so this pass is a
- * complete no-op.  When U20/U17 roster data is eventually added and players
- * accumulate match history, links appear automatically the next time the sync
- * runs — no separate migration needed.
+ * Each age level uses its own finished-fixture history. When youth roster
+ * links are added, upcoming youth links appear automatically without copying
+ * senior players into those fixtures.
  *
  * Using finished-fixture history (rather than a hardcoded player list) means
  * the pass is self-healing: it never over-links (a player can only be linked
@@ -721,7 +720,7 @@ export async function runRepairPass({
 export async function runNationalTeamRepairPass(): Promise<{ linked: number }> {
   // Find all upcoming / live national-team fixtures.
   const upcoming = await db
-    .select({ id: fixturesTable.id, competition: fixturesTable.competition })
+    .select({ id: fixturesTable.id, competition: fixturesTable.competition, ntLevel: fixturesTable.ntLevel })
     .from(fixturesTable)
     .where(
       and(
@@ -732,19 +731,20 @@ export async function runNationalTeamRepairPass(): Promise<{ linked: number }> {
 
   if (upcoming.length === 0) return { linked: 0 };
 
-  // Group upcoming fixtures by competition for efficient per-competition lookup.
-  const byCompetition = new Map<string, number[]>();
+  // Group by both competition and age level; neither alone identifies a squad.
+  const byCompetition = new Map<string, { competition: string; ntLevel: string | null; ids: number[] }>();
   for (const f of upcoming) {
-    const ids = byCompetition.get(f.competition) ?? [];
-    ids.push(f.id);
-    byCompetition.set(f.competition, ids);
+    const key = JSON.stringify([f.competition, f.ntLevel]);
+    const group = byCompetition.get(key) ?? { competition: f.competition, ntLevel: f.ntLevel, ids: [] };
+    group.ids.push(f.id);
+    byCompetition.set(key, group);
   }
 
   let linked = 0;
 
-  for (const [competition, fixtureIds] of byCompetition) {
+  for (const { competition, ntLevel, ids: fixtureIds } of byCompetition.values()) {
     // Find players who have ever played in a *finished* NT fixture in this
-    // competition — they should be linked to all upcoming ones too.
+    // competition and age level — they should be linked to upcoming ones too.
     const veterans = await db
       .selectDistinct({ playerId: fixturePlayersTable.playerId })
       .from(fixturePlayersTable)
@@ -753,6 +753,7 @@ export async function runNationalTeamRepairPass(): Promise<{ linked: number }> {
         and(
           eq(fixturesTable.isNationalTeam, true),
           eq(fixturesTable.competition, competition),
+          ntLevel === null ? isNull(fixturesTable.ntLevel) : eq(fixturesTable.ntLevel, ntLevel),
           eq(fixturesTable.status, "finished"),
         ),
       );

@@ -21,6 +21,7 @@ export const fixturesTable = pgTable("fixtures", {
   competition: text("competition").notNull(),
   kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),
   kickoffTimeTbd: boolean("kickoff_time_tbd").notNull().default(false),
+  squadSyncedAt: timestamp("squad_synced_at", { withTimezone: true }),
   venue: text("venue").notNull(),
   homeTeam: text("home_team").notNull(),
   awayTeam: text("away_team").notNull(),

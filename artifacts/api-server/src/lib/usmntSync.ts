@@ -1,5 +1,5 @@
 import { db, playersTable, playerStatsTable, matchLogsTable, fixturesTable, fixturePlayersTable } from "@workspace/db";
-import { eq, and, or, isNull, lt, gte, lte, inArray, isNotNull, asc } from "drizzle-orm";
+import { eq, and, or, isNull, lt, gt, gte, lte, inArray, isNotNull, asc, desc, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import { pickBestNtFixtureId } from "./pickBestNtFixtureId.js";
@@ -54,6 +54,37 @@ export function cycleForDate(dateStr: string): string {
 // current World Cup cycle (~60 games) for the initial history build.
 const CYCLE_TOTAL_FIXTURES_WINDOW = 99;
 
+function mapUsmntLog(
+  f: AfFixtureListItem,
+  entry: AfFixturePlayersTeam["players"][number],
+  teamId: number,
+): RealMatchLog | null {
+  const stats = entry.statistics[0];
+  const minutes = stats?.games.minutes;
+  if (!minutes || minutes <= 0) return null;
+  const isHome = f.teams.home.id === teamId;
+  const ourGoals = isHome ? f.goals.home : f.goals.away;
+  const theirGoals = isHome ? f.goals.away : f.goals.home;
+  const outcome = ourGoals == null || theirGoals == null ? "" : ourGoals > theirGoals ? "W" : ourGoals < theirGoals ? "L" : "D";
+  return {
+    apiFootballFixtureId: f.fixture.id,
+    date: f.fixture.date.slice(0, 10),
+    opponent: isHome ? f.teams.away.name : f.teams.home.name,
+    competition: f.league.name,
+    result: ourGoals != null && theirGoals != null ? `${outcome} ${ourGoals}-${theirGoals}` : "",
+    minutes,
+    goals: toNum(stats?.goals.total),
+    assists: toNum(stats?.goals.assists),
+    conceded: theirGoals ?? null,
+    rating: toRating(stats?.games.rating),
+    isNationalTeam: true,
+  };
+}
+
+function ntLogValues(playerId: number, log: RealMatchLog) {
+  return { ...log, playerId, cycle: cycleForDate(log.date) };
+}
+
 /** Every USMNT fixture id currently recorded in our match logs, regardless of which player it's attached to — used to detect "has anything new finished". */
 async function getSyncedFixtureIds(): Promise<Set<number>> {
   const rows = await db
@@ -93,35 +124,11 @@ async function fetchLogsForFixtures(
     const usmntBlock = teams.find((t) => t.team.id === teamId);
     if (!usmntBlock) continue;
 
-    const isHome = f.teams.home.id === teamId;
-    const opponent = isHome ? f.teams.away.name : f.teams.home.name;
-    const conceded = isHome ? f.goals.away : f.goals.home;
-    const ourGoals = isHome ? f.goals.home : f.goals.away;
-    const theirGoals = isHome ? f.goals.away : f.goals.home;
-    const outcome =
-      ourGoals == null || theirGoals == null ? "" : ourGoals > theirGoals ? "W" : ourGoals < theirGoals ? "L" : "D";
-    const scoreLine = ourGoals != null && theirGoals != null ? `${outcome} ${ourGoals}-${theirGoals}` : "";
-
     for (const entry of usmntBlock.players) {
       const player = byApiId.get(entry.player.id);
       if (!player) continue;
-      const stats = entry.statistics[0];
-      const minutes = stats?.games.minutes;
-      if (!minutes || minutes <= 0) continue; // did not actually appear — no fabricated row
-
-      const log: RealMatchLog = {
-        apiFootballFixtureId: f.fixture.id,
-        date: f.fixture.date.slice(0, 10),
-        opponent,
-        competition: f.league.name,
-        result: scoreLine,
-        minutes,
-        goals: toNum(stats?.goals.total),
-        assists: toNum(stats?.goals.assists),
-        conceded: conceded ?? null,
-        rating: toRating(stats?.games.rating),
-        isNationalTeam: true,
-      };
+      const log = mapUsmntLog(f, entry, teamId);
+      if (!log) continue;
       const existing = logsByPlayer.get(player.id) ?? [];
       existing.push(log);
       logsByPlayer.set(player.id, existing);
@@ -268,21 +275,7 @@ export async function syncUsmntStats(fixturesToCheck = 20): Promise<UsmntSyncRes
           await db
             .insert(matchLogsTable)
             .values(
-              entries.map(({ playerId, log }) => ({
-                playerId,
-                apiFootballFixtureId: log.apiFootballFixtureId,
-                date: log.date,
-                opponent: log.opponent,
-                competition: log.competition,
-                result: log.result,
-                minutes: log.minutes,
-                goals: log.goals,
-                assists: log.assists,
-                conceded: log.conceded,
-                rating: log.rating,
-                isNationalTeam: true,
-                cycle: cycleForDate(log.date),
-              })),
+              entries.map(({ playerId, log }) => ntLogValues(playerId, log)),
             )
             .onConflictDoNothing();
           for (const { playerId } of entries) insertedPlayerIds.add(playerId);
@@ -460,6 +453,114 @@ export async function promoteNtSentinelIds(): Promise<void> {
  * are promoted to real API-Football IDs within an hour of match logs appearing,
  * rather than waiting for the next server restart.
  */
+export type SeniorNtSquadOptions = {
+  now?: () => Date;
+  fetchPlayers?: (fixtureId: number) => Promise<AfFixturePlayersTeam[]>;
+  fetchFixture?: (fixtureId: number) => Promise<AfFixtureListItem | undefined>;
+};
+
+/** Complete senior squads come from fixture players, including unused substitutes. */
+export async function syncSeniorNtSquads(options: SeniorNtSquadOptions = {}) {
+  const now = (options.now ?? (() => new Date()))();
+  const counts = { fixturesLinkedFromLogs: 0, linksInserted: 0, fixturesSquadSynced: 0, logsInserted: 0, linksRemoved: 0, apiCallsMade: 0 };
+  const eligible = await db.select().from(fixturesTable).where(and(
+    eq(fixturesTable.isNationalTeam, true), eq(fixturesTable.ntLevel, "SENIOR"),
+    eq(fixturesTable.status, "finished"), gt(fixturesTable.apiFootballFixtureId, 0),
+  )).orderBy(desc(fixturesTable.kickoff), desc(fixturesTable.id));
+  for (const fixture of eligible) {
+    const inserted = await db.transaction(async (tx) => {
+      // Serialize this routine's duplicate check without adding a schema constraint.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(22022, ${fixture.id})`);
+      return tx.execute(sql`
+        INSERT INTO fixture_players (fixture_id, player_id, club_id)
+        SELECT ${fixture.id}, ml.player_id, NULL
+        FROM match_logs ml JOIN players p ON p.id = ml.player_id
+        WHERE ml.is_national_team = true AND ml.api_football_fixture_id = ${fixture.apiFootballFixtureId}
+          AND NOT EXISTS (SELECT 1 FROM fixture_players fp WHERE fp.fixture_id = ${fixture.id} AND fp.player_id = ml.player_id)
+        GROUP BY ml.player_id RETURNING id`);
+    });
+    counts.linksInserted += inserted.rows.length;
+    if (inserted.rows.length) counts.fixturesLinkedFromLogs++;
+  }
+  const cutoff = now.getTime() - 60 * 24 * 60 * 60 * 1000;
+  const pending = eligible.filter((f) => f.squadSyncedAt === null && f.kickoff.getTime() >= cutoff && f.kickoff <= now).slice(0, 6);
+  const players = await db.select({ id: playersTable.id, apiId: playersTable.apiFootballPlayerId }).from(playersTable);
+  const byApiId = new Map(players.filter((p) => p.apiId !== null).map((p) => [p.apiId, p.id]));
+  const fetchPlayers = options.fetchPlayers ?? ((id: number) => afFetch<AfFixturePlayersTeam[]>(`/fixtures/players?fixture=${id}`));
+  const fetchFixture = options.fetchFixture ?? (async (id: number) => (await afFetch<AfFixtureListItem[]>(`/fixtures?id=${id}`))[0]);
+  for (const fixture of pending) {
+    try {
+      counts.apiCallsMade++;
+      const teams = await fetchPlayers(fixture.apiFootballFixtureId!);
+      const usa = teams.find((t) => ["usa", "united states", "usmnt"].includes(t.team.name.toLowerCase()));
+      const squad = [...new Map((usa?.players ?? []).map((entry) => [entry.player.id, entry])).values()];
+      if (squad.length < 11) {
+        if (now.getTime() - fixture.kickoff.getTime() > 72 * 60 * 60 * 1000) {
+          await db.update(fixturesTable).set({ squadSyncedAt: now }).where(and(eq(fixturesTable.id, fixture.id), isNull(fixturesTable.squadSyncedAt)));
+          counts.fixturesSquadSynced++;
+          logger.warn({ fixtureId: fixture.id, squadSize: squad.length }, "Senior NT squad not published after 72 hours — giving up");
+        }
+        continue;
+      }
+      const tracked = squad.flatMap((entry) => {
+        const playerId = byApiId.get(entry.player.id);
+        return playerId === undefined ? [] : [{ playerId, entry }];
+      });
+      const existingLogs = await db.select({ playerId: matchLogsTable.playerId }).from(matchLogsTable).where(and(
+        eq(matchLogsTable.isNationalTeam, true), eq(matchLogsTable.apiFootballFixtureId, fixture.apiFootballFixtureId!),
+      ));
+      const logged = new Set(existingLogs.map((log) => log.playerId));
+      const missing = tracked.filter(({ playerId, entry }) => !logged.has(playerId) && (entry.statistics[0]?.games.minutes ?? 0) > 0);
+      let item: AfFixtureListItem | undefined;
+      if (missing.length) {
+        counts.apiCallsMade++;
+        item = await fetchFixture(fixture.apiFootballFixtureId!);
+        if (!item || item.fixture.id !== fixture.apiFootballFixtureId) throw new Error("Missing or mismatched fixture stats source");
+      }
+      const changed = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(22022, ${fixture.id})`);
+        const [current] = await tx.select().from(fixturesTable).where(eq(fixturesTable.id, fixture.id));
+        const result = { linksInserted: 0, logsInserted: 0, linksRemoved: 0, fixturesSquadSynced: 0 };
+        if (!current || current.squadSyncedAt !== null) return result;
+        for (const { playerId, entry } of missing) {
+          const log = mapUsmntLog(item!, entry, usa!.team.id);
+          if (log) {
+            const inserted = await tx.insert(matchLogsTable).values(ntLogValues(playerId, log)).onConflictDoNothing().returning({ id: matchLogsTable.id });
+            result.logsInserted += inserted.length;
+          }
+        }
+        const links = await tx.select().from(fixturePlayersTable).where(eq(fixturePlayersTable.fixtureId, fixture.id));
+        const linked = new Set(links.map((link) => link.playerId));
+        const trackedIds = new Set(tracked.map((p) => p.playerId));
+        for (const playerId of trackedIds) {
+          if (!linked.has(playerId)) {
+            await tx.insert(fixturePlayersTable).values({ fixtureId: fixture.id, playerId, clubId: null });
+            result.linksInserted++;
+          }
+        }
+        const logs = await tx.select({ playerId: matchLogsTable.playerId }).from(matchLogsTable).where(and(
+          eq(matchLogsTable.isNationalTeam, true), eq(matchLogsTable.apiFootballFixtureId, fixture.apiFootballFixtureId!),
+        ));
+        const hasLog = new Set(logs.map((log) => log.playerId));
+        const removeIds = links.filter((link) => link.clubId === null && !trackedIds.has(link.playerId) && !hasLog.has(link.playerId)).map((link) => link.id);
+        if (removeIds.length) {
+          result.linksRemoved = (await tx.delete(fixturePlayersTable).where(and(inArray(fixturePlayersTable.id, removeIds), isNull(fixturePlayersTable.clubId))).returning({ id: fixturePlayersTable.id })).length;
+        }
+        await tx.update(fixturesTable).set({ squadSyncedAt: now }).where(eq(fixturesTable.id, fixture.id));
+        result.fixturesSquadSynced = 1;
+        return result;
+      });
+      counts.linksInserted += changed.linksInserted;
+      counts.logsInserted += changed.logsInserted;
+      counts.linksRemoved += changed.linksRemoved;
+      counts.fixturesSquadSynced += changed.fixturesSquadSynced;
+    } catch (err) {
+      logger.warn({ err, fixtureId: fixture.id }, "Senior NT squad sync failed — skipping fixture");
+    }
+  }
+  return counts;
+}
+
 export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
   if (!process.env["API_FOOTBALL_KEY"]) {
     logger.warn("API_FOOTBALL_KEY not set — skipping USMNT stats sync, no national-team match logs/cycle stats will be available");
@@ -473,7 +574,12 @@ export function startUsmntStatsSyncSchedule(intervalMs = 60 * 60 * 1000): void {
     // Promote sentinel fixture IDs before syncing stats so that any newly
     // promoted fixtures are already bound when match logs are processed.
     await promoteNtSentinelIds();
-    syncUsmntStats().catch((err) => logger.error({ err }, "USMNT stats sync failed"));
+    try {
+      await syncUsmntStats();
+      await syncSeniorNtSquads();
+    } catch (err) {
+      logger.error({ err }, "USMNT stats/squad sync failed");
+    }
   };
   run();
   intervalHandle = setInterval(run, intervalMs);

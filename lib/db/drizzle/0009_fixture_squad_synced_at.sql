@@ -1,0 +1,1 @@
+ALTER TABLE "fixtures" ADD COLUMN "squad_synced_at" timestamp with time zone;
