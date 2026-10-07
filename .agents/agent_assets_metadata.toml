@@ -714,3 +714,17 @@ mtime_ms = 1791402967346
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a8d6347c-0e93-41b0-a0e5-7d3de7c11aae/03e90b61-6dd7-488e-9c26-a8d03c90ae8f"
 storage_version_token = "1791402972524564"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "izrDIA2vsrhVHmSZRZaqj"
+uri = "file://attached_assets/canada-friendly-production-restoration-proposal.md"
+type = "text"
+title = "Canada friendly — production restoration proposal"
+description = "Read-only findings and exact proposed SQL. No restoration SQL has been executed."
+logical_id = "a475613c-b41d-4eba-afbe-a68797f13e9d"
+content_hash = "sha256:677aef0b4ac4fe3028bb5abd5087cc68f9fa49319c32cd03308b667a03e650a2"
+size = 13789
+mtime_ms = 1791403558650
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a475613c-b41d-4eba-afbe-a68797f13e9d/d6e5e6bb-28e2-4d72-92df-50db3532346f"
+storage_version_token = "1791403564846598"
+content_type = "text/markdown"
