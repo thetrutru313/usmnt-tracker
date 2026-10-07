@@ -658,3 +658,17 @@ mtime_ms = 1791400666838
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f58fc294-5489-4f3e-b713-d3a03ced2b6f/86e325a4-671c-4376-9dfd-c72435552c7a"
 storage_version_token = "1791400672309385"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "8Oi_RjnLryeGhel91L6Tf"
+uri = "file://attached_assets/production-november-verification-2026-10-07.md"
+type = "text"
+title = "Production November verification report"
+description = "Read-only production findings, fixture data, and rendering discrepancies from October 7, 2026."
+logical_id = "5d2a18b6-69e9-4c02-8e5c-85850ddce980"
+content_hash = "sha256:edcc3dc7969910de17c44ad467cd52fc9ead13c3509affec605d6bb51cf06c82"
+size = 4250
+mtime_ms = 1791401466709
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/5d2a18b6-69e9-4c02-8e5c-85850ddce980/1c0937fb-917d-490b-8b3e-6e2ab064c1ef"
+storage_version_token = "1791401472712013"
+content_type = "text/markdown"
