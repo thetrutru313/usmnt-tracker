@@ -99,7 +99,7 @@ beforeAll(async () => {
       // dashboardInWindowEvent.test.ts / scheduleFixtureAttachment.test.ts so
       // this event never wins the "next upcoming event" race against theirs
       // when test files run concurrently against the same dev DB. Still far
-      // below any real event's sortOrder (10-90).
+      // below any real event's sortOrder (10-140).
       sortOrder: -9990,
       updatedAt: new Date(),
     })

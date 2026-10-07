@@ -1,0 +1,173 @@
+import type { InsertScheduleEvent } from "../schema/nationalTeam";
+
+// Data only: safe to import without running the seed or opening a DB connection.
+export const events = [
+  {
+    slug: "friendlies-sept-2026",
+    name: "September Friendlies",
+    kind: "friendly",
+    status: "confirmed",
+    startDate: "2026-09-26",
+    endDate: "2026-09-29",
+    dateLabel: "Sept 26 & 29, 2026",
+    description:
+      "The first international window of the post-World Cup cycle. Pochettino uses this window to begin auditions for the next generation as Nations League group stage play begins for CONCACAF's lower-ranked nations.",
+    sortOrder: 10,
+  },
+  {
+    slug: "friendlies-oct-2026",
+    name: "October Friendlies",
+    kind: "friendly",
+    status: "confirmed",
+    startDate: "2026-10-03",
+    endDate: "2026-10-06",
+    dateLabel: "Oct 3 & 6, 2026",
+    description:
+      "Second window of the fall friendly run. With the Nations League group stage still ongoing for smaller CONCACAF sides, the USMNT continues building squad depth ahead of their quarterfinal entry.",
+    sortOrder: 20,
+  },
+  {
+    slug: "cnl-qf-nov-2026",
+    name: "Nations League Quarterfinals",
+    kind: "nations-league",
+    status: "confirmed",
+    startDate: "2026-11-13",
+    endDate: "2026-11-18",
+    dateLabel: "Nov 14 & 17, 2026",
+    description:
+      "The USMNT faces Haiti in a two-legged Nations League quarterfinal on November 14 and 17. The first leg is away at a neutral site, with venue and kickoff time still to be announced; the return leg is at TQL Stadium in Cincinnati at 7:00 PM EST. Both matches air on TNT and stream on HBO Max.",
+    sortOrder: 30,
+  },
+  {
+    slug: "cnl-finals-mar-2027",
+    name: "Nations League Finals",
+    kind: "nations-league",
+    status: "confirmed",
+    startDate: "2027-03-25",
+    endDate: "2027-03-28",
+    dateLabel: "Mar 25–28, 2027",
+    description:
+      "The semifinals, third-place match and final take place March 25–28, 2027, at SoFi Stadium in Inglewood, California. The USA plays in the Finals only if it wins its November quarterfinal against Haiti.",
+    sortOrder: 40,
+  },
+  {
+    slug: "friendlies-jun-2027",
+    name: "Possible Friendlies — June Window",
+    kind: "friendly",
+    status: "tbd",
+    startDate: "2027-06-07",
+    endDate: null,
+    dateLabel: "June 7–15, 2027 (open window)",
+    description:
+      "Nothing has been announced for this window. The FIFA international window runs June 7–15, 2027, immediately before the Gold Cup, with no Concacaf competition scheduled in it. Warm-up friendlies are possible, but none have been announced.",
+    sortOrder: 50,
+  },
+  {
+    slug: "gold-cup-2027",
+    name: "Gold Cup",
+    kind: "gold-cup",
+    status: "approximate",
+    startDate: "2027-06-18",
+    endDate: "2027-07-11",
+    dateLabel: "June 18 – July 11, 2027",
+    description:
+      "The 19th Gold Cup features 16 teams in June–July 2027, with Saudi Arabia participating as a guest. Concacaf has announced only June and July 2027; the June 18 – July 11 dates shown are not yet officially confirmed, and host venues have not been announced. The four League A quarterfinal winners qualify directly, so the USA qualifies by beating Haiti; a quarterfinal loser goes to the Gold Cup Prelims in March 2027.",
+    sortOrder: 60,
+  },
+  {
+    slug: "friendlies-sept-2027",
+    name: "Possible Friendlies — September Window",
+    kind: "friendly",
+    status: "tbd",
+    startDate: "2027-09-20",
+    endDate: null,
+    dateLabel: "Late Sept 2027 (open window)",
+    description:
+      "Nothing has been announced for the USA in the first half of the September 20 – October 5, 2027 FIFA international window. Round One of World Cup qualifying is played then by the teams ranked 14–35, and the USA is not in it.",
+    sortOrder: 70,
+  },
+  {
+    slug: "wcq-r2-2027",
+    name: "2030 World Cup Qualifying — Round Two",
+    kind: "world-cup-qualifying",
+    status: "approximate",
+    startDate: "2027-09-28",
+    endDate: null,
+    dateLabel: "Late Sept 2027 – Mar 2028",
+    description:
+      "Concacaf's top 13 ranked teams, including the USA, enter alongside the 11 Round One winners: 24 teams in six groups of four, playing home and away. Round Two begins in the second half of the September–October 2027 window and continues in November 2027 and March 2028. The top two in each group advance; groups and fixtures have not been drawn.",
+    sortOrder: 80,
+  },
+  {
+    slug: "wcq-final-jun-2028",
+    name: "2030 World Cup Qualifying — Final Round Begins",
+    kind: "world-cup-qualifying",
+    status: "approximate",
+    startDate: "2028-05-29",
+    endDate: null,
+    dateLabel: "June 2028",
+    description:
+      "The Final Round has 12 teams in three groups of four, playing home and away, and opens in the June 2028 window before pausing until autumn 2029. The top two in each group qualify for the 2030 World Cup, providing six direct berths.",
+    sortOrder: 90,
+  },
+  {
+    slug: "copa-america-2028",
+    name: "Copa América 2028",
+    kind: "copa-america",
+    status: "tbd",
+    startDate: "2028-06-01",
+    endDate: null,
+    dateLabel: "Summer 2028 (Pending Invite)",
+    description:
+      "CONMEBOL has historically extended invitations to the USA and Mexico for Copa América. As co-hosts of the 2026 World Cup, the USMNT is a likely invitee — a tournament that would provide elite competition during the qualifying window.",
+    sortOrder: 100,
+  },
+  {
+    slug: "cnl-2028-29",
+    name: "Nations League 2028/29",
+    kind: "nations-league",
+    status: "approximate",
+    startDate: "2028-09-18",
+    endDate: null,
+    dateLabel: "2028–29 (dates TBA)",
+    description:
+      "The Nations League is confirmed for 2028/29 under the three-league system. Dates, format details for the USA and the Finals host have not been announced.",
+    sortOrder: 110,
+  },
+  {
+    slug: "gold-cup-2029",
+    name: "Gold Cup 2029",
+    kind: "gold-cup",
+    status: "approximate",
+    startDate: "2029-06-01",
+    endDate: null,
+    dateLabel: "June–July 2029",
+    description:
+      "The Gold Cup is scheduled for June and July 2029. Nothing else has been announced.",
+    sortOrder: 120,
+  },
+  {
+    slug: "wcq-final-sept-2029",
+    name: "2030 World Cup Qualifying — Final Round Concludes",
+    kind: "world-cup-qualifying",
+    status: "approximate",
+    startDate: "2029-09-24",
+    endDate: null,
+    dateLabel: "Sept–Oct 2029",
+    description:
+      "The Final Round resumes and finishes in the September–October 2029 window. The two best third-placed teams go to a home-and-away Play-In in November 2029 for a place in the intercontinental play-off.",
+    sortOrder: 130,
+  },
+  {
+    slug: "world-cup-2030",
+    name: "2030 FIFA World Cup",
+    kind: "world-cup",
+    status: "tbd",
+    startDate: "2030-06-01",
+    endDate: null,
+    dateLabel: "Summer 2030",
+    description:
+      "The centenary World Cup, hosted across Spain, Portugal, Morocco, Argentina, Uruguay, and Paraguay. The USMNT's four-year mission — built on the momentum of hosting in 2026 — culminates here.",
+    sortOrder: 140,
+  },
+] satisfies InsertScheduleEvent[];
