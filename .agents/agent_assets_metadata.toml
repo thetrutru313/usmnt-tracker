@@ -700,3 +700,17 @@ mtime_ms = 1791402126477
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f65bdc2c-aaad-4987-859c-296d92eb5ae6/0e191383-6a0e-43b4-92b0-75a85da9b979"
 storage_version_token = "1791402684751776"
 content_type = "text/plain"
+
+[[outputs]]
+id = "wnCvJUVm4qJDYV-klxxDD"
+uri = "file://attached_assets/cors-timezone-fixes-completion-report-2026-10-07.md"
+type = "text"
+title = "CORS and timezone fixes — completion report"
+description = "Markdown report with fixes, baseline failures, verification results, and the green CI link."
+logical_id = "a8d6347c-0e93-41b0-a0e5-7d3de7c11aae"
+content_hash = "sha256:7a0ac8ddc7f5e41bab27bc2e1265bd1120b9aec9c85d5ef774c1c2b77de04943"
+size = 2559
+mtime_ms = 1791402967346
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a8d6347c-0e93-41b0-a0e5-7d3de7c11aae/03e90b61-6dd7-488e-9c26-a8d03c90ae8f"
+storage_version_token = "1791402972524564"
+content_type = "text/markdown"
