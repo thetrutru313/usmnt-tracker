@@ -323,7 +323,8 @@ The guard rejects the second execution before any write or sequence allocation.
   production.
 - **Confirmed:** no application, schema, migration, test, dependency, workflow,
   or environment configuration files changed; nothing was published.
-- **Confirmed:** only this report is being committed. Existing implementation
+- **Confirmed:** only documentation is being committed: this report and an
+  internal Git logging safety note/index. Existing implementation
   was exercised directly; full application test suites were not rerun because
   there were no application-code changes.
 - **Unable to verify without running the production application after the
