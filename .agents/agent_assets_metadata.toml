@@ -812,3 +812,17 @@ mtime_ms = 1791415758426
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/ff1a50e7-8996-4e94-927b-e0e21c3ec371/7f9a25ed-e05f-4001-9595-17ce8eaead24"
 storage_version_token = "1791415984473146"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "j_24q0VQIXVKyUx5xVdrE"
+uri = "file://reports/add-squad-players.md"
+type = "text"
+title = "Prompt 23 — Squad player SQL and verification"
+description = "Read-only production/dev preflight, exact guarded SQL, dev results matching 4 fixtures / 12 links / 8 logs, and repeat-execution safety check."
+logical_id = "6d61f68e-d8da-4a2f-b1b3-cc20ecea3d7e"
+content_hash = "sha256:be1f76cc21b20ef3c06e3143468690357230b01aeb129ef71fa115677dda70c8"
+size = 13082
+mtime_ms = 1791424647028
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/6d61f68e-d8da-4a2f-b1b3-cc20ecea3d7e/10e8b65c-c71c-4f1d-b1c6-2c922ccaa220"
+storage_version_token = "1791424676828237"
+content_type = "text/markdown"
