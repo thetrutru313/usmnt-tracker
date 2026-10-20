@@ -39,6 +39,18 @@ export const events = [
     sortOrder: 30,
   },
   {
+    slug: "friendly-dec-2026",
+    name: "December Friendly",
+    kind: "friendly",
+    status: "confirmed",
+    startDate: "2026-12-13",
+    endDate: "2026-12-14",
+    dateLabel: "Dec 13, 2026",
+    description:
+      "A one-off friendly against Jamaica on Sunday, December 13, at Inter Miami CF Stadium in Fort Lauderdale, Florida. The match falls outside a FIFA international window. Kickoff time and broadcast details have not been announced.",
+    sortOrder: 35,
+  },
+  {
     slug: "cnl-finals-mar-2027",
     name: "Nations League Finals",
     kind: "nations-league",

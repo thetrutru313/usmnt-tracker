@@ -2,6 +2,7 @@ import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, trans
 import { eq, and, inArray, isNotNull, isNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { claimSyncRun } from "./syncGuard.js";
+import { nationalTeamFixtureUpdate } from "./nationalTeamFixtureUpdate.js";
 import {
   type AfFixture,
   FINISHED_STATUSES,
@@ -1811,6 +1812,10 @@ export async function syncNationalTeamFixtures(): Promise<{
       status: fixturesTable.status,
       homeScore: fixturesTable.homeScore,
       awayScore: fixturesTable.awayScore,
+      kickoffTimeTbd: fixturesTable.kickoffTimeTbd,
+      venue: fixturesTable.venue,
+      city: fixturesTable.city,
+      ntLevel: fixturesTable.ntLevel,
     })
     .from(fixturesTable)
     .where(eq(fixturesTable.isNationalTeam, true));
@@ -1861,26 +1866,30 @@ export async function syncNationalTeamFixtures(): Promise<{
       const statusChanged = row.status !== newStatus;
       const scoresChanged = row.homeScore !== newHomeScore || row.awayScore !== newAwayScore;
 
-      if (!statusChanged && !scoresChanged && !needsIdBind) continue;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updatePayload: Record<string, any> = {
-        status: newStatus,
-        homeScore: newHomeScore,
-        awayScore: newAwayScore,
-        elapsedMinute: newStatus === "live" ? (afMatch.fixture.status.elapsed ?? null) : null,
-      };
+      const updatePayload = nationalTeamFixtureUpdate(row, afMatch);
+      const scheduleChanges = (["kickoff", "kickoffTimeTbd", "venue", "city"] as const)
+        .flatMap((field) => {
+          if (!(field in updatePayload)) return [];
+          const oldValue = row[field];
+          const newValue = updatePayload[field];
+          const unchanged = oldValue instanceof Date && newValue instanceof Date
+            ? oldValue.getTime() === newValue.getTime()
+            : oldValue === newValue;
+          return unchanged ? [] : [{ field, oldValue, newValue }];
+        });
+      if (!statusChanged && !scoresChanged && !needsIdBind && scheduleChanges.length === 0) continue;
       if (needsIdBind) {
-        updatePayload["apiFootballFixtureId"] = afMatch.fixture.id;
-        // Also write logo URLs on first bind so the hero and schedule page
-        // can display country flags rather than the null placeholder.
-        if (afMatch.teams.home.logo) updatePayload["homeLogoUrl"] = afMatch.teams.home.logo;
-        if (afMatch.teams.away.logo) updatePayload["awayLogoUrl"] = afMatch.teams.away.logo;
         idsBound++;
       }
 
       await db.update(fixturesTable).set(updatePayload).where(eq(fixturesTable.id, row.id));
       fixturesUpdated++;
+      for (const change of scheduleChanges) {
+        logger.info(
+          { fixtureId: row.id, afFixtureId: afMatch.fixture.id, ...change },
+          "NT fixture sync: schedule detail changed",
+        );
+      }
 
       logger.info(
         {

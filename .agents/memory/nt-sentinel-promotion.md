@@ -32,3 +32,17 @@ Do not retire this fallback just because the Sept/Oct 2026 friendlies have been 
 **Why:** Newly announced matches reuse the same backfill mechanism; retiring it based on an older window would remove their fallback.
 
 **How to apply:** Check the current announced sentinel set before removing either the startup call or hourly scheduler.
+
+## Provider season labels do not follow fixture calendar year
+
+National-team competition editions can label a future fixture with the prior
+season, even well away from New Year's. Absence from the current-year list
+alone does not establish that a bound ID disappeared or was reissued.
+
+**Why:** Direct ID and upcoming-fixture lookups confirmed that November
+Nations League fixtures belong to the previous season, while the same
+calendar year's friendlies and World Cup use the current season.
+
+**How to apply:** Preserve current/prior-season coverage. Diagnose missing
+fixtures with by-ID and upcoming-list evidence before changing bindings or
+expanding season queries.

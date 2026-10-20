@@ -840,3 +840,17 @@ mtime_ms = 1792510874317
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/985f6320-caa6-4a9f-91e3-359ba5d869ef/d500c008-2011-4a98-b868-4eeee388bb9f"
 storage_version_token = "1792510879800224"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "ET5-NJIVBIJ4hYVHexAeJ"
+uri = "file://reports/nt-sync-december-friendly.md"
+type = "text"
+title = "Prompt 25 — Evidence, implementation, tests, and dev schedule"
+description = "Complete API fixture evidence, all 13 season-2026 results, Haiti season-2025 diagnosis, development schedule, changed files, passing checks, and production SQL instructions. No production writes or publishing."
+logical_id = "1b0d3aa1-f2f3-44c7-8c48-ce048a756ed0"
+content_hash = "sha256:31e29bf6704a3770786b000087c13cfedfdceda7ccc933fbd2ff371b6c761fe8"
+size = 14573
+mtime_ms = 1792512179885
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/1b0d3aa1-f2f3-44c7-8c48-ce048a756ed0/669de53e-30e2-408a-bb03-f0b8e5e3ab7b"
+storage_version_token = "1792512249264625"
+content_type = "text/markdown"

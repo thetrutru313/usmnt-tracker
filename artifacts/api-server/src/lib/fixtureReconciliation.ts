@@ -18,7 +18,7 @@ export interface AfFixture {
     id: number;
     date: string; // ISO 8601 with offset
     status: { short: string; elapsed: number | null }; // e.g. NS (not started), FT (finished), PST (postponed)
-    venue: { name: string | null };
+    venue: { name: string | null; city?: string | null };
   };
   league: { name: string };
   teams: {

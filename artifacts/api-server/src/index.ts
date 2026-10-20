@@ -69,8 +69,8 @@ async function runCriticalStartupSeeds(): Promise<void> {
       city: string | null;
       competition: string;
       kickoffTimeTbd: boolean;
-      tvNetwork: string;
-      streamingService: string;
+      tvNetwork: string | null;
+      streamingService: string | null;
       windowStart: string;
       windowEnd: string;
     };
@@ -95,6 +95,15 @@ async function runCriticalStartupSeeds(): Promise<void> {
         kickoffUtc: "2026-11-18 00:00:00+00", kickoffTimeTbd: false,
         venue: "TQL Stadium", city: "Cincinnati, OH", tvNetwork: "TNT", streamingService: "HBO Max",
         windowStart: "2026-11-16 00:00:00+00", windowEnd: "2026-11-20 23:59:59+00",
+      },
+      {
+        sentinelId: -2007, homeTeam: "USA", awayTeam: "Jamaica",
+        homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+        awayLogoUrl: "https://media.api-sports.io/football/teams/2385.png",
+        competition: "International Friendly",
+        kickoffUtc: "2026-12-14 00:00:00+00", kickoffTimeTbd: true,
+        venue: "Inter Miami CF Stadium", city: "Fort Lauderdale, FL", tvNetwork: null, streamingService: null,
+        windowStart: "2026-12-12 00:00:00+00", windowEnd: "2026-12-16 23:59:59+00",
       },
     ];
 

@@ -85,12 +85,12 @@ async function seededSandbox(check: (tx: Tx) => Promise<void>) {
 }
 
 describe("November Nations League quarterfinals — real startup and routes", () => {
-  it("6/7: startup seeds only Haiti legs, corrects TBD, and is idempotent before/after binding", async () => {
+  it("6/7: startup seeds Haiti legs and December friendly, corrects TBD, and is idempotent before/after binding", async () => {
     await seededSandbox(async (tx) => {
       const matches = await startupSeed(tx);
-      expect(matches.map((match) => match.sentinelId)).toEqual([-2005, -2006]);
+      expect(matches.map((match) => match.sentinelId)).toEqual([-2005, -2006, -2007]);
       const rows = await tx.select().from(fixturesTable).orderBy(fixturesTable.kickoff);
-      expect(rows).toHaveLength(2);
+      expect(rows).toHaveLength(3);
       expect(rows[0]).toMatchObject({
         apiFootballFixtureId: -2005, homeTeam: "Haiti", awayTeam: "USA",
         competition: "CONCACAF Nations League", ntLevel: "SENIOR",
@@ -113,7 +113,7 @@ describe("November Nations League quarterfinals — real startup and routes", ()
       expect((await tx.select().from(fixturesTable).where(eq(fixturesTable.id, rows[0]!.id)))[0]!.kickoffTimeTbd).toBe(true);
       await tx.update(fixturesTable).set({ apiFootballFixtureId: 9992005 }).where(eq(fixturesTable.id, rows[0]!.id));
       await startupSeed(tx);
-      expect(await tx.select().from(fixturesTable)).toHaveLength(2);
+      expect(await tx.select().from(fixturesTable)).toHaveLength(3);
       expect((await tx.select().from(fixturesTable).where(eq(fixturesTable.id, rows[0]!.id)))[0]!.apiFootballFixtureId).toBe(9992005);
     });
   });
