@@ -896,3 +896,17 @@ mtime_ms = 1792516933112
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f2a04cf8-abdf-4ead-ae47-4bc8a14e8b10/3f089fa5-3db0-4fe7-99d4-d5a88b9eab70"
 storage_version_token = "1792516957464826"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "RnInvHGaDKu2QHIkLwcqi"
+uri = "file://reports/prompt-27-complete.md"
+type = "text"
+title = "Prompt 27 — Complete Markdown Report"
+description = "Downloadable .md with Step 0 evidence, provider response tables, budget audit, files changed, red/green test results, limitations, commit hash, and passing CI link."
+logical_id = "fd38bea3-9922-4ff5-a998-c87e2be6d46a"
+content_hash = "sha256:20479ba560869f356e0a61c78bbb44a9c279f0c84e955ba4338395686993b9bb"
+size = 9568
+mtime_ms = 1792517190788
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/fd38bea3-9922-4ff5-a998-c87e2be6d46a/0003ed55-58b1-4752-b8e8-0767859beb45"
+storage_version_token = "1792517191478959"
+content_type = "text/markdown"
