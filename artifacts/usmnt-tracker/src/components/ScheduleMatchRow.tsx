@@ -1,98 +1,129 @@
 import { MapPin, MonitorPlay } from "lucide-react";
 import { Link } from "wouter";
 import { formatDate, formatTime } from "@/lib/formatTime";
+import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 import type { Fixture } from "@workspace/api-client-react";
 
 /**
  * Compact match row for use inside Schedule event cards and Dashboard Hero.
  *
- * Shows home flag/name, vs (or a home–away score), then away flag/name,
- * alongside kickoff date/time, venue/city, and scheduled/live broadcasts.
- * Both flags are 20px; names truncate independently. On narrow screens,
- * broadcast occupies its own untruncated line below the matchup.
- * Live/finished scores retain their LIVE / FT prefixes.
+ * Date column: date, then one nowrap status line (time+zone / Time TBD /
+ * LIVE + minute / FT / PPD).
+ * sm and up: teams mirrored around a fixed-width centre ("vs" or score pill).
+ * Below sm: home and away stacked, each with its own score when present.
+ * Finished losers are muted; draws, live and scheduled stay full colour.
+ * Broadcast renders exactly once (under teams on mobile, right column on sm+).
  * Finished/live rows link to match details; other rows are non-interactive.
  * Do not wrap this component in a parent link.
  */
 export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
-  const hasScore =
-    fixture.homeScore !== null && fixture.awayScore !== null;
-
+  const hasScore = fixture.homeScore !== null && fixture.awayScore !== null;
   const isFinished = fixture.status === "finished";
   const isLive = fixture.status === "live";
+  const isPostponed = fixture.status === "postponed";
   const isLinked = isFinished || isLive;
+  const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, isLive);
+
   const broadcast = fixture.status === "scheduled" || isLive
     ? [fixture.tvNetwork, fixture.streamingService]
         .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
         .join(" · ")
     : "";
-  const rowClassName = "grid grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[4rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 border-b border-border/50 last:border-0";
+
+  const homeLost = isFinished && hasScore && fixture.homeScore! < fixture.awayScore!;
+  const awayLost = isFinished && hasScore && fixture.awayScore! < fixture.homeScore!;
+  const homeTone = homeLost ? "text-muted-foreground" : "text-foreground";
+  const awayTone = awayLost ? "text-muted-foreground" : "text-foreground";
+
+  const rowClassName =
+    "grid grid-cols-[4.75rem_minmax(0,1fr)] sm:grid-cols-[4.75rem_minmax(0,1fr)_8.5rem] items-center gap-x-3 gap-y-1 px-3 py-2 border-b border-border/50 last:border-0";
+
+  const statusLine = isLive ? (
+    <div className="text-[10px] font-mono font-bold text-destructive whitespace-nowrap">
+      {liveMinute != null ? `LIVE ${liveMinute}'` : "LIVE"}
+    </div>
+  ) : isFinished ? (
+    <div className="text-[10px] font-mono font-bold text-muted-foreground">FT</div>
+  ) : isPostponed ? (
+    <div className="text-[10px] font-mono font-bold text-muted-foreground">PPD</div>
+  ) : (
+    <div className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+      {fixture.kickoffTimeTbd ? "Time TBD" : formatTime(fixture.kickoff)}
+    </div>
+  );
+
+  const flag = (src: string | null, alt: string) =>
+    src ? <img src={src} alt={alt} className="w-5 h-5 object-contain shrink-0" /> : <span className="w-5 h-5 shrink-0" />;
 
   const content = (
     <>
       {/* Date column */}
-      <div className="w-16 shrink-0 text-center">
+      <div data-testid="match-row-date" className="row-span-2 sm:row-span-1 self-start sm:self-center text-left">
         <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider leading-none mb-0.5">
           {formatDate(fixture.kickoff)}
         </div>
-        <div className="text-[10px] font-mono text-muted-foreground">
-          {fixture.kickoffTimeTbd ? "Time TBD" : formatTime(fixture.kickoff)}
+        {statusLine}
+      </div>
+
+      {/* Teams */}
+      <div className="min-w-0">
+        {/* sm and up: [home 1fr][centre fixed][away 1fr] */}
+        <div data-testid="match-row-desktop" className="max-sm:hidden grid grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-center gap-2">
+          <div className="min-w-0 flex items-center justify-end gap-1.5">
+            <span className={`font-semibold text-sm truncate ${homeTone}`}>{fixture.homeTeam}</span>
+            {flag(fixture.homeLogoUrl, fixture.homeTeam)}
+          </div>
+          <div data-testid="match-row-center" className="flex justify-center">
+            {hasScore ? (
+              <span className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
+                isLive ? "bg-destructive/20 text-destructive"
+                  : isFinished ? "bg-muted text-foreground" : "text-muted-foreground"
+              }`}>
+                <span data-testid="match-row-home-score" className={isLive ? "" : homeTone}>{fixture.homeScore}</span>
+                –
+                <span data-testid="match-row-away-score" className={isLive ? "" : awayTone}>{fixture.awayScore}</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">vs</span>
+            )}
+          </div>
+          <div className="min-w-0 flex items-center gap-1.5">
+            {flag(fixture.awayLogoUrl, fixture.awayTeam)}
+            <span className={`font-semibold text-sm truncate ${awayTone}`}>{fixture.awayTeam}</span>
+          </div>
+        </div>
+
+        {/* Below sm: stacked lines, score right-aligned per team */}
+        <div data-testid="match-row-mobile" className="sm:hidden flex flex-col gap-1">
+          <div data-testid="match-row-home-line" className="flex items-center gap-1.5 min-w-0">
+            {flag(fixture.homeLogoUrl, fixture.homeTeam)}
+            <span className={`font-semibold text-sm truncate flex-1 min-w-0 ${homeTone}`}>{fixture.homeTeam}</span>
+            {hasScore && isLinked && (
+              <span data-testid="match-row-home-score" className={`text-xs font-mono font-bold shrink-0 ${isLive ? "text-destructive" : homeTone}`}>
+                {fixture.homeScore}
+              </span>
+            )}
+          </div>
+          <div data-testid="match-row-away-line" className="flex items-center gap-1.5 min-w-0">
+            {flag(fixture.awayLogoUrl, fixture.awayTeam)}
+            <span className={`font-semibold text-sm truncate flex-1 min-w-0 ${awayTone}`}>{fixture.awayTeam}</span>
+            {hasScore && isLinked && (
+              <span data-testid="match-row-away-score" className={`text-xs font-mono font-bold shrink-0 ${isLive ? "text-destructive" : awayTone}`}>
+                {fixture.awayScore}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Match info */}
-      <div className="min-w-0 flex items-center gap-2">
-        {/* Home flag + independently truncating name */}
-        <div className="flex-1 min-w-0 flex items-center gap-1">
-          {fixture.homeLogoUrl && (
-            <img
-              src={fixture.homeLogoUrl}
-              alt={fixture.homeTeam}
-              className="w-5 h-5 object-contain shrink-0"
-            />
-          )}
-          <span className="font-semibold text-sm truncate">{fixture.homeTeam}</span>
-        </div>
-
-        {/* Score or "vs" label */}
-        {hasScore ? (
-          <span className={`text-xs font-mono font-bold shrink-0 px-1.5 py-0.5 rounded ${
-            isLive
-              ? "bg-destructive/20 text-destructive"
-              : isFinished
-              ? "bg-muted text-foreground"
-              : "text-muted-foreground"
-          }`}>
-            {isLive ? "LIVE · " : isFinished ? "FT · " : ""}
-            {fixture.homeScore}–{fixture.awayScore}
-          </span>
-        ) : (
-          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0 uppercase">vs</span>
-        )}
-
-        {/* Away flag + independently truncating name */}
-        <div className="flex-1 min-w-0 flex items-center gap-1">
-          {fixture.awayLogoUrl && (
-            <img
-              src={fixture.awayLogoUrl}
-              alt={fixture.awayTeam}
-              className="w-5 h-5 object-contain shrink-0"
-            />
-          )}
-          <span className="font-semibold text-sm truncate">{fixture.awayTeam}</span>
-        </div>
-      </div>
-
-      {/* Venue stays desktop-only; broadcast is a single responsive element. */}
-      <div className={`${broadcast ? "flex" : "hidden sm:flex"} col-span-2 sm:col-span-1 justify-self-end flex-col items-end gap-1 text-[10px] text-muted-foreground shrink-0 max-w-[140px]`}>
-        <div className="hidden sm:flex items-center gap-1 max-w-full">
+      {/* Meta: venue (sm+ only) above the single broadcast element */}
+      <div className={`${broadcast ? "flex" : "hidden sm:flex"} col-start-2 sm:col-start-3 min-w-0 flex-col items-start sm:items-end gap-1 text-[10px] text-muted-foreground`}>
+        <div className="hidden sm:flex items-center justify-end gap-1 max-w-full min-w-0">
           <MapPin size={10} className="shrink-0" />
-          <span className="truncate">
-            {fixture.city ? fixture.city : fixture.venue}
-          </span>
+          <span className="truncate">{fixture.city ? fixture.city : fixture.venue}</span>
         </div>
         {broadcast && (
-          <div data-testid="match-row-broadcast" className="flex items-center justify-end gap-1 whitespace-nowrap">
+          <div data-testid="match-row-broadcast" className="flex items-center sm:justify-end gap-1 whitespace-nowrap">
             <MonitorPlay size={10} className="shrink-0" />
             <span>{broadcast}</span>
           </div>

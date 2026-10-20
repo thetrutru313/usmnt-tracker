@@ -61,10 +61,11 @@ describe("November fixtures — frontend regression", () => {
   });
   it("4: USA-away row names both teams and puts the Haiti flag first", () => {
     render(<ScheduleMatchRow fixture={leg1} />);
-    expect(screen.getByText("Haiti")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Haiti" })).toHaveAttribute("src", leg1.homeLogoUrl);
-    expect(screen.getByAltText("USA")).toHaveAttribute("src", leg1.awayLogoUrl);
-    expect(screen.getAllByRole("img").map((img) => img.getAttribute("alt"))).toEqual(["Haiti", "USA"]);
+    const desktop = within(screen.getByTestId("match-row-desktop"));
+    expect(desktop.getByText("Haiti")).toBeInTheDocument();
+    expect(desktop.getByRole("img", { name: "Haiti" })).toHaveAttribute("src", leg1.homeLogoUrl);
+    expect(desktop.getByAltText("USA")).toHaveAttribute("src", leg1.awayLogoUrl);
+    expect(desktop.getAllByRole("img").map((img) => img.getAttribute("alt"))).toEqual(["Haiti", "USA"]);
   });
   it("5: dashboard hero shows both home-first legs, Time TBD, and broadcasts", () => {
     dashboardState.data = {
@@ -78,11 +79,13 @@ describe("November fixtures — frontend regression", () => {
     };
     render(<Router><Dashboard /></Router>);
     const hero = screen.getByRole("heading", { name: "Nations League Quarterfinals" }).closest("section")!;
-    expect(within(hero).getAllByText("Haiti")).toHaveLength(2);
+    const desktopRows = within(hero).getAllByTestId("match-row-desktop");
+    expect(desktopRows).toHaveLength(2);
+    expect(desktopRows.flatMap(row => within(row).queryAllByText("Haiti"))).toHaveLength(2);
     expect(within(hero).getByText("Nov 14")).toBeInTheDocument();
     expect(within(hero).getByText("Nov 17")).toBeInTheDocument();
     expect(within(hero).getByText("Time TBD")).toBeInTheDocument();
-    expect(within(hero).getAllByText("USA")).toHaveLength(2);
+    expect(desktopRows.flatMap(row => within(row).queryAllByText("USA"))).toHaveLength(2);
     expect(within(hero).getAllByText("vs")).toHaveLength(2);
     expect(within(hero).queryByText("@")).not.toBeInTheDocument();
   });

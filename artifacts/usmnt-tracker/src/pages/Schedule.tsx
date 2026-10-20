@@ -166,7 +166,7 @@ export default function Schedule() {
 
                   {/* Match rows — shown when fixtures are present */}
                   {event.fixtures && event.fixtures.length > 0 && (
-                    <div className="mt-3">
+                    <div className="mt-3 max-w-2xl">
                       {event.fixtures.map((fixture) => (
                         <ScheduleMatchRow key={fixture.id} fixture={fixture} />
                       ))}

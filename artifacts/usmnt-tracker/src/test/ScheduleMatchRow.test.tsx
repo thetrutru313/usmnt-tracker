@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { Router } from "wouter";
 import type { Fixture } from "@workspace/api-client-react";
 import { ScheduleMatchRow } from "@/components/ScheduleMatchRow";
@@ -31,8 +31,9 @@ function renderRow(overrides: Partial<Fixture> = {}) {
 }
 
 function expectTeamOrder(home: string, away: string) {
-  const homeName = screen.queryByText(home);
-  const awayName = screen.queryByText(away);
+  const desktop = within(screen.getByTestId("match-row-desktop"));
+  const homeName = desktop.queryByText(home);
+  const awayName = desktop.queryByText(away);
   expect(homeName).toBeInTheDocument();
   expect(awayName).toBeInTheDocument();
   expect(
@@ -55,19 +56,25 @@ describe("ScheduleMatchRow home-first change-verifying tests", () => {
 
   it("3: finished Haiti 0–2 USA uses the home–away score", () => {
     renderRow({ homeTeam: "Haiti", awayTeam: "USA", status: "finished", homeScore: 0, awayScore: 2 });
-    expect(screen.queryByText("FT · 0–2")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-date")).getByText("FT")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-desktop")).getByTestId("match-row-center"))
+      .toHaveTextContent(/^0–2$/);
     expectTeamOrder("Haiti", "USA");
   });
 
   it("4: finished USA 1–0 Canada names USA before Canada", () => {
     renderRow({ awayTeam: "Canada", status: "finished", homeScore: 1, awayScore: 0 });
-    expect(screen.queryByText("FT · 1–0")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-date")).getByText("FT")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-desktop")).getByTestId("match-row-center"))
+      .toHaveTextContent(/^1–0$/);
     expectTeamOrder("USA", "Canada");
   });
 
   it("live Haiti 0–2 USA retains LIVE and home–away score order", () => {
     renderRow({ homeTeam: "Haiti", awayTeam: "USA", status: "live", homeScore: 0, awayScore: 2 });
-    expect(screen.queryByText("LIVE · 0–2")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-date")).getByText("LIVE")).toBeInTheDocument();
+    expect(within(screen.getByTestId("match-row-desktop")).getByTestId("match-row-center"))
+      .toHaveTextContent(/^0–2$/);
   });
 });
 
