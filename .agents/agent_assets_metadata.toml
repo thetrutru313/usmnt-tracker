@@ -980,3 +980,31 @@ mtime_ms = 1792526890926
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f8be6e1a-ec2e-48a4-853d-f48543b269ca/10fdec5b-e5a2-47f5-801f-aa431911a3f9"
 storage_version_token = "1792527110793902"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "chM-LTrA16nldoUIQuapM"
+uri = "file://reports/prompt30-youth-nt-windows.md"
+type = "text"
+title = "Prompt 30 verification report"
+description = "Step 0, youth-team coverage, extra-call estimate, red-then-green evidence, changed files, and verification limits."
+logical_id = "bce288c5-b22e-4050-9d6a-9ca2f289c0d3"
+content_hash = "sha256:bc00529bc8929e51a05f51c0835581a81e2d41e48c0c1ee1eb699027c30cf5a7"
+size = 6529
+mtime_ms = 1792527802673
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/bce288c5-b22e-4050-9d6a-9ca2f289c0d3/6ea92095-1115-49c6-9cfb-2e35483eba80"
+storage_version_token = "1792527873899473"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "i8aJAFLAmu2rs_0xosIrY"
+uri = "file://reports/prompt31-atomic-sync-claims.md"
+type = "text"
+title = "Prompt 31 verification report"
+description = "Step 0, the 18-of-20 baseline race, red-then-green evidence, files changed, full local checks, and verification limits."
+logical_id = "d04d81c2-af3c-462a-b15f-ce39c7ef25b1"
+content_hash = "sha256:55821f89d409f20b4525ac705f4268fa028ee250fbe419f58d1ad1f0ade117a5"
+size = 7817
+mtime_ms = 1792528622533
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/d04d81c2-af3c-462a-b15f-ce39c7ef25b1/e0e76f54-8742-4238-9141-ff53c5cfbb1b"
+storage_version_token = "1792528672208848"
+content_type = "text/markdown"
