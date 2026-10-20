@@ -56,16 +56,18 @@ describe("Prompt 28 layout — change verifying", () => {
     expect(layout("desktop")).toHaveClass("grid");
   });
 
-  it("mobile keeps home above away, each with its own right-aligned score and no vs", () => {
+  it("mobile keeps home before away with the score only in the mirrored centre", () => {
     row({ status: "finished", homeScore: 4, awayScore: 1 });
     const mobile = within(layout("mobile"));
-    const home = mobile.getByTestId("match-row-home-line");
-    const away = mobile.getByTestId("match-row-away-line");
+    const home = mobile.getByText("USA");
+    const away = mobile.getByText("Haiti");
     expect(home.compareDocumentPosition(away) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(home).getByText("USA")).toBeInTheDocument();
-    expect(within(away).getByText("Haiti")).toBeInTheDocument();
-    expect(within(home).getByTestId("match-row-home-score")).toHaveTextContent(/^4$/);
-    expect(within(away).getByTestId("match-row-away-score")).toHaveTextContent(/^1$/);
+    const centre = mobile.getByTestId("match-row-center");
+    expect(centre).toHaveTextContent(/^4–1$/);
+    expect(within(centre).getByTestId("match-row-home-score")).toHaveTextContent(/^4$/);
+    expect(within(centre).getByTestId("match-row-away-score")).toHaveTextContent(/^1$/);
+    expect(mobile.queryByTestId("match-row-home-line")).not.toBeInTheDocument();
+    expect(mobile.queryByTestId("match-row-away-line")).not.toBeInTheDocument();
     expect(mobile.queryByText("vs")).not.toBeInTheDocument();
   });
 
@@ -112,11 +114,15 @@ describe("Prompt 28 layout — change verifying", () => {
     expect(scoped.getByTestId("match-row-away-score")).not.toHaveClass("text-muted-foreground");
   });
 
-  it.each(["scheduled", "postponed"] as const)("%s has no per-team mobile scores", status => {
+  it.each(["scheduled", "postponed"] as const)("%s has numeric scores only inside the shared centre", status => {
     row({ status, homeScore: 0, awayScore: 0 });
     const mobile = within(layout("mobile"));
-    expect(mobile.queryByTestId("match-row-home-score")).not.toBeInTheDocument();
-    expect(mobile.queryByTestId("match-row-away-score")).not.toBeInTheDocument();
+    const centre = mobile.getByTestId("match-row-center");
+    expect(centre).toHaveTextContent(/^0–0$/);
+    expect(centre).toContainElement(mobile.getByTestId("match-row-home-score"));
+    expect(centre).toContainElement(mobile.getByTestId("match-row-away-score"));
+    expect(mobile.queryByTestId("match-row-home-line")).not.toBeInTheDocument();
+    expect(mobile.queryByTestId("match-row-away-line")).not.toBeInTheDocument();
   });
 });
 
