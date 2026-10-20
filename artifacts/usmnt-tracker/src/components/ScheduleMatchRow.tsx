@@ -6,29 +6,17 @@ import type { Fixture } from "@workspace/api-client-react";
 /**
  * Compact match row for use inside Schedule event cards and Dashboard Hero.
  *
- * Shows: USMNT crest vs opponent, kickoff date + time, venue/city,
- * and broadcast information for scheduled/live matches.
- * Renders scores when homeScore/awayScore are present.
+ * Shows home flag/name, vs (or a home–away score), then away flag/name,
+ * alongside kickoff date/time, venue/city, and scheduled/live broadcasts.
+ * Both flags are 20px; names truncate independently. On narrow screens,
+ * broadcast occupies its own untruncated line below the matchup.
+ * Live/finished scores retain their LIVE / FT prefixes.
  * Finished/live rows link to match details; other rows are non-interactive.
  * Do not wrap this component in a parent link.
  */
 export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
-  // Determine which side is USMNT so we can label "vs <Opponent>" cleanly
-  const usTeamNames = ["united states", "usa", "usmnt"];
-  const homeIsUS = usTeamNames.some((n) =>
-    fixture.homeTeam.toLowerCase().includes(n)
-  );
-  const opponent = homeIsUS ? fixture.awayTeam : fixture.homeTeam;
-  const usLogoUrl = homeIsUS ? fixture.homeLogoUrl : fixture.awayLogoUrl;
-  const opponentLogoUrl = homeIsUS
-    ? fixture.awayLogoUrl
-    : fixture.homeLogoUrl;
-
   const hasScore =
     fixture.homeScore !== null && fixture.awayScore !== null;
-
-  const usScore = homeIsUS ? fixture.homeScore : fixture.awayScore;
-  const oppScore = homeIsUS ? fixture.awayScore : fixture.homeScore;
 
   const isFinished = fixture.status === "finished";
   const isLive = fixture.status === "live";
@@ -38,7 +26,7 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
         .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
         .join(" · ")
     : "";
-  const rowClassName = "flex items-center gap-3 py-2.5 border-b border-border/50 last:border-0";
+  const rowClassName = "grid grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[4rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 border-b border-border/50 last:border-0";
 
   const content = (
     <>
@@ -53,16 +41,18 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
       </div>
 
       {/* Match info */}
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        {/* USMNT flag */}
-        {usLogoUrl && (
-          <img
-            src={usLogoUrl}
-            alt="USMNT"
-            className="w-5 h-5 object-contain shrink-0"
-            aria-hidden="true"
-          />
-        )}
+      <div className="min-w-0 flex items-center gap-2">
+        {/* Home flag + independently truncating name */}
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          {fixture.homeLogoUrl && (
+            <img
+              src={fixture.homeLogoUrl}
+              alt={fixture.homeTeam}
+              className="w-5 h-5 object-contain shrink-0"
+            />
+          )}
+          <span className="font-semibold text-sm truncate">{fixture.homeTeam}</span>
+        </div>
 
         {/* Score or "vs" label */}
         {hasScore ? (
@@ -74,25 +64,27 @@ export function ScheduleMatchRow({ fixture }: { fixture: Fixture }) {
               : "text-muted-foreground"
           }`}>
             {isLive ? "LIVE · " : isFinished ? "FT · " : ""}
-            {usScore}–{oppScore}
+            {fixture.homeScore}–{fixture.awayScore}
           </span>
         ) : (
-          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0 uppercase">{homeIsUS ? "vs" : "@"}</span>
+          <span className="text-[10px] font-mono font-bold text-muted-foreground shrink-0 uppercase">vs</span>
         )}
 
-        {/* Opponent logo + name */}
-        {opponentLogoUrl && (
-          <img
-            src={opponentLogoUrl}
-            alt={opponent}
-            className="w-4 h-4 object-contain shrink-0"
-          />
-        )}
-        <span className="font-semibold text-sm truncate">{opponent}</span>
+        {/* Away flag + independently truncating name */}
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          {fixture.awayLogoUrl && (
+            <img
+              src={fixture.awayLogoUrl}
+              alt={fixture.awayTeam}
+              className="w-5 h-5 object-contain shrink-0"
+            />
+          )}
+          <span className="font-semibold text-sm truncate">{fixture.awayTeam}</span>
+        </div>
       </div>
 
       {/* Venue stays desktop-only; broadcast is a single responsive element. */}
-      <div className={`${broadcast ? "flex" : "hidden sm:flex"} flex-col items-end gap-1 text-[10px] text-muted-foreground shrink-0 max-w-[140px]`}>
+      <div className={`${broadcast ? "flex" : "hidden sm:flex"} col-span-2 sm:col-span-1 justify-self-end flex-col items-end gap-1 text-[10px] text-muted-foreground shrink-0 max-w-[140px]`}>
         <div className="hidden sm:flex items-center gap-1 max-w-full">
           <MapPin size={10} className="shrink-0" />
           <span className="truncate">

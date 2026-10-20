@@ -59,13 +59,14 @@ describe("November fixtures — frontend regression", () => {
     render(<ScheduleMatchRow fixture={leg1} />);
     expect(screen.getByText("Nov 14")).toBeInTheDocument();
   });
-  it("4: USA-away row names Haiti and uses the home-side opponent logo", () => {
+  it("4: USA-away row names both teams and puts the Haiti flag first", () => {
     render(<ScheduleMatchRow fixture={leg1} />);
     expect(screen.getByText("Haiti")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Haiti" })).toHaveAttribute("src", leg1.homeLogoUrl);
-    expect(screen.getByAltText("USMNT")).toHaveAttribute("src", leg1.awayLogoUrl);
+    expect(screen.getByAltText("USA")).toHaveAttribute("src", leg1.awayLogoUrl);
+    expect(screen.getAllByRole("img").map((img) => img.getAttribute("alt"))).toEqual(["Haiti", "USA"]);
   });
-  it("5: dashboard hero shows both legs, Time TBD, and the away designation", () => {
+  it("5: dashboard hero shows both home-first legs, Time TBD, and broadcasts", () => {
     dashboardState.data = {
       todaysGames: [], upcomingGames: [], topPerformers: [], latestNews: [],
       transfers: [], injuries: [], trending: [], recentlyReturned: [],
@@ -81,6 +82,27 @@ describe("November fixtures — frontend regression", () => {
     expect(within(hero).getByText("Nov 14")).toBeInTheDocument();
     expect(within(hero).getByText("Nov 17")).toBeInTheDocument();
     expect(within(hero).getByText("Time TBD")).toBeInTheDocument();
-    expect(within(hero).getByText("@")).toBeInTheDocument();
+    expect(within(hero).getAllByText("USA")).toHaveLength(2);
+    expect(within(hero).getAllByText("vs")).toHaveLength(2);
+    expect(within(hero).queryByText("@")).not.toBeInTheDocument();
+  });
+
+  it("dashboard hero renders both broadcast lines with the production endpoint values", () => {
+    dashboardState.data = {
+      todaysGames: [], upcomingGames: [], topPerformers: [], latestNews: [],
+      transfers: [], injuries: [], trending: [], recentlyReturned: [],
+      nextScheduleEvent: {
+        id: 30, slug: "cnl-qf-nov-2026", name: "Nations League Quarterfinals",
+        kind: "nations-league", status: "confirmed", dateLabel: "Nov 14 & 17, 2026",
+        description: "Two-legged tie against Haiti.", fixtures: [leg1, leg2],
+      },
+    };
+    render(<Router><Dashboard /></Router>);
+    const hero = screen.getByRole("heading", { name: "Nations League Quarterfinals" }).closest("section")!;
+    const broadcasts = within(hero).getAllByTestId("match-row-broadcast");
+    expect(broadcasts).toHaveLength(2);
+    for (const broadcast of broadcasts) {
+      expect(broadcast).toHaveTextContent("TNT · HBO Max");
+    }
   });
 });
