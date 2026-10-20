@@ -910,3 +910,17 @@ mtime_ms = 1792517190788
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/fd38bea3-9922-4ff5-a998-c87e2be6d46a/0003ed55-58b1-4752-b8e8-0767859beb45"
 storage_version_token = "1792517191478959"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "swJNvMtRVVXdZtVqtVIbe"
+uri = "file://reports/match-row-layout/prompt28-report.html"
+type = "html"
+title = "Prompt 28 — Complete match-row layout report"
+description = "Commit and successful CI, red/green evidence, all assertion rewrites, chosen widths, changed files, safety notes and four embedded America/Denver dev screenshots."
+logical_id = "a7ad277a-2f3a-4783-ab0e-c194b5fcc306"
+content_hash = "sha256:b6114c25cb6d6b46275d9de1fb74f202b601602feac3b984a857c3bb3f70ae72"
+size = 337912
+mtime_ms = 1792518661659
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a7ad277a-2f3a-4783-ab0e-c194b5fcc306/43bfe1e5-5bc2-4258-8cb1-2d44eb2207a3"
+storage_version_token = "1792518662985570"
+content_type = "text/html"
