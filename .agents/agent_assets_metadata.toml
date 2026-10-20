@@ -924,3 +924,17 @@ mtime_ms = 1792518661659
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a7ad277a-2f3a-4783-ab0e-c194b5fcc306/43bfe1e5-5bc2-4258-8cb1-2d44eb2207a3"
 storage_version_token = "1792518662985570"
 content_type = "text/html"
+
+[[outputs]]
+id = "rLpau-YI1bSfScgfBIL8Y"
+uri = "file://reports/match-row-layout/prompt28b-report.html"
+type = "html"
+title = "Prompt 28b — Complete mobile match-row report"
+description = "Successful commit and CI, seven red-to-green assertions, three authorized rewrites, desktop image comparison and four embedded Denver-time dev screenshots."
+logical_id = "034b46a3-68c9-4ce0-8023-bc87a2e9ea4f"
+content_hash = "sha256:d2fb3fb48858a1ba950fcfe821192b1f304aafa7ca41bfb3894fabca4f68cdcb"
+size = 336063
+mtime_ms = 1792519469315
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/034b46a3-68c9-4ce0-8023-bc87a2e9ea4f/3ab7690c-6cbc-41a1-a607-ad8ff0714dd8"
+storage_version_token = "1792519470633065"
+content_type = "text/html"
