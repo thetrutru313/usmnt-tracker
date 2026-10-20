@@ -826,3 +826,17 @@ mtime_ms = 1791424647028
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/6d61f68e-d8da-4a2f-b1b3-cc20ecea3d7e/10e8b65c-c71c-4f1d-b1c6-2c922ccaa220"
 storage_version_token = "1791424676828237"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "PqyhAVpdkSnYQChIfkN8Y"
+uri = "file://reports/home-first-match-rows-review.md"
+type = "text"
+title = "Prompt 24 — Review report and approval question"
+description = "Stopped-for-review report with the approval question, production side effect, home-first changes, rewritten assertions, test results, visual checks, and Git/CI limitations."
+logical_id = "985f6320-caa6-4a9f-91e3-359ba5d869ef"
+content_hash = "sha256:56300b43ccdd54eb211513a0ba984a42f6a0f476a0fe422e78e10c875c5bae57"
+size = 9585
+mtime_ms = 1792510509905
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/985f6320-caa6-4a9f-91e3-359ba5d869ef/99bcb627-42d3-4461-aeae-5093494d59b9"
+storage_version_token = "1792510530569986"
+content_type = "text/markdown"
