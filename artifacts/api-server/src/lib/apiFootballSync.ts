@@ -1969,11 +1969,11 @@ export interface YouthTeamFetchResult {
   label: string;
   /**
    * All API-Football fixture ids returned for this team across all fetched
-   * seasons (after filtering to US-participant fixtures).
+   * seasons and next/last windows (after filtering to US-participant fixtures).
    */
   seenAfIds: Set<number>;
   /**
-   * True only when *every* season fetch for this team succeeded.  A partial
+   * True only when *every* season and window fetch for this team succeeded. A partial
    * outage (e.g. the current-season call times out) leaves the seen-id set
    * incomplete, so rows absent from it may simply have been missed rather than
    * genuinely removed.  The purge skips this team entirely unless this flag
@@ -2121,7 +2121,7 @@ export async function syncYouthNtFixtures(): Promise<{
 
   for (const { teamId, label } of YOUTH_NT_TEAMS) {
     let afFixtures: AfFixture[] = [];
-    let fetchComplete = true; // flipped to false on any season fetch failure
+    let fetchComplete = true; // flipped to false on any season or window fetch failure
 
     for (const season of [currentYear, currentYear - 1]) {
       try {
@@ -2133,6 +2133,19 @@ export async function syncYouthNtFixtures(): Promise<{
         fetchComplete = false;
       }
     }
+
+    // Competition season labels can be older than both queried calendar years.
+    for (const window of ["next", "last"] as const) {
+      try {
+        const fetched = await afFetch<AfFixture[]>(`/fixtures?team=${teamId}&${window}=10`);
+        afFixtures = afFixtures.concat(fetched);
+      } catch (err) {
+        logger.warn({ err, teamId, label, window }, "Youth NT fixture sync: API-Football fetch failed for window");
+        failures++;
+        fetchComplete = false;
+      }
+    }
+    afFixtures = [...new Map(afFixtures.map((fixture) => [fixture.fixture.id, fixture])).values()];
 
     // Only process fixtures where a US youth team is actually a participant.
     // (API-Football may return opponent fixtures if we fetched by team ID and
