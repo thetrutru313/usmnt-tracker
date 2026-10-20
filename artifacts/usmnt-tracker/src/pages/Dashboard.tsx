@@ -12,9 +12,10 @@ import { format } from "date-fns";
 import { KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS, type EventKind, type EventStatus } from "@/data/schedule";
 
 export default function Dashboard() {
-  const { data: dashboard, isLoading, error } = useGetDashboard({
+  const params = { tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  const { data: dashboard, isLoading, error } = useGetDashboard(params, {
     query: {
-      queryKey: getGetDashboardQueryKey(),
+      queryKey: getGetDashboardQueryKey(params),
       refetchInterval: (query): number | false =>
         dashboardRefetchInterval(query.state.data as DashboardSummary | undefined),
     },

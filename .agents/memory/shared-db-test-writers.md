@@ -18,3 +18,11 @@ until `afterAll`, not just persistent sports data. A post-run query returning no
 finished-fixture history does not disprove interference during the run, because
 cleanup may already have removed it. Preserve assertions and respect the user's
 limits on diagnostic reruns and out-of-scope fixes.
+
+Hero-selection tests can also collide through globally visible temporary schedule
+events: one test's earlier sort order wins another test's dashboard request.
+Keep such tests unchanged and run them serially to establish a truthful baseline;
+new integration tests should prefer rollback-only transactions for isolation.
+
+**Why:** A baseline hero assertion selected another test's temporary event,
+while both unchanged tests passed with file parallelism disabled.

@@ -13,4 +13,8 @@ export type ListFixturesParams = {
  */
 scope?: ListFixturesScope;
 playerId?: number;
+/**
+ * IANA viewer time zone for scope=today only. Missing or unknown zones use America/New_York. Ignored for other scopes.
+ */
+tz?: string;
 };

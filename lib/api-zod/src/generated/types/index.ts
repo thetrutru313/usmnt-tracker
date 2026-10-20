@@ -16,6 +16,7 @@ export * from './fixtureFeaturedPlayer';
 export * from './fixtureMatchLog';
 export * from './fixtureStatus';
 export * from './fixtureTrackedPlayer';
+export * from './getDashboardParams';
 export * from './getPlayerParams';
 export * from './healthStatus';
 export * from './injury';

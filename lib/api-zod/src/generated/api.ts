@@ -273,7 +273,8 @@ export const GetPlayerResponse = zod.object({
  */
 export const ListFixturesQueryParams = zod.object({
   "scope": zod.enum(['today', 'upcoming', 'all']).optional().describe('Filter to today\'s or upcoming fixtures'),
-  "playerId": zod.coerce.number().optional()
+  "playerId": zod.coerce.number().optional(),
+  "tz": zod.coerce.string().optional().describe('IANA viewer time zone for scope=today only. Missing or unknown zones use America\/New_York. Ignored for other scopes.')
 })
 
 export const listFixturesResponseKickoffTimeTbdDefault = false;
@@ -477,6 +478,10 @@ export const ListTransfersResponse = zod.array(ListTransfersResponseItem)
 /**
  * @summary Get dashboard summary
  */
+export const GetDashboardQueryParams = zod.object({
+  "tz": zod.coerce.string().optional().describe('IANA viewer time zone for today\'s fixtures and start-only schedule events. Missing or unknown zones use America\/New_York.')
+})
+
 export const getDashboardResponseTodaysGamesItemKickoffTimeTbdDefault = false;
 export const getDashboardResponseUpcomingGamesItemKickoffTimeTbdDefault = false;
 export const getDashboardResponseNextScheduleEventFixturesItemKickoffTimeTbdDefault = false;

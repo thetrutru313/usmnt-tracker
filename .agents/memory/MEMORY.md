@@ -20,3 +20,4 @@
 - [SQL notice capture](sql-notice-capture.md) — DO execution may return only its command tag; capture notices before one-time maintenance and never invent missing output.
 - [Screenshot coverage](screenshot-coverage.md) — DOM counts do not prove saved-image coverage; fullPage does not reveal content clipped by an internal scrolling region.
 - [National-team row design](national-team-row-design.md) — phone rows use a meta line above mirrored teams; stacked teams with far-right scores were explicitly rejected.
+- [Viewer calendar-day scope](viewer-day-policy.md) — viewer-day filtering must not change the Watch Guide, display formatting, or deliberate UTC schedule grace windows.

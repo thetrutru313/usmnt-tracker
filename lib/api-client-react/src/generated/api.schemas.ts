@@ -560,6 +560,10 @@ export type ListFixturesParams = {
  */
 scope?: ListFixturesScope;
 playerId?: number;
+/**
+ * IANA viewer time zone for scope=today only. Missing or unknown zones use America/New_York. Ignored for other scopes.
+ */
+tz?: string;
 };
 
 export type ListFixturesScope = typeof ListFixturesScope[keyof typeof ListFixturesScope];
@@ -594,6 +598,13 @@ status?: TransferStatus;
  * @maximum 200
  */
 limit?: number;
+};
+
+export type GetDashboardParams = {
+/**
+ * IANA viewer time zone for today's fixtures and start-only schedule events. Missing or unknown zones use America/New_York.
+ */
+tz?: string;
 };
 
 export type SearchParams = {

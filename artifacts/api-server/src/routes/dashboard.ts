@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { GetDashboardResponse } from "@workspace/api-zod";
+import { GetDashboardQueryParams, GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
 import { and, asc, avg, desc, eq, gte, inArray, isNotNull, isNull, lt, notIlike, notInArray, or, sql } from "drizzle-orm";
 import {
@@ -21,15 +21,17 @@ import {
   resolveAge,
   seniorNtFixtureCondition,
 } from "../lib/queries";
+import { viewerDay } from "../lib/viewerDay.js";
 
 const router: IRouter = Router();
 
-router.get("/dashboard", async (_req, res): Promise<void> => {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setDate(endOfDay.getDate() + 1);
-  const todayStr = new Date().toISOString().slice(0, 10);
+router.get("/dashboard", async (req, res): Promise<void> => {
+  const parsed = GetDashboardQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { startOfDay, endOfDay, todayStr } = viewerDay(parsed.data.tz);
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);

@@ -131,6 +131,12 @@ paths:
           required: false
           schema:
             type: integer
+        - name: tz
+          in: query
+          required: false
+          description: "IANA viewer time zone for scope=today only. Missing or unknown zones use America/New_York. Ignored for other scopes."
+          schema:
+            type: string
       responses:
         "200":
           description: List of fixtures
@@ -260,6 +266,13 @@ paths:
       operationId: getDashboard
       tags: [dashboard]
       summary: Get dashboard summary
+      parameters:
+        - name: tz
+          in: query
+          required: false
+          description: "IANA viewer time zone for today's fixtures and start-only schedule events. Missing or unknown zones use America/New_York."
+          schema:
+            type: string
       responses:
         "200":
           description: Dashboard summary

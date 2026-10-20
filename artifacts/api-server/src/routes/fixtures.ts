@@ -4,6 +4,7 @@ import { db, fixturesTable, fixturePlayersTable, playersTable, matchLogsTable, c
 import { and, eq, gte, inArray, isNotNull, lt, lte, notIlike, or, sql } from "drizzle-orm";
 import { pickBestNtFixtureId } from "../lib/pickBestNtFixtureId.js";
 import { attachFeaturedPlayers, computePoolTier, resolveAge } from "../lib/queries";
+import { viewerDay } from "../lib/viewerDay.js";
 
 
 const router: IRouter = Router();
@@ -209,7 +210,7 @@ router.get("/fixtures", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { scope, playerId } = parsed.data;
+  const { scope, playerId, tz } = parsed.data;
 
   // Exclude club friendlies; keep national-team fixtures regardless of competition name.
   const conditions = [or(eq(fixturesTable.isNationalTeam, true), notIlike(fixturesTable.competition, "%Friendlies%"))];
@@ -237,10 +238,7 @@ router.get("/fixtures", async (req, res): Promise<void> => {
   }
 
   if (scope === "today") {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    const { startOfDay, endOfDay } = viewerDay(tz);
     conditions.push(gte(fixturesTable.kickoff, startOfDay), lt(fixturesTable.kickoff, endOfDay));
   } else if (scope === "upcoming") {
     conditions.push(gte(fixturesTable.kickoff, new Date()));
