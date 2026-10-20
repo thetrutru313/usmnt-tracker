@@ -966,3 +966,17 @@ mtime_ms = 1792525004647
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/3106cc88-1b0f-4b47-9f95-e721f9a7cbad/79b90962-0f34-42fe-8a1d-f78ee59e6719"
 storage_version_token = "1792525019044382"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "KmV7r4B991q4dujZTCE6V"
+uri = "file://reports/prompt29-viewer-day.md"
+type = "text"
+title = "Prompt 29 verification report"
+description = "Step 0 inventory, files changed, red-then-green evidence, full local check results, and verification limits."
+logical_id = "f8be6e1a-ec2e-48a4-853d-f48543b269ca"
+content_hash = "sha256:4dc07a4ba57e3c061803683fca083b7ae7dc3d5934a22ac025ee02a582045d85"
+size = 8571
+mtime_ms = 1792526890926
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f8be6e1a-ec2e-48a4-853d-f48543b269ca/10fdec5b-e5a2-47f5-801f-aa431911a3f9"
+storage_version_token = "1792527110793902"
+content_type = "text/markdown"
