@@ -26,3 +26,10 @@ new integration tests should prefer rollback-only transactions for isolation.
 
 **Why:** A baseline hero assertion selected another test's temporary event,
 while both unchanged tests passed with file parallelism disabled.
+
+Scheduler-claim integration tests must use unique synthetic sync names and clean
+up only those names. Exercise the real scheduled names only through mocks.
+
+**Why:** The user explicitly requires concurrency tests to leave the running
+development server's cooldown metadata unaffected. A broad cleanup or a real
+claim for a production scheduler name can suppress its next refresh.

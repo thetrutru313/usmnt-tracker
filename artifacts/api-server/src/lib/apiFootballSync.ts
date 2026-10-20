@@ -2424,6 +2424,7 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
       }
       liveLoopRunning = true;
       try {
+        if (!(await claimSyncRun("livePoll", livePollIntervalMs * 0.8))) return;
         await pollLiveFixtures();
       } catch (err) {
         logger.error({ err }, "Live fixture poll failed");

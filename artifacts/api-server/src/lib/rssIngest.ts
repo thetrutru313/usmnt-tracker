@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import { db, playersTable, newsArticlesTable, newsArticlePlayersTable } from "@workspace/db";
 
 import { logger } from "./logger";
+import { claimSyncRun } from "./syncGuard.js";
 
 const parser = new Parser({ timeout: 10_000 });
 
@@ -175,9 +176,13 @@ let intervalHandle: NodeJS.Timeout | null = null;
 
 /** Runs ingestion immediately, then on a recurring interval (default 15 min). */
 export function startRssIngestionSchedule(intervalMs = 15 * 60 * 1000): void {
-  ingestRssNews().catch((err) => logger.error({ err }, "Initial RSS ingestion failed"));
+  const run = async () => {
+    if (!(await claimSyncRun("rssIngest", 12 * 60 * 1000))) return;
+    await ingestRssNews();
+  };
+  run().catch((err) => logger.error({ err }, "Initial RSS ingestion failed"));
   intervalHandle = setInterval(() => {
-    ingestRssNews().catch((err) => logger.error({ err }, "Scheduled RSS ingestion failed"));
+    run().catch((err) => logger.error({ err }, "Scheduled RSS ingestion failed"));
   }, intervalMs);
 }
 
