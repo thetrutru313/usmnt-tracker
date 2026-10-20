@@ -868,3 +868,17 @@ mtime_ms = 1792514958653
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/8f516aef-1ebe-4176-9ff8-20cdcd2b7e7c/b0d5595c-042b-4bfe-9b7c-ead24cbe0d00"
 storage_version_token = "1792514993810682"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "spiLJd0xeaSQHk1x3cinH"
+uri = "file://reports/prompt-26-complete.md"
+type = "text"
+title = "Prompt 26 — Complete Markdown Report"
+description = "Downloadable .md containing all evidence, news counts, dev verification, NOTICE-output limitation, full revised SQL, commit hash, and passing CI link."
+logical_id = "a8f76d32-40b1-4389-9985-be900d259db0"
+content_hash = "sha256:cbddb9462466956687a613fd66bbae653425a97a99e875d3b9ce772a2e9dd8eb"
+size = 19756
+mtime_ms = 1792515255036
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a8f76d32-40b1-4389-9985-be900d259db0/ddae3c65-e71d-4018-90d9-47116b06898b"
+storage_version_token = "1792515256169023"
+content_type = "text/markdown"
