@@ -938,3 +938,17 @@ mtime_ms = 1792519469315
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/034b46a3-68c9-4ce0-8023-bc87a2e9ea4f/3ab7690c-6cbc-41a1-a607-ad8ff0714dd8"
 storage_version_token = "1792519470633065"
 content_type = "text/html"
+
+[[outputs]]
+id = "8-v3nHF9lWCdcC3qJW-Lb"
+uri = "file://reports/prompt28c-production-seed-audit.html"
+type = "html"
+title = "Prompt 28c — Production seed-data audit"
+description = "Read-only audit with eleven per-table findings, matching row IDs and timestamps, retained versus changed fields, historical fingerprints, SELECT evidence, and destructive-seed safeguards."
+logical_id = "cdc775e2-60df-4127-8507-52df563eb1d2"
+content_hash = "sha256:c38a947f74efb98327b01e2fcca4d54caa10dd4f03c554261c9d04b8fcaf804e"
+size = 486768
+mtime_ms = 1792524916856
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/cdc775e2-60df-4127-8507-52df563eb1d2/c66d45e6-ea20-451c-ac83-46d44f38ba00"
+storage_version_token = "1792524933443792"
+content_type = "text/html"
