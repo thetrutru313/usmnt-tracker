@@ -952,3 +952,17 @@ mtime_ms = 1792524916856
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/cdc775e2-60df-4127-8507-52df563eb1d2/c66d45e6-ea20-451c-ac83-46d44f38ba00"
 storage_version_token = "1792524933443792"
 content_type = "text/html"
+
+[[outputs]]
+id = "w3MFkq6uwiJQpbhfoPduW"
+uri = "file://reports/prompt28c-production-seed-audit.md"
+type = "text"
+title = "Prompt 28c — Markdown report"
+description = "Downloadable Markdown version of the full production seed-data audit, including all eleven table sections and evidence."
+logical_id = "3106cc88-1b0f-4b47-9f95-e721f9a7cbad"
+content_hash = "sha256:c0550ec8c3d2ff66f0f61f5f0b06343848955ff37107ca9311f81db3058fc357"
+size = 348771
+mtime_ms = 1792525004647
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/3106cc88-1b0f-4b47-9f95-e721f9a7cbad/79b90962-0f34-42fe-8a1d-f78ee59e6719"
+storage_version_token = "1792525019044382"
+content_type = "text/markdown"
