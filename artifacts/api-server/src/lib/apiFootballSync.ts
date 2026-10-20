@@ -1701,8 +1701,8 @@ export async function syncApiFootballFixtures(
  * the need to mock the API-Football HTTP client in integration tests.
  *
  * @param usaRows    USA-participant NT fixture rows read from the DB.
- * @param afFixtures The flat list of AfFixtures returned by the USMNT seasons
- *                   fetch (current + previous year concatenated).
+ * @param afFixtures The deduplicated USMNT fixtures from the current/prior
+ *                   seasons and season-independent next/last windows.
  * @param nowMs      Current epoch milliseconds — injectable for deterministic
  *                   testing without clock manipulation.
  */
@@ -1790,6 +1790,18 @@ export async function syncNationalTeamFixtures(): Promise<{
       logger.warn({ err, season }, "NT fixture sync: API-Football fetch failed for season");
     }
   }
+
+  // Competition season labels can be older than either calendar-year query
+  // (e.g. March 2027 Nations League fixtures filed under season 2025).
+  for (const window of ["next", "last"] as const) {
+    try {
+      const fetched = await afFetch<AfFixture[]>(`/fixtures?team=${teamId}&${window}=10`);
+      afFixtures = afFixtures.concat(fetched);
+    } catch (err) {
+      logger.warn({ err, window }, "NT fixture sync: API-Football fetch failed for window");
+    }
+  }
+  afFixtures = [...new Map(afFixtures.map((fixture) => [fixture.fixture.id, fixture])).values()];
 
   if (afFixtures.length === 0) {
     logger.warn("NT fixture sync: no fixtures returned from API-Football for USMNT");

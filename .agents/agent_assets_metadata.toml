@@ -882,3 +882,17 @@ mtime_ms = 1792515255036
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/a8f76d32-40b1-4389-9985-be900d259db0/ddae3c65-e71d-4018-90d9-47116b06898b"
 storage_version_token = "1792515256169023"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "V_3n59_3Vp5_-zXzPIYgl"
+uri = "file://reports/prompt-27-nt-sync.md"
+type = "text"
+title = "Prompt 27 — NT Sync Evidence and Test Report"
+description = "Downloadable Markdown: request inventory, budget audit, both provider response tables, approved test split, red/green evidence, changed files, verification, and limitations. Commit and CI result follow in the completion message."
+logical_id = "f2a04cf8-abdf-4ead-ae47-4bc8a14e8b10"
+content_hash = "sha256:fae0c697d416797a65f83b6fdd59bdbb9dc19a57511b01f904e8e836f1565b68"
+size = 9502
+mtime_ms = 1792516933112
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/f2a04cf8-abdf-4ead-ae47-4bc8a14e8b10/3f089fa5-3db0-4fe7-99d4-d5a88b9eab70"
+storage_version_token = "1792516957464826"
+content_type = "text/markdown"

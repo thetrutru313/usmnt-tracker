@@ -35,14 +35,27 @@ Do not retire this fallback just because the Sept/Oct 2026 friendlies have been 
 
 ## Provider season labels do not follow fixture calendar year
 
-National-team competition editions can label a future fixture with the prior
-season, even well away from New Year's. Absence from the current-year list
-alone does not establish that a bound ID disappeared or was reissued.
+National-team competition editions can label future fixtures with a season
+older than both queried calendar years after New Year's. Absence from those
+season lists does not establish that a bound ID disappeared or was reissued.
 
-**Why:** Direct ID and upcoming-fixture lookups confirmed that November
-Nations League fixtures belong to the previous season, while the same
-calendar year's friendlies and World Cup use the current season.
+**Why:** Direct upcoming-fixture evidence confirmed that the November 2026 Haiti
+legs belong to season 2025. The user identified the same competition edition as
+a January 2027 rollover risk: two calendar-year queries would then exclude it.
+The future March Finals were not yet present in the observed upcoming list.
 
-**How to apply:** Preserve current/prior-season coverage. Diagnose missing
-fixtures with by-ID and upcoming-list evidence before changing bindings or
-expanding season queries.
+**How to apply:** Preserve current/prior-season coverage plus season-independent
+next/last windows. Do not simplify back to calendar-year lists or hard-code a
+particular old season. Diagnose missing fixtures before changing bindings.
+
+## Test classification when expanding fetch coverage
+
+Preserve baseline partial-failure guards as green-before/green-after tests;
+classify assertions requiring newly added fetches as red-to-green.
+
+**Why:** The user explicitly approved this split when a requested regression
+assertion required three surviving responses, although the baseline made only
+two requests. Making that assertion pass on the baseline would weaken it.
+
+**How to apply:** Keep the original two-source failure-isolation proof and
+separately verify all four ways one of the expanded sources can fail.
