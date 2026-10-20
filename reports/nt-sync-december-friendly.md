@@ -12,7 +12,9 @@ the initial season-2026 lookup. No season-2027 lookup was needed. Tests of the
 sync intercepted fetch rather than making provider requests. At the development
 restart, the existing cooldowns skipped the paid startup syncs.
 
-Git push and CI results are reported in the final delivery after CI completes.
+**Confirmed:** pushed commit `cde2ff50d25d34bd94c0ecf934fd45b4761be043`
+to `main`. [GitHub CI passed](https://github.com/thetrutru313/usmnt-tracker/actions/runs/39454184999).
+The working tree was clean at completion.
 
 ## Step 0a — original implementation
 
@@ -258,7 +260,63 @@ statement; the BEGIN inside DO is the required PL/pgSQL body delimiter.
 It omits id, raises unless the initial count is 14, raises on an existing
 December slug or occupied sort order 35, inserts the exact event, checks
 `GET DIAGNOSTICS ... ROW_COUNT = 1`, and verifies the final count is 15.
-The full SQL is reproduced in the final delivery for the user to run.
+The full SQL follows for the user to run. It has not been executed by the agent.
+
+```sql
+DO $dec_friendly$
+DECLARE
+  inserted_count integer;
+BEGIN
+  IF (SELECT count(*) FROM schedule_events) <> 14 THEN
+    RAISE EXCEPTION 'Expected exactly 14 schedule_events rows before insertion';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM schedule_events
+    WHERE slug = 'friendly-dec-2026'
+  ) THEN
+    RAISE EXCEPTION 'friendly-dec-2026 already exists';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM schedule_events
+    WHERE sort_order = 35
+      AND slug <> 'friendly-dec-2026'
+  ) THEN
+    RAISE EXCEPTION 'Another schedule event already uses sort_order 35';
+  END IF;
+
+  INSERT INTO schedule_events (
+    slug, name, kind, status, start_date, end_date,
+    date_label, sort_order, description
+  ) VALUES (
+    'friendly-dec-2026',
+    'December Friendly',
+    'friendly',
+    'confirmed',
+    '2026-12-13',
+    '2026-12-14',
+    'Dec 13, 2026',
+    35,
+    'A one-off friendly against Jamaica on Sunday, December 13, at Inter Miami CF Stadium in Fort Lauderdale, Florida. The match falls outside a FIFA international window. Kickoff time and broadcast details have not been announced.'
+  );
+
+  GET DIAGNOSTICS inserted_count = ROW_COUNT;
+
+  IF inserted_count <> 1 THEN
+    RAISE EXCEPTION 'Expected INSERT 1, got %', inserted_count;
+  END IF;
+
+  IF (SELECT count(*) FROM schedule_events) <> 15 THEN
+    RAISE EXCEPTION 'Expected exactly 15 schedule_events rows after insertion';
+  END IF;
+END;
+$dec_friendly$;
+
+SELECT slug, sort_order, start_date, end_date, date_label
+FROM schedule_events
+ORDER BY sort_order;
+```
 
 ## API call accounting
 
