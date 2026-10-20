@@ -15,4 +15,4 @@
 - [Shared-database test writers](shared-db-test-writers.md) — global NT repair can change another parallel test's fixtures; post-run cleanup can erase the history that enabled it.
 - [Data snapshot integrity](data-snapshot-integrity.md) — reject truncated output even if JSON parses; verify expected fixture/group coverage before reporting totals.
 - [Credential-safe Git logging](git-credential-logging.md) — remove tracing variables before authenticated pushes; `GIT_CURL_VERBOSE=0` still enables diagnostics.
-- [Read-only browser safety](read-only-browser-safety.md) — production page loads can create anonymous identities; inspect static GETs unless mutations are blocked or authorized.
+- [Read-only browser safety](read-only-browser-safety.md) — production checks mean direct API/static-asset GETs only; never load the production app in a browser.

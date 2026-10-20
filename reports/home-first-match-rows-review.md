@@ -1,14 +1,32 @@
-# Prompt 24 — stopped for review
+# Prompt 24 — review decision and completion
 
-## Review question
+## Current decision — October 20, 2026
+
+The user authorized finishing Prompt 24 with **no further production access of
+any kind**. The earlier stop and its evidence are preserved below as history.
+
+- The production POST is accepted; no cleanup or record inspection.
+- Standing safety rule: read-only production checks mean direct GET requests
+  only to API endpoints and static assets. Never load the production app in a
+  browser, because startup writes.
+- Task B is closed: the omission was not reproduced; the recorded endpoints
+  contain broadcast fields and the deployed shared chunk renders them.
+  **Possible cause:** stale browser or service-worker state on the user's device.
+  No Task B code change.
+- Finish only the reviewed Task A changes and documentation; rerun checks,
+  push the existing local commits and documentation, and wait for CI.
+- Do not publish.
+
+## Original review question — now answered
 
 **Should I finish the dev changes and CI without any more production access?**
 
-- Finish the dev changes and CI.
-- **Stop for review — the user's current decision.**
+- **Finish the dev changes and CI — the user's latest decision.**
+- Stop for review — the earlier decision, since superseded.
 
-This report is for review only. It does not authorize resuming implementation,
-production access, committing, pushing, publishing, or production cleanup.
+The authorization is limited to local verification, documentation, Git push,
+and GitHub CI. It does not permit any production access, production cleanup,
+or publishing.
 
 ## Why work stopped
 
@@ -26,8 +44,10 @@ The browser check was therefore **not read-only**, contrary to the operating
 rule. No click or deliberate record-creation request was needed for the app to
 send this request.
 
-**Likely consequence:** creation of an anonymous visitor/following identity.
-The exact created record was not inspected in the production database.
+**Confirmed by the user:** one anonymous visitor row was created, holding only
+a token hash, as for any first-time visitor. The existing cleanup job removes
+it after 90 days with no follows. The exact record was not inspected in the
+production database and will not be inspected or touched.
 
 **Confirmed:** no production cleanup was attempted. No production SQL writes
 were issued by the agent. That does not negate the application-generated POST.
@@ -195,7 +215,7 @@ with `Time TBD` / `12:00 AM UTC`. Date/time formatting code was unchanged.
 The dev screenshot emitted CSP inline-script warnings and a 404 resource
 warning. Their origin was not investigated; no CSP change was made.
 
-## Git, CI, and publication status at review
+## Historical Git, CI, and publication status at the stop
 
 **Confirmed:** the agent did not issue a manual Git commit or push for Prompt
 24, did not wait for or report a CI result, and did not publish.
@@ -208,10 +228,10 @@ Its creation mechanism, remote publication status, and CI state were not
 verified. No remote lookup was performed after the stop.
 
 The source files were clean in local Git before adding this review document
-and safety documentation. The work is **stopped for review**, not delivered
-as a completed/CI-verified Prompt 24.
+and safety documentation. At that point the work was stopped for review,
+not delivered as a completed/CI-verified Prompt 24.
 
-## What remains blocked pending explicit approval
+## Restrictions recorded at the earlier stop
 
 - Any further implementation or investigation.
 - Any further production access.
@@ -219,5 +239,39 @@ as a completed/CI-verified Prompt 24.
 - Production cleanup or record inspection.
 - Publishing.
 
-**Review question:** Should I finish the dev changes and CI without any more
-production access?
+The later decision permits local checks, documentation, pushing, and CI only.
+Production access, record inspection/cleanup, and publishing remain prohibited.
+
+## Completion scope confirmation
+
+**Confirmed locally after the review decision:** the three Task A files are
+unchanged from commit `5133266`. Relative to the prior pushed work, the only
+other files are this report, safety documentation/index, and automatically
+generated Library metadata registering the Markdown reports. There are no
+additional application changes.
+
+The existing local documentation commit is `f1663f9`; local history also
+includes generated report-asset metadata commit `8240e26`.
+
+## Fresh verification after the review decision
+
+**Confirmed:** reran the requested checks once after authorization:
+
+| Command | Result |
+|---|---|
+| `pnpm run lint` | Passed: 0 errors; the same 8 warnings in unchanged files |
+| `pnpm run typecheck` | Passed across workspace libraries and artifacts |
+| `pnpm --filter @workspace/usmnt-tracker run test` | Passed: 255 tests, 16 files |
+| `pnpm -r --if-present run build` | Passed |
+
+The recursive build command runs the workspace builds without unnecessarily
+repeating the root build wrapper's typecheck. No application source changed
+after these checks.
+
+**Confirmed:** no production requests, browser loads, database inspection,
+deployment-log retrieval, cleanup, or publishing were performed during this
+completion pass. Only local files/commands and the authorized GitHub push/CI
+operations are involved.
+
+The final pushed hash and observed GitHub CI outcome are supplied in the
+completion delivery rather than embedded in a report committed before CI runs.
