@@ -21,7 +21,8 @@ import { logger } from "./logger";
 // player's Wikipedia infobox has accurate, current numbers. Wikidata's
 // claims lag; Wikipedia's infobox is the thing editors actually keep
 // current, so it's used directly via {{Infobox football biography}}'s
-// `nationalteamN`/`nationalcapsN`/`nationalgoalsN` parameters.
+// `nationalteamN`/`nationalcapsN`/`nationalgoalsN` parameters (also spelled
+// `national_teamN`/`national_capsN`/`national_goalsN`).
 // ---------------------------------------------------------------------------
 
 // Wikimedia's API etiquette asks for a descriptive User-Agent identifying the
@@ -30,7 +31,13 @@ import { logger } from "./logger";
 const USER_AGENT = "USMNTTrackerSync/1.0 (Replit sports-tracker app; internal, low-volume use)";
 const API_BASE = "https://en.wikipedia.org/w/api.php";
 
-type PlayerRow = { id: number; name: string; wikipediaTitle: string | null };
+type PlayerRow = {
+  id: number;
+  name: string;
+  wikipediaTitle: string | null;
+  nationalTeamCaps: number;
+  nationalTeamGoals: number;
+};
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -150,16 +157,16 @@ interface NationalTeamEntry {
   goals: number;
 }
 
-/** Parses every `nationalteamN`/`nationalcapsN`/`nationalgoalsN` triple out of an {{Infobox football biography}}. */
+/** Parses indexed national-team triples in either infobox spelling, retaining full piped team lines. */
 function parseNationalTeamEntries(wikitext: string): NationalTeamEntry[] {
   const entries: NationalTeamEntry[] = [];
-  const teamRe = /nationalteam(\d+)\s*=\s*([^\n|]+)/g;
+  const teamRe = /(?:^|\n)[ \t]*\|[ \t]*national_?team(\d+)[ \t]*=[ \t]*([^\r\n]*)/g;
   let m: RegExpExecArray | null;
   while ((m = teamRe.exec(wikitext))) {
     const idx = m[1];
     const teamText = m[2].trim();
-    const capsMatch = wikitext.match(new RegExp(`nationalcaps${idx}\\s*=\\s*(\\d+)`));
-    const goalsMatch = wikitext.match(new RegExp(`nationalgoals${idx}\\s*=\\s*(\\d+)`));
+    const capsMatch = wikitext.match(new RegExp(`(?:^|\\n)[ \\t]*\\|[ \\t]*national_?caps${idx}[ \\t]*=[ \\t]*(\\d+)`));
+    const goalsMatch = wikitext.match(new RegExp(`(?:^|\\n)[ \\t]*\\|[ \\t]*national_?goals${idx}[ \\t]*=[ \\t]*(\\d+)`));
     entries.push({ teamText, caps: capsMatch ? Number(capsMatch[1]) : 0, goals: goalsMatch ? Number(goalsMatch[1]) : 0 });
   }
   return entries;
@@ -178,7 +185,7 @@ function hasFootballInfobox(wikitext: string): boolean {
 }
 
 function hasAnyUsNationalTeamEntry(wikitext: string): boolean {
-  return /nationalteam\d+\s*=\s*[^\n|]*united states/i.test(wikitext);
+  return parseNationalTeamEntries(wikitext).some((entry) => /united states/i.test(entry.teamText));
 }
 
 /**
@@ -222,12 +229,35 @@ async function resolvePlayerWikipediaArticle(player: PlayerRow): Promise<{ title
   }
 }
 
-function extractSeniorCapsAndGoals(wikitext: string): { caps: number; goals: number } {
+function extractSeniorCapsAndGoals(wikitext: string): NationalTeamTotals | null {
   const senior = seniorUsmntEntries(parseNationalTeamEntries(wikitext));
+  if (senior.length === 0) return null;
   return {
     caps: senior.reduce((sum, e) => sum + e.caps, 0),
     goals: senior.reduce((sum, e) => sum + e.goals, 0),
   };
+}
+
+export interface NationalTeamTotals {
+  caps: number;
+  goals: number;
+}
+
+export interface NationalTeamWriteDecision extends NationalTeamTotals {
+  guardedFields: { field: keyof NationalTeamTotals; stored: number; parsed: number | null }[];
+}
+
+/** Career totals never decrease automatically; a missing senior entry is not a parsed zero. */
+export function decideNationalTeamWrite(stored: NationalTeamTotals, parsed: NationalTeamTotals | null): NationalTeamWriteDecision {
+  const decision: NationalTeamWriteDecision = { ...stored, guardedFields: [] };
+  for (const field of ["caps", "goals"] as const) {
+    if (parsed !== null && parsed[field] >= stored[field]) {
+      decision[field] = parsed[field];
+    } else {
+      decision.guardedFields.push({ field, stored: stored[field], parsed: parsed?.[field] ?? null });
+    }
+  }
+  return decision;
 }
 
 export interface NationalTeamSyncResult {
@@ -235,18 +265,24 @@ export interface NationalTeamSyncResult {
   playersResolved: number;
   playersUpdated: number;
   failures: number;
+  playersGuarded: number;
+  fieldsGuarded: number;
+  cappedPlayers: number;
+  cappedPlayersGuarded: number;
 }
 
 /**
  * Refreshes every tracked player's senior USMNT caps/goals from Wikipedia's
- * infobox. Players without a resolvable article, or without a senior-team
- * entry yet (uncapped prospects with only youth-team entries), end up with
- * 0/0 rather than a stale or fabricated number — matching the "graceful
- * gaps" requirement.
+ * infobox. Unresolved/download-failed articles leave totals unchanged.
+ * Missing senior entries preserve both stored totals; parsed caps and goals
+ * are independently guarded against decreases.
  */
 export async function syncNationalTeamCapsAndGoals(): Promise<NationalTeamSyncResult> {
   const players: PlayerRow[] = await db
-    .select({ id: playersTable.id, name: playersTable.name, wikipediaTitle: playersTable.wikipediaTitle })
+    .select({
+      id: playersTable.id, name: playersTable.name, wikipediaTitle: playersTable.wikipediaTitle,
+      nationalTeamCaps: playersTable.nationalTeamCaps, nationalTeamGoals: playersTable.nationalTeamGoals,
+    })
     .from(playersTable);
 
   let playersResolved = 0;
@@ -278,16 +314,34 @@ export async function syncNationalTeamCapsAndGoals(): Promise<NationalTeamSyncRe
   }
 
   let playersUpdated = 0;
+  let playersGuarded = 0;
+  let fieldsGuarded = 0;
+  const cappedPlayers = players.filter((p) => p.nationalTeamCaps > 0).length;
+  let cappedPlayersGuarded = 0;
   for (const player of players) {
     if (!player.wikipediaTitle) continue;
     const wikitext = resolvedWikitext.get(player.id) ?? fetchedWikitext.get(player.wikipediaTitle);
     if (!wikitext) continue; // fetch failure or page renamed — leave existing value rather than wiping it
-    const { caps, goals } = extractSeniorCapsAndGoals(wikitext);
+    const { caps, goals, guardedFields } = decideNationalTeamWrite(
+      { caps: player.nationalTeamCaps, goals: player.nationalTeamGoals },
+      extractSeniorCapsAndGoals(wikitext),
+    );
+    if (guardedFields.length > 0) {
+      playersGuarded++;
+      fieldsGuarded += guardedFields.length;
+      if (player.nationalTeamCaps > 0) cappedPlayersGuarded++;
+      for (const guard of guardedFields) {
+        logger.warn({ player: player.name, ...guard }, "National-team total kept at stored value");
+      }
+    }
     await db.update(playersTable).set({ nationalTeamCaps: caps, nationalTeamGoals: goals }).where(eq(playersTable.id, player.id));
     playersUpdated++;
   }
 
-  const result = { playersChecked: players.length, playersResolved, playersUpdated, failures };
+  if (cappedPlayersGuarded > cappedPlayers * 0.2) {
+    logger.error({ cappedPlayers, cappedPlayersGuarded, playersGuarded, fieldsGuarded }, "national-team infobox format may have changed");
+  }
+  const result = { playersChecked: players.length, playersResolved, playersUpdated, failures, playersGuarded, fieldsGuarded, cappedPlayers, cappedPlayersGuarded };
   logger.info(result, "National-team caps/goals sync complete");
   return result;
 }
