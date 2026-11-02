@@ -1008,3 +1008,17 @@ mtime_ms = 1792528622533
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/d04d81c2-af3c-462a-b15f-ce39c7ef25b1/e0e76f54-8742-4238-9141-ff53c5cfbb1b"
 storage_version_token = "1792528672208848"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "LQuqe5usdBWEVhmJia1MP"
+uri = "file://.local/reports/wikipedia-national-team-sync-report.md"
+type = "text"
+title = "Wikipedia National-Team Sync Report"
+description = "Downloadable Markdown report with implementation details, red-then-green evidence, development sync results, commit hash, and passing CI."
+logical_id = "5822aae8-6ea0-4fa5-a81b-2f3b92867288"
+content_hash = "sha256:9c1b6fbd79f70da74cdbe4f3ec2d9292aa1d45040958941ce0db0496286fa293"
+size = 5532
+mtime_ms = 1793660935785
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/5822aae8-6ea0-4fa5-a81b-2f3b92867288/8fd005a6-b034-466a-8623-f61957bf80b3"
+storage_version_token = "1793660936668989"
+content_type = "text/markdown"
