@@ -47,3 +47,14 @@ export const pushSubscriptionsTable = pgTable(
 );
 
 export type PushSubscriptionRow = typeof pushSubscriptionsTable.$inferSelect;
+
+/**
+ * Alerts already sent, one row per event (e.g. "kickoff:123",
+ * "rating:123:45"). Inserting the key claims the event, so each alert goes
+ * out once even when several server instances scan at the same time.
+ */
+export const pushEventsTable = pgTable("push_events", {
+  key: text("key").primaryKey(),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

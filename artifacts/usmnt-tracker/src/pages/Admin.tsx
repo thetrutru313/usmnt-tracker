@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ClipboardList,
   SlidersHorizontal,
+  Megaphone,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -634,6 +635,106 @@ interface ClubOption {
   name: string;
 }
 
+// ─── USMNT announcement (push alert) ──────────────────────────────────────────
+
+const INPUT_CLASS =
+  "w-full px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50";
+
+/** Send a push alert to every device with "USMNT announcements" switched on. */
+export function AnnouncementSection({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
+  const [title, setTitle] = React.useState("USMNT");
+  const [body, setBody] = React.useState("");
+  const [url, setUrl] = React.useState("");
+  const [confirming, setConfirming] = React.useState(false);
+  const [result, setResult] = React.useState<string | null>(null);
+
+  const { data: audience, refetch } = useQuery({
+    queryKey: ["admin-announcement-audience"],
+    queryFn: async () => ((await apiFetch("/admin/announcements/audience", token)) as { devices?: number }).devices ?? 0,
+    retry: false,
+  });
+
+  const send = useMutation({
+    mutationFn: async () =>
+      (await apiFetch("/admin/announcements", token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), body: body.trim(), ...(url.trim() ? { url: url.trim() } : {}) }),
+      })) as { devices: number; sent: number },
+    onSuccess: (r) => {
+      setResult(`Sent to ${r.sent} of ${r.devices} device${r.devices === 1 ? "" : "s"}.`);
+      setBody("");
+      setUrl("");
+      setConfirming(false);
+      void refetch();
+    },
+    onError: (err) => {
+      setConfirming(false);
+      if (err instanceof SessionExpiredError) onUnauthorized();
+      else setResult(err instanceof Error ? err.message : "Sending failed.");
+    },
+  });
+
+  const devices = audience ?? 0;
+  const ready = title.trim() !== "" && body.trim() !== "" && devices > 0 && !send.isPending;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <Megaphone size={16} className="text-muted-foreground" />
+          <h2 className="text-xl font-bold tracking-tight">Send announcement</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Push alert to every device with USMNT announcements on — {audience === undefined ? "…" : `${devices} device${devices === 1 ? "" : "s"}`} right now.
+        </p>
+      </div>
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Title</span>
+          <input value={title} maxLength={80} onChange={(e) => { setTitle(e.target.value); setConfirming(false); }} className={INPUT_CLASS} />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Message</span>
+          <textarea value={body} maxLength={300} rows={3} onChange={(e) => { setBody(e.target.value); setConfirming(false); }} className={INPUT_CLASS} placeholder="The roster for the November camp is out." />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Opens (optional in-app link)</span>
+          <input value={url} maxLength={200} onChange={(e) => { setUrl(e.target.value); setConfirming(false); }} className={INPUT_CLASS} placeholder="/schedule" />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {!confirming ? (
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => { setResult(null); setConfirming(true); }}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+            >
+              Send to {devices} device{devices === 1 ? "" : "s"}
+            </button>
+          ) : (
+            <>
+              <span className="text-sm">Send this now?</span>
+              <button
+                type="button"
+                disabled={send.isPending}
+                onClick={() => send.mutate()}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+              >
+                Yes, send
+              </button>
+              <button type="button" onClick={() => setConfirming(false)} className="px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground">
+                Cancel
+              </button>
+            </>
+          )}
+          {result && <span role="status" className="text-sm text-muted-foreground">{result}</span>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ClubOverrideSection({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = React.useState("");
@@ -1060,6 +1161,9 @@ function AdminPanel({ token, onLogout, onReauth }: { token: string; onLogout: ()
 
         {/* Eligibility config */}
         <EligibilityConfigSection token={token} />
+
+        {/* USMNT announcement push alert */}
+        <AnnouncementSection token={token} onUnauthorized={handleUnauthorized} />
 
         {/* Club overrides */}
         <ClubOverrideSection token={token} onUnauthorized={handleUnauthorized} />

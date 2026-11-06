@@ -8,7 +8,7 @@ export const ALERT_KINDS = [
   { key: "goals", label: "Goals & assists", description: "As they happen, within a few minutes" },
   { key: "ratings", label: "Post-match ratings", description: "Your players' ratings after the final whistle" },
   { key: "announcements", label: "USMNT announcements", description: "Roster calls and team news" },
-  { key: "injuries", label: "Injuries", description: "New injuries and returns" },
+  { key: "injuries", label: "Injuries", description: "New injuries" },
   { key: "transfers", label: "Transfers", description: "Completed moves" },
 ] as const;
 

@@ -211,7 +211,7 @@ export default function Alerts() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg uppercase tracking-tight">Alert types</CardTitle>
-              <CardDescription>Some of these are still being switched on and will start arriving soon.</CardDescription>
+              <CardDescription>Lineup and goal alerts are coming soon.</CardDescription>
             </CardHeader>
             <CardContent className="divide-y divide-border">
               {ALERT_KINDS.map(({ key, label, description }) => (

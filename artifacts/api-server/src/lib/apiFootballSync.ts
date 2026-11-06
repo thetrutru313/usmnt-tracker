@@ -2427,9 +2427,18 @@ export function startApiFootballSyncSchedule(intervalMs = 60 * 60 * 1000): void 
       liveLoopRunning = true;
       try {
         if (!(await claimSyncRun("livePoll", livePollIntervalMs * 0.8))) return;
-        await pollLiveFixtures();
+        try {
+          await pollLiveFixtures();
+        } catch (err) {
+          logger.error({ err }, "Live fixture poll failed");
+        }
+        // Push alerts ride on the same 5-minute cycle (kickoff reminders,
+        // ratings, injuries, transfers). Loaded lazily so tests that import
+        // this module never load the alerts code. runDueAlerts never throws.
+        const { runDueAlerts } = await import("./pushAlerts.js");
+        await runDueAlerts();
       } catch (err) {
-        logger.error({ err }, "Live fixture poll failed");
+        logger.error({ err }, "Live fixture poll cycle failed");
       } finally {
         liveLoopRunning = false;
       }

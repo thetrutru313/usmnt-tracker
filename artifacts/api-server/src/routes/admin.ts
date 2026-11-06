@@ -12,6 +12,8 @@ import { syncPlayerClubs } from "../lib/playerClubSync";
 import { syncApiFootballFixtures, syncNationalTeamFixtures, syncYouthNtFixtures } from "../lib/apiFootballSync";
 import { cleanupOrphanedAnonUsers } from "../lib/anonUserCleanup";
 import { runCommitmentSweep } from "../lib/commitmentTracker";
+import { announcementAudience, sendAnnouncement } from "../lib/pushAlerts";
+import { z } from "zod";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
 interface AfPlayerRecord {
@@ -1126,6 +1128,40 @@ router.patch("/admin/players/:id/club", async (req, res): Promise<void> => {
     "Admin: club override set",
   );
   res.json({ ok: true, clubId: club.id, clubName: club.name });
+});
+
+// ─── USMNT announcements (push alerts) ────────────────────────────────────────
+
+const AnnouncementBody = z.object({
+  title: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(300),
+  /** In-app path opened when the alert is tapped, e.g. "/schedule". */
+  url: z.string().trim().max(200).regex(/^\/(?!\/)\S*$/, "Use an in-app path like /schedule").optional(),
+});
+
+/**
+ * GET /admin/announcements/audience
+ * How many devices have USMNT announcements switched on.
+ */
+router.get("/admin/announcements/audience", async (_req, res): Promise<void> => {
+  res.json({ devices: await announcementAudience() });
+});
+
+/**
+ * POST /admin/announcements  { title, body, url? }
+ * Send an announcement to every device with announcements on. Runs inline:
+ * the audience is small, and the admin sees how many were delivered.
+ */
+router.post("/admin/announcements", async (req, res): Promise<void> => {
+  const parsed = AnnouncementBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    return;
+  }
+  const { title, body, url } = parsed.data;
+  const result = await sendAnnouncement({ title, body, url: url || "/" });
+  logger.info(result, "Admin announcement sent");
+  res.json(result);
 });
 
 /**

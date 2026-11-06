@@ -172,6 +172,8 @@ Web Push notifications (works in the iPhone Home Screen app on iOS 16.4+, and in
 - **API:** `routes/push.ts` (config, subscription PUT/GET/DELETE, test) — outside the OpenAPI spec, like follows. Endpoints are only accepted on known push-service hosts. `lib/push.ts` `sendPush()` deletes a subscription on 404/410 and after 10 consecutive failures.
 - **Service worker:** `public/push-sw.js`, loaded via `workbox.importScripts`. The service worker is off in dev, so alerts can only be tried on the published app.
 - **Frontend:** `/alerts` page, `src/lib/push.ts`. iOS only shows the permission prompt in direct response to a tap, so nothing is awaited before `Notification.requestPermission()`.
+- **Sending (`lib/pushAlerts.ts`):** scanners look for new events instead of hooking into the syncs — kickoff within 30 min (club friendlies skipped), ratings for matches finished in the last 12 h, active injuries that started in the last 2 days, confirmed transfers recorded in the last 24 h (and announced in the last 14 days). `runDueAlerts()` runs them on each 5-minute live-poll cycle, so on Autoscale they only fire while the server is awake. Each event is claimed once in `push_events` (key like `kickoff:123`, `rating:123:45`), so nothing is sent twice; rows older than 60 days are pruned. `sendAlert()` applies each device's prefs and scope ("mine" = the device user's `user_follows`).
+- **Announcements:** admin page "Send announcement" → `POST /api/admin/announcements` (`GET …/audience` for the device count). Sent to every device with announcements on, regardless of scope.
 
 ## Deferred work
 
