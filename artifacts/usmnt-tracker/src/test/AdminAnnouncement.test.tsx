@@ -29,24 +29,27 @@ afterEach(() => {
 });
 
 describe("Admin — Send announcement", () => {
-  it("1: can't send until there's a message", async () => {
+  it("1: can't send until there's a title and a message (the title starts empty)", async () => {
     setup();
     const button = await screen.findByRole("button", { name: "Send to 3 devices" });
-    expect(button).toBeDisabled();
+    expect(screen.getByPlaceholderText("November camp roster")).toHaveValue("");
     fireEvent.change(screen.getByPlaceholderText(/roster for the November camp/i), { target: { value: "Roster is out" } });
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText("November camp roster"), { target: { value: "November camp roster" } });
     expect(button).toBeEnabled();
   });
 
   it("2: asks to confirm, then posts the announcement and reports delivery", async () => {
     const fetchMock = setup();
-    fireEvent.change(await screen.findByPlaceholderText(/roster for the November camp/i), { target: { value: "Roster is out" } });
+    fireEvent.change(await screen.findByPlaceholderText("November camp roster"), { target: { value: "November camp roster" } });
+    fireEvent.change(screen.getByPlaceholderText(/roster for the November camp/i), { target: { value: "Roster is out" } });
     fireEvent.change(screen.getByPlaceholderText("/schedule"), { target: { value: "/schedule" } });
     fireEvent.click(await screen.findByRole("button", { name: "Send to 3 devices" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
 
     expect(await screen.findByText("Sent to 3 of 3 devices.")).toBeInTheDocument();
     const post = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/api/admin/announcements") && (init as RequestInit)?.method === "POST");
-    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ title: "USMNT", body: "Roster is out", url: "/schedule" });
+    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ title: "November camp roster", body: "Roster is out", url: "/schedule" });
     await waitFor(() => expect((post![1] as RequestInit).headers).toMatchObject({ Authorization: "Bearer admin-token" }));
   });
 });

@@ -642,7 +642,9 @@ const INPUT_CLASS =
 
 /** Send a push alert to every device with "USMNT announcements" switched on. */
 export function AnnouncementSection({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
-  const [title, setTitle] = React.useState("USMNT");
+  // Starts empty: iOS already shows "from USMNT" under the title, so the
+  // title should say what the news is.
+  const [title, setTitle] = React.useState("");
   const [body, setBody] = React.useState("");
   const [url, setUrl] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
@@ -692,7 +694,7 @@ export function AnnouncementSection({ token, onUnauthorized }: { token: string; 
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
         <label className="block space-y-1">
           <span className="text-xs font-medium text-muted-foreground">Title</span>
-          <input value={title} maxLength={80} onChange={(e) => { setTitle(e.target.value); setConfirming(false); }} className={INPUT_CLASS} />
+          <input value={title} maxLength={80} onChange={(e) => { setTitle(e.target.value); setConfirming(false); }} className={INPUT_CLASS} placeholder="November camp roster" />
         </label>
         <label className="block space-y-1">
           <span className="text-xs font-medium text-muted-foreground">Message</span>

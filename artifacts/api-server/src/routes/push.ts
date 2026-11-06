@@ -176,9 +176,10 @@ router.post("/push/test", testLimiter, requireAnonUser, async (req, res): Promis
     res.status(404).json({ error: "Not subscribed" });
     return;
   }
+  // iOS shows "from USMNT" under the title, so the title doesn't repeat it.
   const result = await sendPush(sub, {
-    title: "USMNT Tracker",
-    body: "Test alert — notifications are working.",
+    title: "Test alert",
+    body: "Notifications are working on this device.",
     url: "/alerts",
     tag: "test",
   });

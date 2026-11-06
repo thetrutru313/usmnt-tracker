@@ -30,13 +30,14 @@ export const DEFAULT_PREFS: AlertPrefs = {
 
 export type PushSupport = "supported" | "needs-install" | "unsupported";
 
-function isIos(): boolean {
+export function isIos(): boolean {
   const ua = navigator.userAgent;
   // iPadOS reports itself as a Mac; touch support gives it away.
   return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 }
 
-function isStandalone(): boolean {
+/** Running as the installed Home Screen app rather than in a browser tab. */
+export function isStandalone(): boolean {
   return (
     window.matchMedia?.("(display-mode: standalone)").matches === true ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true

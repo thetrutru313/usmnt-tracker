@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
 import { SyncMyPlayersModal } from "./SyncMyPlayersModal"
+import { AlertsIntro } from "./AlertsIntro"
 import { useScrollRestoration } from "@/lib/scrollRestoration"
 
 // ── Pull-to-refresh ───────────────────────────────────────────────────────────
@@ -222,6 +223,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sync My Players Modal */}
       <SyncMyPlayersModal open={syncModalOpen} onOpenChange={setSyncModalOpen} />
+
+      {/* One-time "New: alerts" popup in the installed mobile app */}
+      <AlertsIntro />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">

@@ -116,7 +116,7 @@ describe("/api/push", () => {
     expect(res.body).toEqual({ result: "sent" });
     const [target, payload] = vi.mocked(webpush.sendNotification).mock.calls[0]!;
     expect(target).toEqual({ endpoint: ENDPOINT, keys: KEYS });
-    expect(JSON.parse(payload as string)).toMatchObject({ title: "USMNT Tracker", url: "/alerts" });
+    expect(JSON.parse(payload as string)).toMatchObject({ title: "Test alert", url: "/alerts" });
   });
 
   it("6: a subscription the push service reports gone (410) is removed", async () => {
