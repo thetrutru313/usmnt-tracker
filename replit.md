@@ -85,7 +85,7 @@ it is created from scratch on each run and has no migration history to preserve.
 | **API server** | `artifacts/api-server/src/` — routes under `src/routes/`, business logic and sync jobs under `src/lib/` |
 | **Frontend** | `artifacts/usmnt-tracker/src/` — React SPA, Vite build, pages under `src/pages/`, components under `src/components/` |
 | **Theme / design tokens** | `artifacts/usmnt-tracker/src/index.css` — CSS custom properties; `artifacts/usmnt-tracker/tailwind.config.ts` |
-| **Background sync jobs** | `artifacts/api-server/src/lib/apiFootballSync.ts` (club fixtures, hourly), `rssIngest.ts` (news, 15 min), `playerClubSync.ts` (club assignments, daily), `usmntSync.ts` (NT stats + sentinel promotion, hourly) |
+| **Background sync jobs** | `artifacts/api-server/src/lib/apiFootballSync.ts` (club fixtures, senior + youth NT fixtures, live polling; hourly / 5 min), `rssIngest.ts` (news, 15 min), `playerClubSync.ts` (club assignments, daily), `playerStatsSync.ts` (club stats + injuries, daily), `nationalTeamSync.ts` (senior caps/goals from Wikipedia, daily), `usmntSync.ts` (NT match logs, squad links, sentinel promotion; hourly) |
 | **Seed scripts** | `scripts/src/seedUsmnt.ts` and related one-off scripts |
 | **Security** | `threat_model.md` (root) |
 | **DB workflow** | `lib/db/README.md` |
@@ -94,10 +94,11 @@ it is created from scratch on each run and has no migration history to preserve.
 
 ## Architecture decisions
 
-- Player roster, clubs, fixtures, stats, injuries, and transfers are seeded data (`scripts/src/seedUsmnt.ts`) — no live API populates these directly yet.
+- **The player pool is curated; almost everything about each player is live.** Players are added by promoting a discovered candidate in the admin review queue, or by a hand-run SQL insert in the production console (see "Production data and access rules"). Club, photo, club stats, injuries, transfers and club fixtures come from API-Football; senior caps and goals come from Wikipedia. Still hand-authored and never refreshed: `bio`, `market_value_usd`, `contract_until`, `debut_date`, `youth_national_team`, `world_cup_roster`.
+- **Pool tier is computed, not stored** (`computePoolTier` in `lib/queries.ts`): Core = `world_cup_roster`; In the Mix = 5+ senior caps; otherwise Prospect. The `category` column does not set the badge.
 - **News is live:** `artifacts/api-server/src/lib/rssIngest.ts` pulls free public RSS feeds (BBC Sport, Google News searches for USMNT/ESPN) on a 15-min schedule, keeps only articles naming a tracked player or the senior men's national team, dedupes by URL, and caps inserts per run at 25 to avoid flooding the feed with noise.
 - **Club fixtures are live** via API-Football (`artifacts/api-server/src/lib/apiFootballSync.ts`, hourly sync, started from `index.ts`).
-- **National-team fixtures** are curated/seeded with the sentinel system — see the Sentinel Fixture System section below.
+- **National-team fixtures** are seeded with the sentinel system as soon as they are announced, then bound to API-Football and kept current by the hourly sync (status, score, and kickoff time / venue while still scheduled) — see the Sentinel Fixture System section below.
 - **Player club assignments are live** via `artifacts/api-server/src/lib/playerClubSync.ts` (daily): resolves each player's API-Football ID via their club's squad list or a name-search fallback, checks transfer history, and updates `clubId` + inserts a confirmed `transfers` row when they've moved to a tracked club. A move to an untracked club is logged and the last-known club is kept rather than guessing.
 
 ---
@@ -110,9 +111,9 @@ NT (national team) fixtures are curated rather than synced from API-Football, be
 
 1. Announced NT fixtures are seeded into the `fixtures` table with a **negative** `api_football_fixture_id` (e.g. `-1`, `-2`). These sentinels appear in the app immediately, with a real kickoff time, opponent, and venue — they just lack an API-Football match ID.
 
-2. **`syncNationalTeamFixtures()`** (hourly, in `lib/usmntSync.ts`) is the primary binding path. For every unbound sentinel, it matches against the USMNT fixture list from API-Football using a **±1-day date window**. On a match it writes the real positive `api_football_fixture_id`, status, scores, and logo URLs in a single UPDATE.
+2. **`syncNationalTeamFixtures()`** (hourly, in `lib/apiFootballSync.ts`) is the primary binding path. It fetches the USMNT fixture list from API-Football for the current and previous season **plus `next=10` and `last=10`** (API-Football files competitions under their own season label — the 2026/27 Nations League is season 2025 — so season queries alone go blind each January). For every unbound sentinel it matches using a **±1-day date window** and writes the real positive `api_football_fixture_id`, status, scores and logo URLs. While a bound fixture is still scheduled, it also fills in kickoff time (when the API status is `NS`) and venue/city (only when the stored venue is `TBD`).
 
-3. **`promoteNtSentinelIds()`** (also hourly, in `lib/usmntSync.ts`) is the post-match fallback — for cases where API-Football published the fixture after the match was played, or the ±1-day window was missed. It queries match logs (which carry the real fixture ID) within a **±2-day window** of each sentinel's kickoff, processes sentinels **`ORDER BY kickoff ASC`**, and updates any unbound row it can resolve.
+3. **`promoteNtSentinelIds()`** (also hourly, in `lib/usmntSync.ts`) is the post-match fallback — for cases where API-Football published the fixture after the match was played, or the ±1-day window was missed. It queries match logs (which carry the real fixture ID) within a **±2-day window** of each sentinel's kickoff, processes sentinels **`ORDER BY kickoff ASC`**, and updates any unbound row it can resolve. In practice it rarely fires for senior matches: it only considers players already linked to the sentinel, and senior sentinels normally have none before kickoff, so binding relies on step 2.
 
 **Why both window size and ordering are load-bearing:**
 
@@ -123,6 +124,16 @@ Two distinct corruption paths were found and fixed:
 - **Window too wide (reverse-direction corruption):** A window larger than 2 days (the original ±7-day implementation) lets the earlier sentinel reach a log from the later match (3 days away, still inside ±7). `ORDER BY ASC` only prevents the later fixture from claiming an earlier log; it does not prevent the earlier sentinel from over-reaching forward. ±2 days keeps the windows tight enough that a log from one match cannot be in scope for a different match's sentinel, except in the narrow overlap zone where ordering resolves ambiguity.
 
 **Do not widen the ±2-day window or remove the ORDER BY** without understanding both of the above failure modes.
+
+---
+
+## Production data and access rules
+
+- **Data changes are hand-run SQL.** Publish carries schema (DDL) only. Write each production data change as ONE `DO $tag$ ... $tag$;` block (the console rejects explicit BEGIN/COMMIT) with `RAISE EXCEPTION` guards, so it applies fully or not at all. Look rows up by stable keys (API ids, slugs), never by hard-coded row ids. The owner runs it in the production database console.
+- **Agent access to production is read-only.** Database: SELECT only, and only when a prompt authorises it. HTTP: direct GET requests to API endpoints and static assets only. **Never load the production app in a browser** — the app writes on startup (it POSTs `/api/follows/users` to create an anonymous user).
+- **Never choose "Copy your development database schema & data to production"** in the Publish dialog.
+- **Adding a player without the agent:** look the player up in the Shell with `curl -s -H "x-apisports-key: $API_FOOTBALL_KEY" "https://v3.football.api-sports.io/players?id=<id>&season=<year>"`, then insert with a guarded DO block that finds the club by `api_football_team_id` (inserting the club if missing).
+- **Prompt test discipline:** a test of new or changed behaviour must fail before the change; only tests of existing behaviour are regression guards. Local API tests run with file parallelism off because test files share the dev database.
 
 ---
 
@@ -162,7 +173,7 @@ These items are explicitly scoped out but documented here so they can be picked 
 
 3. **Upload e2e test not in CI** — The invoice upload end-to-end test requires real GCS credentials (the object-storage sidecar) and a pre-seeded admin session. It must NOT use a rate-limit bypass header as a workaround. Until CI has GCS access and a session seed, keep this test local-only and document that it is excluded.
 
-4. **`promoteNtSentinelIds()` cleanup** — This function is removable once all four Sept/Oct 2026 USMNT friendlies have been played and their `fixtures` rows carry confirmed positive `api_football_fixture_id` values. The fast-path short-circuit (returns immediately when no unbound rows exist) makes it nearly free to leave running in the meantime.
+4. **`promoteNtSentinelIds()` cleanup** — The Sept/Oct 2026 friendlies are bound, but new sentinels keep being added (e.g. `-2007`, USA v Jamaica, 13 Dec 2026). The function is nearly free while no unbound rows exist; see step 3 of the sentinel section for why it rarely fires for senior matches.
 
 5. **Invoice upload file-type and size validation** — Currently missing. Best addressed by proxying uploads through the API server rather than sending them directly from the browser to GCS. Proxying also eliminates the `connect-src https://storage.googleapis.com/<bucket-id>/` CSP exception in `index.html` and removes the frontend's knowledge of the GCS bucket URL.
 
@@ -172,19 +183,22 @@ These items are explicitly scoped out but documented here so they can be picked 
 
 ## Product
 
-Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prospect rankings for USMNT players. News is real (RSS-sourced); fixtures, stats, injuries, and transfers are still seeded placeholder data.
+Dashboard, player pool, fixtures, USMNT schedule, live news feed, injuries, transfers, and prospect rankings for USMNT players. Fixtures, stats, injuries and transfers are live (API-Football); news is RSS-sourced; caps are from Wikipedia.
 
 ---
 
 ## User preferences
 
-- Match times on the dashboard should be shown in MST.
+- Kickoff times are displayed in the viewer's device time zone (`formatTime.ts`). The dashboard's "today" is computed in the viewer's zone too (`tz` query parameter, fallback `America/New_York`; `lib/viewerDay.ts`).
+- Matches are listed home team first ("Haiti vs USA" when Haiti is at home), everywhere.
+- The owner relays prompts and runs production SQL by hand; prompts and SQL must be given as copy-pasteable code blocks in chat.
 
 ---
 
 ## Gotchas
 
 - **API server port is 8080, not 5000.** The Vite dev proxy targets `http://localhost:8080`. Confirm this in `artifacts/api-server/.replit-artifact/artifact.toml` and `artifacts/usmnt-tracker/vite.config.ts` if the frontend stops reaching the API.
+- **`scripts/src/seedUsmnt.ts` is destructive and dev-only.** It TRUNCATEs eleven tables with CASCADE (which also empties user follows, candidates and status history). It refuses to run when `REPLIT_DEPLOYMENT` is set; refuses unless `SEED_CONFIRM_DATABASE` equals the target database's name; and refuses when players already exist unless `--force` is passed.
 - **`scripts/src/seedUsmnt.ts` seed rows never reach production via Publish.** Players and clubs defined there are DML (data), not schema — migrations only carry DDL to production through Publish's schema diff. Adding a player to the seed script does not add them to any database. Both dev and production need the row inserted by hand via the database console.
 
 - **After changing `rssIngest.ts`**, restart the workflow to re-run ingestion. If you restart twice in quick succession, the old process may still be mid-insert and can leave one stale/uncleaned row behind — check for and delete duplicates if so.
@@ -195,7 +209,9 @@ Dashboard, player pool, fixtures, live news feed, injuries, transfers, and prosp
 
 - **The ±2-day window and `ORDER BY kickoff ASC` in `promoteNtSentinelIds()` are intentional.** Do not widen the window or remove the ordering — see the Sentinel Fixture System section for the two corruption paths they prevent.
 
-- **`syncGuard`** prevents concurrent duplicate sync runs and enforces cooldown between runs. If a sync appears stuck, check whether a previous run is still in progress before restarting.
+- **`syncGuard`** (`claimSyncRun`) is one atomic database statement on database time: only one instance can claim a sync inside its cooldown. All schedulers, live polling (`livePoll`) and news import (`rssIngest`) use it. The claim is written before the run, so a failed daily sync waits for its 23-hour cooldown; to force a re-run, set that row's `last_run_at` in `sync_metadata` back and restart. A database error during the claim allows the run.
+- **Wikipedia infobox parameters changed in late 2026** from `nationalteamN`/`nationalcapsN`/`nationalgoalsN` to `national_teamN`/`national_capsN`/`national_goalsN`. `nationalTeamSync.ts` accepts both, never lowers stored caps or goals automatically, and logs ERROR "national-team infobox format may have changed" when more than 20% of capped players are guarded in one run.
+- **New clubs get their league from their first fixture**, which is often a preseason friendly ("Friendlies Clubs"). Correct it by hand from API-Football's `/leagues?team=<id>&current=true`; the sync only fills a league that is "Unknown".
 
 ---
 

@@ -26,15 +26,45 @@ const TRUNCATED_TABLES = [
 async function main() {
   console.log("Seeding USMNT Tracker data...");
 
-  // Guard: this script destroys all data in eleven tables (see TRUNCATED_TABLES
-  // below) and is only meant for building a database from empty. Refuse to run
-  // against a database that already has players, unless --force is passed.
+  // Guard 1: never run inside a deployed (production) Replit environment.
+  if (process.env.REPLIT_DEPLOYMENT) {
+    console.error("Refusing to run: REPLIT_DEPLOYMENT is set, so this looks like a deployed production environment.");
+    process.exit(1);
+  }
+
+  // Guard 2: the caller must name the target database explicitly. This script
+  // TRUNCATEs the tables in TRUNCATED_TABLES with CASCADE, which also empties
+  // every table that references them (user follows, candidates, history...).
+  const dbResult = (await db.execute(
+    `SELECT current_database() AS name`,
+  )) as unknown as { rows: Array<{ name: string }> };
+  const dbName = dbResult.rows[0]?.name;
+  if (!dbName) {
+    console.error("Refusing to run: could not determine the target database name.");
+    process.exit(1);
+  }
+  if (process.env.SEED_CONFIRM_DATABASE !== dbName) {
+    console.error(
+      `Refusing to run: this script destroys ALL data in ${TRUNCATED_TABLES.length} tables ` +
+        "(and, through CASCADE, every table that references them).\n" +
+        `Target database: "${dbName}".\n` +
+        `If this is a development database you intend to rebuild, re-run with SEED_CONFIRM_DATABASE=${dbName}`,
+    );
+    process.exit(1);
+  }
+
+  // Guard 3: refuse to run against a database that already has players,
+  // unless --force is passed. Fails closed if the count cannot be read.
   const force = process.argv.includes("--force");
   if (!force) {
     const countResult = (await db.execute(
       `SELECT COUNT(*)::int AS cnt FROM players`,
     )) as unknown as { rows: Array<{ cnt: number }> };
-    const playerCount = countResult.rows[0]?.cnt ?? 0;
+    const playerCount = countResult.rows[0]?.cnt;
+    if (playerCount === undefined) {
+      console.error("Refusing to run: could not read the players count.");
+      process.exit(1);
+    }
     if (playerCount > 0) {
       console.error(
         `Refusing to run: players table already has ${playerCount} row(s).\n\n` +

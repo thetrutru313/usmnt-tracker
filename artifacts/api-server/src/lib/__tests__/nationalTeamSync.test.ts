@@ -127,6 +127,15 @@ describe("change-verifying sync behavior", () => {
       cappedPlayers: 1, cappedPlayersGuarded: 1,
     }), "national-team infobox format may have changed");
   });
+  it("does not warn or count a guard for an uncapped prospect with no senior entry", async () => {
+    state.rows[0].nationalTeamCaps = state.rows[0].nationalTeamGoals = 0;
+    pages["Test Player"] = youthOnly;
+    const result = await run();
+    expect(lastStats()).toEqual({ nationalTeamCaps: 0, nationalTeamGoals: 0 });
+    expect(state.warn).not.toHaveBeenCalledWith(expect.anything(), "National-team total kept at stored value");
+    expect(result.playersGuarded).toBe(0);
+    expect(result.fieldsGuarded).toBe(0);
+  });
   it("classifies full piped team text, not only the link target", async () => {
     pages["Test Player"] = oldSenior().replace("national soccer team|United States", "national soccer team|United States under-17");
     await run();

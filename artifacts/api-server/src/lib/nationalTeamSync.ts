@@ -247,12 +247,18 @@ export interface NationalTeamWriteDecision extends NationalTeamTotals {
   guardedFields: { field: keyof NationalTeamTotals; stored: number; parsed: number | null }[];
 }
 
-/** Career totals never decrease automatically; a missing senior entry is not a parsed zero. */
+/**
+ * Career totals never decrease automatically; a missing senior entry is not a parsed zero.
+ * A field that is stored as 0 with no senior entry parsed has nothing to protect (an
+ * uncapped prospect), so it is left at 0 without counting as a guard or logging a warning.
+ */
 export function decideNationalTeamWrite(stored: NationalTeamTotals, parsed: NationalTeamTotals | null): NationalTeamWriteDecision {
   const decision: NationalTeamWriteDecision = { ...stored, guardedFields: [] };
   for (const field of ["caps", "goals"] as const) {
     if (parsed !== null && parsed[field] >= stored[field]) {
       decision[field] = parsed[field];
+    } else if (parsed === null && stored[field] === 0) {
+      continue;
     } else {
       decision.guardedFields.push({ field, stored: stored[field], parsed: parsed?.[field] ?? null });
     }
