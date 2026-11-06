@@ -64,6 +64,8 @@ vi.mock("@tanstack/react-virtual", () => ({
         start: index * 142,
       })),
     measureElement: () => {},
+    // No measured rows → no pinned date headings in these tests.
+    measurementsCache: [],
   }),
 }));
 

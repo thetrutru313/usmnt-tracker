@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Input } from "./ui/input"
 import { SyncMyPlayersModal } from "./SyncMyPlayersModal"
+import { useScrollRestoration } from "@/lib/scrollRestoration"
 
 // ── Pull-to-refresh ───────────────────────────────────────────────────────────
 
@@ -128,6 +129,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     [queryClient],
   )
   const { pullY, refreshing } = usePullToRefresh(scrollRef, handleRefresh)
+  useScrollRestoration(scrollRef, location)
 
   // Fire the primary query for a page when the user hovers its nav link.
   // prefetchQuery is a no-op when the cache is already fresh, so this is safe

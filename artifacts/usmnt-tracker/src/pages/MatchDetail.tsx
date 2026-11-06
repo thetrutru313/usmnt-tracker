@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Clock, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { goBackIfCameFrom } from "@/lib/scrollRestoration";
 import type { FixtureTrackedPlayer } from "@workspace/api-client-react";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
@@ -228,8 +229,11 @@ export default function MatchDetail() {
 
   return (
     <div className="space-y-6 pb-10 max-w-3xl mx-auto">
+      {/* Coming from the Fixtures page, go back in history so its scroll
+          position, filters and Recent Results toggle come back too. */}
       <Link
         href="/fixtures"
+        onClick={(e) => { goBackIfCameFrom("/fixtures", e); }}
         className="inline-flex items-center text-sm font-mono text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft size={14} className="mr-1" /> BACK TO FIXTURES

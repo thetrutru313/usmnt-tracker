@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useCallback, memo } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect, memo } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { useListFixtures, getListFixturesQueryKey, type Fixture } from "@workspace/api-client-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { subDays, startOfDay } from "date-fns";
@@ -10,6 +10,8 @@ import { type PoolTier } from "@/lib/poolTiers";
 import { fixturesRefetchInterval } from "@/lib/livePolling";
 import { localDateLabel, toLocalDateStr } from "@/lib/dateLabels";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
+import { useHistoryState } from "@/lib/scrollRestoration";
+import { dayGroups } from "@/lib/stickyHeading";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -28,8 +30,22 @@ type FlatRow    = HeadingRow | CardRow;
 // Estimated pixel heights used for initial layout — dynamic measurement
 // refines these on first render.
 const HEADING_FIRST_HEIGHT  = 52;
-const HEADING_HEIGHT        = 52 + 32; // includes the mt-8 gap above the group
+const HEADING_GAP           = 32;      // the mt-8 gap above every heading but the first
+const HEADING_HEIGHT        = HEADING_FIRST_HEIGHT + HEADING_GAP;
 const CARD_HEIGHT           = 142;     // card body (~130px) + mb-3 (12px)
+
+// Shared by the (invisible) heading rows and the pinned headings drawn over
+// them, so the two line up exactly.
+const DATE_HEADING_CLASS =
+  "text-lg font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pt-2 pb-2";
+
+function rowKey(row: FlatRow): string {
+  return row.type === "heading" ? `h:${row.dateStr}` : `f:${row.fixture.id}`;
+}
+
+// Row sizes from the last visit, so the list is laid out exactly as before
+// when the page is re-opened and Back can restore the same scroll position.
+let savedMeasurements: VirtualItem[] | undefined;
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -99,10 +115,12 @@ function RecentResults({
   groupedFinished: Record<string, FixtureCardFixture[]>;
   sortedFinishedDates: string[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useHistoryState("fixturesRecentOpen", false);
 
+  // overflow-clip (not -hidden) so the sticky date headings below still stick
+  // to the page's scroll area.
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-clip">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
@@ -122,7 +140,7 @@ function RecentResults({
         <div className="p-4 space-y-8">
           {sortedFinishedDates.map((dateStr) => (
             <div key={dateStr} className="space-y-4">
-              <h2 className="text-sm font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
+              <h2 className="sticky top-0 z-10 bg-background pt-2 text-sm font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2">
                 <CalendarIcon size={14} />
                 {localDateLabel(dateStr)}
               </h2>
@@ -157,6 +175,27 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
     return document.documentElement;
   }, []);
 
+  // Distance from the top of the scroll area's content to this list (page
+  // header and Recent Results sit above it). The virtualizer needs it to work
+  // out which rows are on screen; re-measured whenever the content above
+  // changes size, e.g. when Recent Results is opened.
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const scrollEl = getScrollElement();
+    const measure = () => {
+      const m = el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+      setScrollMargin((prev) => (Math.abs(prev - m) < 1 ? prev : m));
+    };
+    measure();
+    const parent = el.parentElement;
+    if (!parent || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [getScrollElement]);
+
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement,
@@ -166,14 +205,59 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
       return CARD_HEIGHT;
     },
     measureElement: (el) => el.getBoundingClientRect().height,
+    getItemKey: (i) => rowKey(flatRows[i]!),
+    initialMeasurementsCache: savedMeasurements,
+    // Start from wherever the scroll area already is rather than jumping to
+    // the top, so a restored position isn't overridden on mount.
+    initialOffset: () => getScrollElement().scrollTop,
+    scrollMargin,
     overscan: 5,
   });
+
+  useEffect(() => () => { savedMeasurements = virtualizer.measurementsCache; }, [virtualizer]);
+
+  // Pinned date headings: for each day with a row on screen, draw its heading
+  // in a box spanning that day (see dayGroups). The heading rows in the list
+  // keep their space but are invisible underneath.
+  const dayOf = useMemo(() => {
+    let heading = 0;
+    return flatRows.map((row, i) => (row.type === "heading" ? (heading = i) : heading));
+  }, [flatRows]);
+  const totalSize = virtualizer.getTotalSize(); // also refreshes measurementsCache
+  const virtualItems = virtualizer.getVirtualItems();
+  const measurements = virtualizer.measurementsCache;
+  const headings: { index: number; top: number }[] = [];
+  flatRows.forEach((row, index) => {
+    const m = measurements[index];
+    if (row.type === "heading" && m) {
+      headings.push({ index, top: m.start - scrollMargin + (row.isFirst ? 0 : HEADING_GAP) });
+    }
+  });
+  const visibleDays = new Set(virtualItems.map((item) => dayOf[item.index]));
+  const groups = dayGroups(headings, totalSize).filter((g) => visibleDays.has(g.index));
+  const pinnedHeadings = new Set(groups.map((g) => g.index));
 
   return (
     <div ref={containerRef}>
       {/* Total height spacer — keeps the scrollbar accurate */}
-      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-        {virtualizer.getVirtualItems().map((vItem) => {
+      <div style={{ height: totalSize, position: "relative" }}>
+        {groups.map((g) => {
+          const heading = flatRows[g.index];
+          if (heading?.type !== "heading") return null;
+          return (
+            <div
+              key={`day:${heading.dateStr}`}
+              data-testid="date-heading-group"
+              style={{ position: "absolute", top: g.top, left: 0, width: "100%", height: g.height, zIndex: 10, pointerEvents: "none" }}
+            >
+              <h2 className={`${DATE_HEADING_CLASS} sticky top-0 bg-background`}>
+                <CalendarIcon size={16} />
+                {localDateLabel(heading.dateStr)}
+              </h2>
+            </div>
+          );
+        })}
+        {virtualItems.map((vItem) => {
           const row = flatRows[vItem.index];
           return (
             <div
@@ -185,14 +269,15 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
                 top: 0,
                 left: 0,
                 width: "100%",
-                transform: `translateY(${vItem.start}px)`,
+                transform: `translateY(${vItem.start - scrollMargin}px)`,
               }}
             >
               {row.type === "heading" ? (
+                // Keeps the heading's space in the list; hidden when the
+                // pinned copy is drawn over it.
                 <h2
-                  className={`text-lg font-bold font-mono uppercase text-muted-foreground flex items-center gap-2 border-b border-border pb-2 ${
-                    row.isFirst ? "" : "mt-8"
-                  }`}
+                  aria-hidden={pinnedHeadings.has(vItem.index) || undefined}
+                  className={`${DATE_HEADING_CLASS} ${row.isFirst ? "" : "mt-8"} ${pinnedHeadings.has(vItem.index) ? "invisible" : ""}`}
                 >
                   <CalendarIcon size={16} />
                   {localDateLabel(row.dateStr)}
@@ -238,8 +323,9 @@ export default function Fixtures() {
       },
     },
   );
-  const [poolFilter, setPoolFilter] = useState<string[]>(["all"]);
-  const [myPlayersOnly, setMyPlayersOnly] = useState(false);
+  // Kept on the history entry so Back from a match brings the same view back.
+  const [poolFilter, setPoolFilter] = useHistoryState<string[]>("fixturesPoolFilter", ["all"]);
+  const [myPlayersOnly, setMyPlayersOnly] = useHistoryState("fixturesMyPlayersOnly", false);
   const { followedIds } = useMyPlayers();
 
   const handlePoolFilterChange = (next: string[]) => {
