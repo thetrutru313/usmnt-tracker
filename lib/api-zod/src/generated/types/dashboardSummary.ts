@@ -10,6 +10,7 @@ import type { Injury } from './injury';
 import type { NewsArticle } from './newsArticle';
 import type { NextScheduleEvent } from './nextScheduleEvent';
 import type { PlayerSummary } from './playerSummary';
+import type { TopPerformer } from './topPerformer';
 import type { Transfer } from './transfer';
 
 export interface DashboardSummary {
@@ -18,7 +19,7 @@ export interface DashboardSummary {
   latestNews: NewsArticle[];
   injuries: Injury[];
   transfers: Transfer[];
-  topPerformers: PlayerSummary[];
+  topPerformers: TopPerformer[];
   trending: PlayerSummary[];
   recentlyReturned: Injury[];
   nextScheduleEvent?: NextScheduleEvent;

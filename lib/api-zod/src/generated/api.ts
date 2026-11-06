@@ -620,7 +620,10 @@ export const GetDashboardResponse = zod.object({
   "trending": zod.boolean(),
   "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
-})),
+}).and(zod.object({
+  "weekRating": zod.number(),
+  "weekMinutes": zod.number()
+}))),
   "trending": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),

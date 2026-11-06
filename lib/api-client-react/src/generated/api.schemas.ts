@@ -442,13 +442,18 @@ export interface NextScheduleEvent {
   fixtures: Fixture[];
 }
 
+export type TopPerformer = PlayerSummary & {
+  weekRating: number;
+  weekMinutes: number;
+};
+
 export interface DashboardSummary {
   todaysGames: Fixture[];
   upcomingGames: Fixture[];
   latestNews: NewsArticle[];
   injuries: Injury[];
   transfers: Transfer[];
-  topPerformers: PlayerSummary[];
+  topPerformers: TopPerformer[];
   trending: PlayerSummary[];
   recentlyReturned: Injury[];
   nextScheduleEvent?: NextScheduleEvent;

@@ -52,6 +52,7 @@ export * from './scheduleEventsResult';
 export * from './scheduleEventStatus';
 export * from './searchParams';
 export * from './searchResults';
+export * from './topPerformer';
 export * from './transfer';
 export * from './transferPerformanceTrend';
 export * from './transferStatus';

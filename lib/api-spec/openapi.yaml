@@ -937,6 +937,17 @@ components:
           items:
             $ref: "#/components/schemas/Fixture"
 
+    # Dashboard Top Performers row: a player summary plus the week's
+    # minutes-weighted average rating and the rated minutes behind it.
+    TopPerformer:
+      allOf:
+        - $ref: "#/components/schemas/PlayerSummary"
+        - type: object
+          required: [weekRating, weekMinutes]
+          properties:
+            weekRating: { type: number }
+            weekMinutes: { type: integer }
+
     DashboardSummary:
       type: object
       required:
@@ -972,7 +983,7 @@ components:
         topPerformers:
           type: array
           items:
-            $ref: "#/components/schemas/PlayerSummary"
+            $ref: "#/components/schemas/TopPerformer"
         trending:
           type: array
           items:

@@ -99,6 +99,9 @@ async function resolveLeaderboardSeasonYear(log: RouteLogger): Promise<string> {
 
 const router: IRouter = Router();
 
+// Best Performances this week: a single game must be at least this long.
+export const BEST_PERFORMANCE_MIN_MINUTES = 45;
+
 router.get("/rankings", async (req, res): Promise<void> => {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -148,11 +151,13 @@ router.get("/rankings", async (req, res): Promise<void> => {
       })
       .from(matchLogsTable)
       .innerJoin(playersTable, eq(matchLogsTable.playerId, playersTable.id))
-      // Only real, rated appearances from the past 7 days qualify — brief
-      // cameos with no rating are excluded, and the window keeps results
-      // current rather than showing all-time highlights.
+      // Only real, rated appearances of at least BEST_PERFORMANCE_MIN_MINUTES
+      // from the past 7 days qualify — a high rating from a short cameo isn't
+      // a "best performance", and the window keeps results current rather
+      // than showing all-time highlights.
       .where(and(
         isNotNull(matchLogsTable.rating),
+        gte(matchLogsTable.minutes, BEST_PERFORMANCE_MIN_MINUTES),
         gte(matchLogsTable.date, sevenDaysAgoStr),
       ))
       .orderBy(desc(matchLogsTable.rating))

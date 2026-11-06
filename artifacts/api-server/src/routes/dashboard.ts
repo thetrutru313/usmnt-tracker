@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GetDashboardQueryParams, GetDashboardResponse } from "@workspace/api-zod";
 import { db, scheduleEventsTable, playersTable, clubsTable } from "@workspace/db";
-import { and, asc, avg, desc, eq, gte, inArray, isNotNull, isNull, lt, notIlike, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notIlike, notInArray, or, sql } from "drizzle-orm";
 import {
   fixturesTable,
   matchLogsTable,
@@ -24,6 +24,13 @@ import {
 import { viewerDay } from "../lib/viewerDay.js";
 
 const router: IRouter = Router();
+
+// Top Performers needs at least this many rated minutes over the 7-day window.
+export const TOP_PERFORMER_MIN_MINUTES = 60;
+
+// Minutes-weighted average rating; rated logs only (the query filters nulls).
+const weekRatingExpr = sql<number>`sum(${matchLogsTable.rating} * ${matchLogsTable.minutes}) / nullif(sum(${matchLogsTable.minutes}), 0)`.mapWith(Number);
+const weekMinutesExpr = sql<number>`sum(${matchLogsTable.minutes})`.mapWith(Number);
 
 router.get("/dashboard", async (req, res): Promise<void> => {
   const parsed = GetDashboardQueryParams.safeParse(req.query);
@@ -81,13 +88,16 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     db.select().from(newsArticlesTable).orderBy(desc(newsArticlesTable.publishedAt)).limit(8),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "active")).orderBy(desc(injuriesTable.startDate)).limit(6),
     transfersWithPlayerQuery().orderBy(desc(transfersTable.announcedAt)).limit(6),
-    // Rank by average match rating over the past 7 days — more time-sensitive
-    // than the pre-computed last5 average, which can keep a player at the top
-    // for weeks after their hot streak ended.
+    // Rank by minutes-weighted average match rating over the past 7 days —
+    // more time-sensitive than the pre-computed last5 average, which can keep
+    // a player at the top for weeks after their hot streak ended. Weighting by
+    // minutes stops a short cameo counting as much as a full game, and the
+    // TOP_PERFORMER_MIN_MINUTES floor keeps a single cameo off the list.
     db
       .select({
         playerId: matchLogsTable.playerId,
-        avgRating7d: avg(matchLogsTable.rating),
+        weekRating: weekRatingExpr,
+        weekMinutes: weekMinutesExpr,
       })
       .from(matchLogsTable)
       .where(and(
@@ -95,7 +105,8 @@ router.get("/dashboard", async (req, res): Promise<void> => {
         isNotNull(matchLogsTable.rating),
       ))
       .groupBy(matchLogsTable.playerId)
-      .orderBy(desc(avg(matchLogsTable.rating)))
+      .having(sql`sum(${matchLogsTable.minutes}) >= ${TOP_PERFORMER_MIN_MINUTES}`)
+      .orderBy(desc(weekRatingExpr), desc(weekMinutesExpr))
       .limit(5),
     // Over-fetch for "trending" — badge computation below filters to on_fire/rising only.
     db
@@ -165,9 +176,12 @@ router.get("/dashboard", async (req, res): Promise<void> => {
         ))
     : [];
   const profileMap = new Map(topProfiles.map((p) => [p.id, p]));
-  const topPerformersRaw = topPlayerIds
-    .map((id) => profileMap.get(id))
-    .filter((p): p is NonNullable<typeof p> => p !== undefined);
+  const topPerformersRaw = recentRatings.flatMap((r) => {
+    const p = profileMap.get(r.playerId);
+    return p
+      ? [{ ...p, weekRating: Math.round(r.weekRating * 100) / 100, weekMinutes: r.weekMinutes }]
+      : [];
+  });
 
   // Batch-compute live form badges for topPerformers + trending candidates.
   const badgeCandidateIds = [

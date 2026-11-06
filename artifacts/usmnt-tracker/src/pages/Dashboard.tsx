@@ -179,7 +179,7 @@ export default function Dashboard() {
               <Trophy size={18} className="text-secondary" />
               Top Performers
             </CardTitle>
-            <CardDescription>Highest rated this week</CardDescription>
+            <CardDescription>Highest rated this week (60+ min)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -196,7 +196,10 @@ export default function Dashboard() {
                     <div className="font-bold truncate group-hover:text-secondary transition-colors">{player.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{player.clubName} • {player.position}</div>
                   </div>
-                  <FormBadge trend={player.performanceTrend} showEmoji={false} className="mt-0" />
+                  <div className="text-right shrink-0" data-testid="top-performer-rating">
+                    <div className="text-lg font-bold font-mono text-secondary leading-none">{player.weekRating.toFixed(1)}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground mt-1">{player.weekMinutes} min</div>
+                  </div>
                 </Link>
               ))}
             </div>
