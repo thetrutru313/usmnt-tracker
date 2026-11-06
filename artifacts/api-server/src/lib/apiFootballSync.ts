@@ -3,6 +3,7 @@ import { eq, and, inArray, isNotNull, isNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { claimSyncRun } from "./syncGuard.js";
 import { nationalTeamFixtureUpdate } from "./nationalTeamFixtureUpdate.js";
+import { pickClubLeague } from "./clubLeague.js";
 import {
   type AfFixture,
   FINISHED_STATUSES,
@@ -24,11 +25,12 @@ const BASE_URL = "https://v3.football.api-sports.io";
 // before firing the post-match stats pipeline so they don't read empty data
 // and leave match logs in a permanent "pending" state.
 const POST_MATCH_STATS_DELAY_MINUTES = 35;
-// Pro plan allows 30 requests/minute (1 every 2s). The original 7s interval
-// was for the free plan (~10/min) and made 99-fixture USMNT syncs take
-// 11+ minutes — longer than a typical server restart window — so writes
-// never committed. Reduced to 2s to match the actual Pro plan limit.
-const MIN_REQUEST_INTERVAL_MS = 2000;
+// The account's limit is 450 requests/minute and 75,000/day (response headers,
+// Oct 2026). 500 ms between calls is 120/minute per server instance, which
+// leaves headroom for several autoscale instances, retries and manual Shell
+// lookups. Faster syncs also finish before an idle autoscale instance is shut
+// down. History: 7 s on the free plan, then 2 s for a 30/minute plan.
+const MIN_REQUEST_INTERVAL_MS = 500;
 const MAX_RETRIES = 2;
 
 export function apiKey(): string {
@@ -1478,12 +1480,12 @@ export async function syncApiFootballFixtures(
         const enriched: { league?: string; country?: string } = {};
 
         if (needsLeague) {
-          // Use the competition name from the first fixture in the season list
-          // (before filtering to upcoming-only) — this includes finished
-          // fixtures whose competition name is still authoritative.
-          const firstFixture = seasonFixtures[0];
-          if (firstFixture) {
-            enriched.league = firstFixture.league.name;
+          // Use the competition the club plays most often in the season list,
+          // ignoring friendlies (see clubLeague.ts). Null leaves "Unknown" in
+          // place so a later sweep can try again.
+          const league = pickClubLeague(seasonFixtures);
+          if (league) {
+            enriched.league = league;
           }
         }
 
