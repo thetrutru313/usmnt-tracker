@@ -14,6 +14,7 @@ import transparencyRouter from "./transparency";
 import storageRouter from "./storage";
 import followsRouter from "./follows";
 import pushRouter from "./push";
+import cronRouter from "./cron";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(adminRouter);
 router.use(scheduleRouter);
 router.use(followsRouter);
 router.use(pushRouter);
+router.use(cronRouter);
 
 export default router;
