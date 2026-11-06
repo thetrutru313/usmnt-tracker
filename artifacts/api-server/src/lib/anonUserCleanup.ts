@@ -1,4 +1,4 @@
-import { db, anonUsersTable, userFollowsTable, recoveryTokensTable, adminSessionsTable } from "@workspace/db";
+import { db, anonUsersTable, userFollowsTable, recoveryTokensTable, adminSessionsTable, pushSubscriptionsTable } from "@workspace/db";
 import { and, lt, notExists, inArray, eq, sql, or, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -34,6 +34,8 @@ function getCleanupIntervalMs(): number {
  * Deletes `anon_users` rows that:
  *   - have no `user_follows` children (i.e. the user never followed anyone, or
  *     all their follows were removed), AND
+ *   - have no `push_subscriptions` (a device with alerts on keeps its user,
+ *     even with no follows — e.g. announcements only), AND
  *   - were created more than {@link getOrphanAgeDays} days ago.
  *
  * Associated `recovery_tokens` rows are deleted first (within the same
@@ -60,6 +62,12 @@ export async function cleanupOrphanedAnonUsers(): Promise<number> {
             .select({ one: sql<number>`1` })
             .from(userFollowsTable)
             .where(eq(userFollowsTable.anonUserId, anonUsersTable.id)),
+        ),
+        notExists(
+          db
+            .select({ one: sql<number>`1` })
+            .from(pushSubscriptionsTable)
+            .where(eq(pushSubscriptionsTable.anonUserId, anonUsersTable.id)),
         ),
       ),
     );

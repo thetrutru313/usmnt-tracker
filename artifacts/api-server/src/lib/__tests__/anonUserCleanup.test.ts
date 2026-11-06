@@ -24,11 +24,13 @@ const {
   tAnonUsers,
   tUserFollows,
   tRecoveryTokens,
+  tPushSubscriptions,
   capturedDeleteTables,
 } = vi.hoisted(() => {
   const tAnonUsers = { _table: "anon_users" };
   const tUserFollows = { _table: "user_follows" };
   const tRecoveryTokens = { _table: "recovery_tokens" };
+  const tPushSubscriptions = { _table: "push_subscriptions" };
 
   const capturedDeleteTables: unknown[] = [];
 
@@ -46,7 +48,7 @@ const {
     }),
   };
 
-  return { mockDb, tAnonUsers, tUserFollows, tRecoveryTokens, capturedDeleteTables };
+  return { mockDb, tAnonUsers, tUserFollows, tRecoveryTokens, tPushSubscriptions, capturedDeleteTables };
 });
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,7 @@ vi.mock("@workspace/db", () => ({
   anonUsersTable: tAnonUsers,
   userFollowsTable: tUserFollows,
   recoveryTokensTable: tRecoveryTokens,
+  pushSubscriptionsTable: tPushSubscriptions,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -242,5 +245,25 @@ describe("cleanupOrphanedAnonUsers", () => {
     mockDb.select.mockReturnValueOnce(makeSelectResult([]));
     // Should not throw — invalid env var triggers a logger.warn and uses the default
     await expect(cleanupOrphanedAnonUsers()).resolves.toBe(0);
+  });
+
+  // ── 5. Users with alerts switched on are retained ─────────────────────────
+
+  it("excludes users who have a push subscription, even with no follows", async () => {
+    // Record every table the orphan query (and its NOT EXISTS sub-selects) reads.
+    const tablesRead: unknown[] = [];
+    mockDb.select.mockImplementation(() => {
+      const chain = makeSubqueryResult();
+      chain.from.mockImplementation((table: unknown) => {
+        tablesRead.push(table);
+        return Object.assign(Promise.resolve([]), { where: vi.fn().mockResolvedValue([]) });
+      });
+      return chain;
+    });
+
+    await cleanupOrphanedAnonUsers();
+
+    expect(tablesRead).toContain(tUserFollows);
+    expect(tablesRead).toContain(tPushSubscriptions);
   });
 });

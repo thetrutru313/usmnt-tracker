@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign, Star } from "lucide-react"
+import { Search, Calendar, CalendarRange, Menu, X, Activity, User2, Trophy, Newspaper, HeartPulse, RefreshCw, WifiOff, Info, DollarSign, Star, Bell } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -150,6 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { label: "Transfers",    path: "/transfers",   icon: RefreshCw,    onHover: () => prefetch(getListTransfersQueryOptions()) },
     { label: "Rankings",     path: "/rankings",    icon: Trophy,       onHover: () => prefetch(getGetRankingsQueryOptions()) },
     { label: "USMNT Schedule", path: "/schedule",    icon: CalendarRange, onHover: () => prefetch(getListScheduleEventsQueryOptions()) },
+    { label: "Alerts",       path: "/alerts",      icon: Bell },
     { label: "About",        path: "/about",       icon: Info },
     { label: "Transparency", path: "/transparency", icon: DollarSign,  onHover: () => prefetch(getListTransparencyMonthsQueryOptions()) },
   ]

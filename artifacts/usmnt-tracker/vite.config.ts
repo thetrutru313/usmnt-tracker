@@ -62,6 +62,8 @@ export default defineConfig({
         // Exclude Replit dev endpoints from the SW so hot-reload still works
         // in any environment where devOptions.enabled is true.
         navigateFallbackDenylist: [/^\/__/, /\/api\//],
+        // Push and notification-click handlers (public/push-sw.js).
+        importScripts: ['push-sw.js'],
       },
     }),
     ...(process.env.NODE_ENV !== 'production' &&

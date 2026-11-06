@@ -28,7 +28,8 @@ const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 let provisioningPromise: Promise<string> | null = null;
 
-async function ensureToken(): Promise<string> {
+/** The anon user token, provisioning one on first use. Also used by alerts. */
+export async function ensureToken(): Promise<string> {
   const existing = safeGetItem(ANON_TOKEN_KEY);
   if (existing) return existing;
 

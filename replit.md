@@ -163,6 +163,16 @@ We evaluated switching to Reserved VM (`deploymentTarget = "vm"` — note: `"vm"
 
 ---
 
+## Push alerts
+
+Web Push notifications (works in the iPhone Home Screen app on iOS 16.4+, and in desktop browsers).
+
+- **Secrets:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (an `https://` URL or `mailto:`). Generate the pair once with `pnpm --filter @workspace/api-server exec web-push generate-vapid-keys`; never print or commit the private key. Without them `/api/push/config` returns `publicKey: null` and the Alerts page shows alerts as unavailable. Changing the keys invalidates every existing subscription.
+- **Data:** `push_subscriptions` — one row per device: endpoint, encryption keys, and `prefs` (jsonb: one boolean per alert type plus `scope` "mine" | "all"). Cascades with its anon user; the anon-user cleanup keeps users who have a subscription.
+- **API:** `routes/push.ts` (config, subscription PUT/GET/DELETE, test) — outside the OpenAPI spec, like follows. Endpoints are only accepted on known push-service hosts. `lib/push.ts` `sendPush()` deletes a subscription on 404/410 and after 10 consecutive failures.
+- **Service worker:** `public/push-sw.js`, loaded via `workbox.importScripts`. The service worker is off in dev, so alerts can only be tried on the published app.
+- **Frontend:** `/alerts` page, `src/lib/push.ts`. iOS only shows the permission prompt in direct response to a tap, so nothing is awaited before `Notification.requestPermission()`.
+
 ## Deferred work
 
 These items are explicitly scoped out but documented here so they can be picked up with full context:
