@@ -25,6 +25,10 @@ export interface PlayerSummary {
   age: number;
   /** @nullable */
   marketValueUsd?: number | null;
+  /** @nullable */
+  marketValueEur?: number | null;
+  /** @nullable */
+  marketValueAsOf?: string | null;
   nationalTeamCaps: number;
   nationalTeamGoals: number;
   trending: boolean;

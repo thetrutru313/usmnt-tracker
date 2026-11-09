@@ -86,6 +86,8 @@ export const playerSummaryColumns = {
   age: playersTable.age,
   dateOfBirth: playersTable.dateOfBirth,
   marketValueUsd: playersTable.marketValueUsd,
+  marketValueEur: playersTable.marketValueEur,
+  marketValueAsOf: playersTable.marketValueAsOf,
   nationalTeamCaps: playersTable.nationalTeamCaps,
   nationalTeamGoals: playersTable.nationalTeamGoals,
   potentialCallUpScore: playersTable.potentialCallUpScore,

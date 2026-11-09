@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormBadge } from "@/components/FormBadge";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
+import { compactMoney, monthYear } from "@/lib/marketValue";
 
 export interface PlayerCardPlayer {
   id: number;
@@ -16,6 +17,10 @@ export interface PlayerCardPlayer {
   photoUrl?: string | null;
   performanceTrend?: string | null;
   poolTier: string;
+  /** Hand-entered Transfermarkt value; shown only when it has an as-of date. */
+  marketValueEur?: number | null;
+  marketValueUsd?: number | null;
+  marketValueAsOf?: string | null;
 }
 
 export function PlayerCard({ player }: { player: PlayerCardPlayer }) {
@@ -89,6 +94,16 @@ export function PlayerCard({ player }: { player: PlayerCardPlayer }) {
                   <span>•</span>
                   <span className="truncate max-w-[100px]">{player.clubName}</span>
                 </div>
+                {/* Its own line, so a long club name never cuts it off. Old undated seed values stay hidden. */}
+                {player.marketValueAsOf && player.marketValueEur != null && (
+                  <div
+                    className="mt-0.5 text-xs font-mono text-green-600 dark:text-green-400"
+                    title={`Transfermarkt value, ${monthYear(player.marketValueAsOf)}`}
+                  >
+                    {compactMoney(player.marketValueEur, "€")}
+                    {player.marketValueUsd != null && ` (${compactMoney(player.marketValueUsd, "$")})`}
+                  </div>
+                )}
               </div>
             </div>
 

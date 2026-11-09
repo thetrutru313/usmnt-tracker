@@ -422,6 +422,10 @@ components:
         photoUrl: { type: ["string", "null"] }
         age: { type: integer }
         marketValueUsd: { type: ["number", "null"] }
+        # Euros as entered from Transfermarkt and the date read (YYYY-MM-DD);
+        # cards show the value only when it has a date.
+        marketValueEur: { type: ["number", "null"] }
+        marketValueAsOf: { type: ["string", "null"] }
         nationalTeamCaps: { type: integer }
         nationalTeamGoals: { type: integer }
         trending: { type: boolean }
