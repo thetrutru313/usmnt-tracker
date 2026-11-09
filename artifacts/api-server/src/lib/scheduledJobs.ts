@@ -161,6 +161,14 @@ export const APP_JOBS: ScheduledJob[] = [
     run: async () => (await import("./nationalTeamSync.js")).syncNationalTeamCapsAndGoals(),
   },
   {
+    // ECB EUR→USD rate (published ~15:00 UTC on working days), then
+    // re-convert hand-entered market values to dollars.
+    name: "eurUsdRate",
+    isDue: dailyAt(16),
+    maxRunMs: 30 * 60 * 1000,
+    run: async () => (await import("./marketValues.js")).refreshEurUsd(),
+  },
+  {
     // Re-scores candidates from stored signals.
     name: "candidateRescore",
     isDue: every(7),

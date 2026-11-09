@@ -34,6 +34,12 @@ export interface PlayerProfile {
   contractUntil: Date | null;
   /** @nullable */
   marketValueUsd: number | null;
+  /** @nullable */
+  marketValueEur: number | null;
+  /** @nullable */
+  marketValueAsOf: string | null;
+  /** @nullable */
+  transfermarktUrl: string | null;
   nationalTeamCaps: number;
   nationalTeamGoals: number;
   /** @nullable */

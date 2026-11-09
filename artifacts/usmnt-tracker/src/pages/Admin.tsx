@@ -25,6 +25,7 @@ import {
   API_BASE,
   apiFetch,
 } from "../lib/adminSession";
+import { MarketValuesSection } from "../components/MarketValuesSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1169,6 +1170,9 @@ function AdminPanel({ token, onLogout, onReauth }: { token: string; onLogout: ()
 
         {/* Club overrides */}
         <ClubOverrideSection token={token} onUnauthorized={handleUnauthorized} />
+
+        {/* Market values (Transfermarkt, quarterly) and bios */}
+        <MarketValuesSection token={token} onUnauthorized={handleUnauthorized} />
 
         {/* Transparency section */}
         <section className="space-y-4">

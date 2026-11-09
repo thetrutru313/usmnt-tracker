@@ -13,6 +13,7 @@ import { syncApiFootballFixtures, syncNationalTeamFixtures, syncYouthNtFixtures 
 import { cleanupOrphanedAnonUsers } from "../lib/anonUserCleanup";
 import { runCommitmentSweep } from "../lib/commitmentTracker";
 import { announcementAudience, sendAnnouncement } from "../lib/pushAlerts";
+import { listMarketValues, refreshEurUsd, saveMarketValues, storedEurUsd } from "../lib/marketValues";
 import { z } from "zod";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
@@ -1162,6 +1163,74 @@ router.post("/admin/announcements", async (req, res): Promise<void> => {
   const result = await sendAnnouncement({ title, body, url: url || "/" });
   logger.info(result, "Admin announcement sent");
   res.json(result);
+});
+
+// ─── Market values and bios ──────────────────────────────────────────────────
+
+/** A player's Transfermarkt page (any of its country domains). */
+const TRANSFERMARKT_URL = /^https:\/\/(www\.)?transfermarkt\.[a-z]{2,3}(\.[a-z]{2})?\/\S+$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const MarketValuesBody = z.object({
+  asOf: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "The as-of date must be YYYY-MM-DD")
+    .refine((d) => {
+      const t = Date.parse(`${d}T00:00:00Z`);
+      // Allow a day ahead for time zones; nothing in the future otherwise.
+      return Number.isFinite(t) && t >= Date.parse("2020-01-01T00:00:00Z") && t <= Date.now() + DAY_MS;
+    }, "The as-of date can't be in the future"),
+  players: z
+    .array(
+      z.object({
+        id: z.number().int().positive(),
+        valueEurM: z.number().positive().max(500, "Values are in € millions (max 500)").nullable().optional(),
+        transfermarktUrl: z
+          .string()
+          .trim()
+          .max(300)
+          .regex(TRANSFERMARKT_URL, "Use a Transfermarkt link (https://www.transfermarkt.com/…)")
+          .nullable()
+          .optional(),
+        bio: z.string().trim().max(2000).optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+/**
+ * GET /admin/market-values
+ * Every player's hand-entered value (euros, as-of date), Transfermarkt link
+ * and bio, plus the current EUR→USD rate.
+ */
+router.get("/admin/market-values", async (_req, res): Promise<void> => {
+  const [players, eurUsd] = await Promise.all([listMarketValues(), storedEurUsd()]);
+  res.json({ eurUsd, players });
+});
+
+/**
+ * PUT /admin/market-values  { asOf, players: [{ id, valueEurM?, transfermarktUrl?, bio? }] }
+ * Saves only the fields sent. New values are dated `asOf` and converted to
+ * dollars at the stored rate (fetched now if there isn't one yet).
+ */
+router.put("/admin/market-values", async (req, res): Promise<void> => {
+  const parsed = MarketValuesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    return;
+  }
+  const { asOf, players } = parsed.data;
+  let eurUsd = await storedEurUsd();
+  if (!eurUsd && players.some((p) => typeof p.valueEurM === "number")) {
+    eurUsd = await refreshEurUsd().catch((err) => {
+      logger.warn({ err }, "Could not fetch the EUR→USD rate — saving euros; dollars fill in at the next refresh");
+      return null;
+    });
+  }
+  const updated = await saveMarketValues(players, asOf, eurUsd?.rate ?? null);
+  logger.info({ updated, asOf }, "Admin: market values saved");
+  res.json({ updated, eurUsd });
 });
 
 /**

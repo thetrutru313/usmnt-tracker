@@ -45,7 +45,18 @@ export const playersTable = pgTable("players", {
   age: integer("age").notNull(),
   dateOfBirth: text("date_of_birth"),
   contractUntil: date("contract_until", { mode: "string" }),
+  // Market value. Entered by hand on the admin page from Transfermarkt, in
+  // euros (market_value_eur), with the date it was read (market_value_as_of).
+  // market_value_usd is derived: euros × the daily ECB EUR→USD rate, refreshed
+  // by the eurUsdRate job (see marketValues.ts). The call-up score and API use
+  // it. Older rows have a usd value from the original seed and no as-of date;
+  // profiles only show values that have one.
   marketValueUsd: doublePrecision("market_value_usd"),
+  marketValueEur: doublePrecision("market_value_eur"),
+  marketValueAsOf: date("market_value_as_of", { mode: "string" }),
+  // The player's Transfermarkt profile, saved once so the admin page can link
+  // straight to it each quarter.
+  transfermarktUrl: text("transfermarkt_url"),
   nationalTeamCaps: integer("national_team_caps").notNull().default(0),
   nationalTeamGoals: integer("national_team_goals").notNull().default(0),
   // Whether this player was named to the USA's 2026 World Cup 26-man roster.

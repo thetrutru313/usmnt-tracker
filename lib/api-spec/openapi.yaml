@@ -539,6 +539,9 @@ components:
         - age
         - contractUntil
         - marketValueUsd
+        - marketValueEur
+        - marketValueAsOf
+        - transfermarktUrl
         - nationalTeamCaps
         - nationalTeamGoals
         - youthNationalTeam
@@ -575,7 +578,15 @@ components:
         photoUrl: { type: ["string", "null"] }
         age: { type: integer }
         contractUntil: { type: ["string", "null"], format: date }
+        # Dollars: the hand-entered euro value converted at the latest ECB
+        # rate, or (with no as-of date) an old seed value the UI doesn't show.
         marketValueUsd: { type: ["number", "null"] }
+        # Euros as entered from Transfermarkt, and the date they were read
+        # (YYYY-MM-DD; no `format: date`, which would turn it into a UTC
+        # timestamp and shift the month for viewers west of UTC).
+        marketValueEur: { type: ["number", "null"] }
+        marketValueAsOf: { type: ["string", "null"] }
+        transfermarktUrl: { type: ["string", "null"] }
         nationalTeamCaps: { type: integer }
         nationalTeamGoals: { type: integer }
         youthNationalTeam: { type: ["string", "null"] }

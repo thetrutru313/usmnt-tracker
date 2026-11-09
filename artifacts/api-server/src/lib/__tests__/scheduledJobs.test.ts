@@ -55,7 +55,7 @@ describe("schedules", () => {
 
   it("3: keeps the old schedule names, so production's run history carries over", () => {
     expect(APP_JOBS.map((j) => j.name)).toEqual(
-      expect.arrayContaining(["playerClub", "playerStats", "nationalTeamCaps"]),
+      expect.arrayContaining(["playerClub", "playerStats", "nationalTeamCaps", "eurUsdRate"]),
     );
   });
 });

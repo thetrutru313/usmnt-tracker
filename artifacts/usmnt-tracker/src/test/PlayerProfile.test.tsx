@@ -57,7 +57,7 @@ const PLAYER = {
   clubName: "AC Milan",
   clubLogoUrl: null,
   league: "Serie A",
-  marketValueUsd: null,
+  marketValueUsd: null as number | null,
   nationalTeamCaps: 70,
   nationalTeamGoals: 26,
   photoUrl: null,
@@ -326,5 +326,44 @@ describe("PlayerProfile — tier badge uses server-provided poolTier (Task B)", 
     renderProfile();
     expect(screen.getByText("Prospect")).toBeInTheDocument();
     expect(screen.queryByText("In the Mix")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Market value: entered from Transfermarkt, shown only with a date ─────────
+
+describe("PlayerProfile — market value", () => {
+  beforeEach(() => { currentPlayerData = PLAYER; });
+
+  it("shows a dated value in dollars, and the euro value with source and month in the details", () => {
+    currentPlayerData = {
+      ...PLAYER,
+      marketValueUsd: 27_500_000,
+      marketValueEur: 25_000_000,
+      // The 1st of the month: must read "Nov 2026" in any time zone.
+      marketValueAsOf: "2026-11-01",
+      transfermarktUrl: "https://www.transfermarkt.com/christian-pulisic/profil/spieler/315779",
+      contractUntil: "2027-06-30",
+    };
+    renderProfile();
+    expect(screen.getByText("$27.5M")).toBeInTheDocument();
+    expect(screen.getByText(/€25\.0M \(\$27\.5M\)/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Transfermarkt" })).toHaveAttribute(
+      "href",
+      "https://www.transfermarkt.com/christian-pulisic/profil/spieler/315779",
+    );
+    expect(screen.getByText(/Nov 2026/)).toBeInTheDocument();
+  });
+
+  it("hides an undated (old seed) value", () => {
+    currentPlayerData = { ...PLAYER, marketValueUsd: 9_000_000, marketValueAsOf: null, marketValueEur: null };
+    renderProfile();
+    expect(screen.queryByText("$9.0M")).not.toBeInTheDocument();
+    expect(screen.queryByText("Market value")).not.toBeInTheDocument();
+  });
+
+  it("no longer shows contract dates", () => {
+    currentPlayerData = { ...PLAYER, contractUntil: "2027-06-30" };
+    renderProfile();
+    expect(screen.queryByText("Contract Until")).not.toBeInTheDocument();
   });
 });

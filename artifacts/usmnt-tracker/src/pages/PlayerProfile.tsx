@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { formatDate, formatKickoff } from "@/lib/formatTime";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
 import { toast } from "sonner";
+import { compactMoney, monthYear } from "@/lib/marketValue";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
 
@@ -168,9 +169,13 @@ export default function PlayerProfile() {
                 </span>
                 <span className="uppercase tracking-wider font-medium">{player.position}</span>
                 <span>Age: {player.age}</span>
-                {player.marketValueUsd && (
-                  <span className="text-green-600 dark:text-green-400 font-mono">
-                    ${(player.marketValueUsd / 1000000).toFixed(1)}M
+                {/* Only values entered with a date; old undated seed values stay hidden. */}
+                {player.marketValueAsOf && player.marketValueUsd != null && (
+                  <span
+                    className="text-green-600 dark:text-green-400 font-mono"
+                    title={player.marketValueEur != null ? `${compactMoney(player.marketValueEur, "€")} on Transfermarkt, ${monthYear(player.marketValueAsOf)}` : undefined}
+                  >
+                    {compactMoney(player.marketValueUsd, "$")}
                   </span>
                 )}
               </div>
@@ -511,15 +516,31 @@ export default function PlayerProfile() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm leading-relaxed mb-4 text-muted-foreground">
-                {player.bio}
-              </p>
-              
-              <div className="space-y-3 pt-4 border-t border-border">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Contract Until</span>
-                  <span className="font-medium">{player.contractUntil ? format(new Date(player.contractUntil), "MMM yyyy") : 'Unknown'}</span>
-                </div>
+              {player.bio && (
+                <p className="text-sm leading-relaxed mb-4 text-muted-foreground">
+                  {player.bio}
+                </p>
+              )}
+
+              <div className={`space-y-3 ${player.bio ? "pt-4 border-t border-border" : ""}`}>
+                {player.marketValueAsOf && player.marketValueEur != null && (
+                  <div className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-muted-foreground">Market value</span>
+                    <span className="font-medium text-right">
+                      {compactMoney(player.marketValueEur, "€")}
+                      {player.marketValueUsd != null && ` (${compactMoney(player.marketValueUsd, "$")})`}
+                      <span className="text-muted-foreground font-normal">
+                        {" · "}
+                        {player.transfermarktUrl ? (
+                          <a href={player.transfermarktUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                            Transfermarkt
+                          </a>
+                        ) : "Transfermarkt"}
+                        , {monthYear(player.marketValueAsOf)}
+                      </span>
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Youth NT</span>
                   <span className="font-medium">{player.youthNationalTeam || 'None'}</span>
