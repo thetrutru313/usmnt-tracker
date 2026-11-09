@@ -9,6 +9,10 @@ vi.mock("../syncGuard.js", () => ({ claimSyncRun: state.claim }));
 vi.mock("../logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+// The live poll loads the push-alert scanners after each allowed run. Real,
+// they keep querying the mocked db after test 2 ends and land in test 3's
+// "no db calls" check (flaky in CI). This file is about claims, not alerts.
+vi.mock("../pushAlerts.js", () => ({ runDueAlerts: vi.fn(async () => {}) }));
 vi.mock("rss-parser", () => ({
   default: class { parseURL = state.parseURL; },
 }));
