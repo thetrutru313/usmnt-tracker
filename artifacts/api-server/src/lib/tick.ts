@@ -131,10 +131,17 @@ export async function findDueFixtures(now: Date): Promise<DueFixture[]> {
   return due;
 }
 
-async function handleLineups(f: DueFixture, fresh: AfFixtureDetail, status: string): Promise<boolean> {
+/**
+ * When lineups first appear, send the one pre-match alert: when the match
+ * kicks off, and whether each of the device's players starts or is on the
+ * bench. It claims `kickoff:<id>` — the same key as the fallback kickoff
+ * reminder — so a match never gets both.
+ */
+async function handleLineups(f: DueFixture, fresh: AfFixtureDetail, status: string, now: Date): Promise<boolean> {
   if (status === "finished") return false;
   const lineups = fresh.lineups ?? [];
   if (!lineups.some((l) => (l.startXI ?? []).length > 0)) return false;
+  // Marks the lineups as seen, so the match isn't fetched again before kickoff.
   if (!(await claimPushEvent(`lineup:${f.id}`, "lineups"))) return false;
 
   const starters = new Set(lineups.flatMap((l) => (l.startXI ?? []).map((p) => p.player.id)));
@@ -146,12 +153,19 @@ async function handleLineups(f: DueFixture, fresh: AfFixtureDetail, status: stri
   for (const p of players) {
     if (p.apiId !== null && !starters.has(p.apiId) && bench.has(p.apiId)) roles.set(p.id, { name: p.name, role: "on the bench" });
   }
+  // None of the match's players found in the lineups (e.g. not in the
+  // squad): leave it to the fallback kickoff reminder.
   if (roles.size === 0) return false;
-  await sendAlert("lineups", [...roles.keys()], (ids) => ({
-    title: `Lineups: ${f.homeTeam} vs ${f.awayTeam}`,
+  if (!(await claimPushEvent(`kickoff:${f.id}`, "kickoff"))) return false;
+  const minutes = Math.round((f.kickoff.getTime() - now.getTime()) / 60_000);
+  const title = minutes >= 1
+    ? `Kicks off in ${minutes} min: ${f.homeTeam} vs ${f.awayTeam}`
+    : `Lineups: ${f.homeTeam} vs ${f.awayTeam}`;
+  await sendAlert("kickoff", [...roles.keys()], (ids) => ({
+    title,
     body: ids.map((id) => `${roles.get(id)!.name} ${roles.get(id)!.role}`).join(" · "),
     url: `/matches/${f.id}`,
-    tag: `lineup-${f.id}`,
+    tag: `kickoff-${f.id}`,
   }));
   return true;
 }
@@ -250,7 +264,7 @@ export async function runTick(now = new Date()): Promise<TickSummary> {
           .where(eq(fixturesTable.id, f.id));
         summary.fixturesUpdated++;
       }
-      if (await handleLineups(f, fresh, status)) summary.lineupAlerts++;
+      if (await handleLineups(f, fresh, status, now)) summary.lineupAlerts++;
       summary.goalAlerts += await handleGoals(f, fresh);
     } catch (err) {
       logger.warn({ err, fixtureId: f.id }, "Tick: match refresh failed");

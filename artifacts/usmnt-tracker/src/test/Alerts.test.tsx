@@ -95,6 +95,17 @@ describe("Alerts page", () => {
     expect(putBodies()[1].prefs).toEqual({ ...DEFAULT_PREFS, goals: false });
   });
 
+  it("3b: one Kickoff & lineups switch saves both kickoff and lineups", async () => {
+    supportedBrowser();
+    render(<Alerts />);
+    fireEvent.click(await screen.findByRole("button", { name: /Enable alerts/i }));
+    expect(screen.queryByRole("switch", { name: "Starting lineups" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("switch", { name: "Kickoff & lineups" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(2));
+    expect(putBodies()[1].prefs).toEqual({ ...DEFAULT_PREFS, kickoff: false, lineups: false });
+  });
+
   it("4: shows a blocked message when notifications were denied", async () => {
     supportedBrowser();
     vi.stubGlobal("Notification", { permission: "denied", requestPermission });

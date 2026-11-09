@@ -2,17 +2,33 @@ import { ensureToken } from "@/context/MyPlayersContext";
 
 // ─── Alert choices ────────────────────────────────────────────────────────────
 
-export const ALERT_KINDS = [
-  { key: "kickoff", label: "Kickoff reminders", description: "Before your players' matches start" },
-  { key: "lineups", label: "Starting lineups", description: "When your players are named in the starting XI" },
+export type AlertKind =
+  | "kickoff"
+  | "lineups"
+  | "goals"
+  | "ratings"
+  | "announcements"
+  | "injuries"
+  | "transfers";
+
+/**
+ * The switches on the Alerts page. Kickoff reminders and lineups are one
+ * alert (sent when lineups are announced, or as a plain reminder shortly
+ * before kickoff if they aren't), so one switch sets both stored choices.
+ */
+export const ALERT_KINDS: { key: AlertKind; label: string; description: string; alsoSets?: AlertKind[] }[] = [
+  {
+    key: "kickoff",
+    label: "Kickoff & lineups",
+    description: "Before your players' matches, with whether they start",
+    alsoSets: ["lineups"],
+  },
   { key: "goals", label: "Goals & assists", description: "As they happen, within a few minutes" },
   { key: "ratings", label: "Post-match ratings", description: "Your players' ratings after the final whistle" },
   { key: "announcements", label: "USMNT announcements", description: "Roster calls and team news" },
   { key: "injuries", label: "Injuries", description: "New injuries" },
   { key: "transfers", label: "Transfers", description: "Completed moves" },
-] as const;
-
-export type AlertKind = (typeof ALERT_KINDS)[number]["key"];
+];
 export type AlertPrefs = Record<AlertKind, boolean> & { scope: "mine" | "all" };
 
 export const DEFAULT_PREFS: AlertPrefs = {

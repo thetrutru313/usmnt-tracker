@@ -17,8 +17,13 @@ import { sendPush, type PushPayload } from "./push";
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
 
-/** Kickoff reminders go out when a match is at most this far away. */
-export const KICKOFF_LEAD_MS = 30 * 60 * 1000;
+/**
+ * Fallback kickoff reminder: sent this close to kickoff only when the cron
+ * tick hasn't already sent the combined "kicks off in … / lineup" alert, which
+ * usually goes out 40–60 min before when lineups are announced. Both claim
+ * `kickoff:<fixtureId>`, so a match gets one pre-match alert, never two.
+ */
+export const KICKOFF_LEAD_MS = 15 * 60 * 1000;
 /** Ratings are looked for on matches that kicked off within this window. */
 export const RATINGS_LOOKBACK_MS = 12 * 60 * 60 * 1000;
 /** Only injuries that started this recently count as new. */
@@ -108,7 +113,7 @@ function notClubFriendly() {
   );
 }
 
-// ─── Kickoff reminders ───────────────────────────────────────────────────────
+// ─── Kickoff reminders (fallback when lineups aren't out yet) ─────────────────
 
 export async function sendKickoffReminders(now = new Date()): Promise<number> {
   const rows = await db

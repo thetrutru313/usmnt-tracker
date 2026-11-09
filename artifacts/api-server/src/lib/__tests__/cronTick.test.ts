@@ -188,7 +188,7 @@ describe("cron tick", () => {
     expect(due).not.toContain(ids.done);
   });
 
-  it("2: updates status and score, sends lineup and goal alerts, and doesn't run post-match stats yet", async () => {
+  it("2: updates status and score, sends one kickoff-and-lineup alert and goal alerts, and doesn't run post-match stats yet", async () => {
     const summary = await runTick(NOW);
     expect(summary.fixturesChecked).toBe(3);
 
@@ -198,9 +198,10 @@ describe("cron tick", () => {
     expect(live).toMatchObject({ status: "live", elapsedMinute: 55, homeScore: 1, awayScore: 0 });
 
     const mine = received("mine");
-    expect(mine.find((p) => p.title === "Lineups: Home FC vs Away FC")?.body).toBe("__tick-player-a__ starts");
-    expect(received("all").find((p) => p.title === "Lineups: Home FC vs Away FC")?.body)
+    expect(mine.find((p) => p.title === "Kicks off in 40 min: Home FC vs Away FC")?.body).toBe("__tick-player-a__ starts");
+    expect(received("all").find((p) => p.title === "Kicks off in 40 min: Home FC vs Away FC")?.body)
       .toBe("__tick-player-a__ starts · __tick-player-b__ on the bench");
+    expect(mine.filter((p) => p.url === `/matches/${ids.pre}`)).toHaveLength(1); // no separate lineups alert
     expect(mine.find((p) => p.title === "Goal: __tick-player-a__")?.body).toBe("Home FC 1–0 Away FC · 23′");
     expect(mine.find((p) => p.title === "Assist: __tick-player-a__")?.body).toBe("Sets up Someone Else · Home FC 1–0 Away FC · 50′");
     expect(mine.filter((p) => p.title.startsWith("Goal:"))).toHaveLength(1); // missed penalty ignored
@@ -212,6 +213,12 @@ describe("cron tick", () => {
     await runTick(NOW);
     expect(received("mine")).toHaveLength(0);
     expect((await findDueFixtures(NOW)).map((f) => f.id)).not.toContain(ids.pre);
+  });
+
+  it("3b: the fallback kickoff reminder doesn't follow once the combined alert has gone out", async () => {
+    await runTick(new Date(NOW.getTime() + 30 * MIN)); // the match is now 10 min away
+    expect(received("mine").filter((p) => p.url === `/matches/${ids.pre}`)).toHaveLength(0);
+    expect(received("all").filter((p) => p.url === `/matches/${ids.pre}`)).toHaveLength(0);
   });
 
   it("4: runs post-match stats once, after the delay, with the match's players", async () => {

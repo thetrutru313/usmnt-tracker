@@ -61,7 +61,7 @@ const EP = {
 
 const ids = {
   club: 0, a: 0, b: 0, userMine: 0, userAll: 0, userQuiet: 0,
-  kickoffFixture: 0, friendlyFixture: 0, finishedFixture: 0, transfer: 0,
+  kickoffFixture: 0, friendlyFixture: 0, finishedFixture: 0, laterFixture: 0, transfer: 0,
 };
 const ADMIN_TOKEN = generateToken();
 const savedEnv: Record<string, string | undefined> = {};
@@ -109,16 +109,19 @@ beforeAll(async () => {
     awayTeam: "Away FC",
     ...extra,
   });
-  const [kick, friendly, finished] = await db.insert(fixturesTable).values([
-    fixture(20, { status: "scheduled" }, 0),
+  const [kick, friendly, finished, later] = await db.insert(fixturesTable).values([
+    fixture(10, { status: "scheduled" }, 0),
     fixture(10, { status: "scheduled", competition: "Friendlies Clubs" }, 1),
     fixture(-180, { status: "finished", homeScore: 2, awayScore: 1 }, 2),
+    fixture(20, { status: "scheduled" }, 3), // lineups may still come: too early for the fallback
   ]).returning({ id: fixturesTable.id, apiId: fixturesTable.apiFootballFixtureId });
   ids.kickoffFixture = kick!.id;
   ids.friendlyFixture = friendly!.id;
   ids.finishedFixture = finished!.id;
+  ids.laterFixture = later!.id;
   await db.insert(fixturePlayersTable).values([
     { fixtureId: kick!.id, playerId: ids.a }, { fixtureId: kick!.id, playerId: ids.b },
+    { fixtureId: later!.id, playerId: ids.a },
     { fixtureId: friendly!.id, playerId: ids.a },
     { fixtureId: finished!.id, playerId: ids.a }, { fixtureId: finished!.id, playerId: ids.b },
   ]);
@@ -145,7 +148,7 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(async () => {
-  const fixtureIds = [ids.kickoffFixture, ids.friendlyFixture, ids.finishedFixture].filter(Boolean);
+  const fixtureIds = [ids.kickoffFixture, ids.friendlyFixture, ids.finishedFixture, ids.laterFixture].filter(Boolean);
   await db.delete(pushEventsTable).where(or(
     ...fixtureIds.map((f) => like(pushEventsTable.key, `%:${f}`)),
     ...fixtureIds.map((f) => like(pushEventsTable.key, `%:${f}:%`)),
@@ -187,14 +190,14 @@ function received(): Record<keyof typeof EP, { title: string; body: string; url:
   return out;
 }
 
-describe("kickoff reminders", () => {
+describe("kickoff reminders (fallback when lineups aren't out)", () => {
   it("1: a My Players device hears only about followed players; an All device hears about everyone", async () => {
     await sendKickoffReminders(NOW);
     const got = received();
     const mine = got.mine.filter((p) => p.url === `/matches/${ids.kickoffFixture}`);
     const all = got.all.filter((p) => p.url === `/matches/${ids.kickoffFixture}`);
     expect(mine).toHaveLength(1);
-    expect(mine[0]!.title).toBe("Kicks off in 20 min: Home FC vs Away FC");
+    expect(mine[0]!.title).toBe("Kicks off in 10 min: Home FC vs Away FC");
     expect(mine[0]!.body).toBe("__alerts-player-a__");
     expect(all).toHaveLength(1);
     expect(all[0]!.body).toContain("__alerts-player-b__");
@@ -203,6 +206,13 @@ describe("kickoff reminders", () => {
   it("2: is sent once — a second scan sends nothing for the same match", async () => {
     await sendKickoffReminders(NOW);
     expect(received().mine.filter((p) => p.url === `/matches/${ids.kickoffFixture}`)).toHaveLength(0);
+  });
+
+  it("3b: isn't sent while the match is more than 15 minutes away (lineups may still come)", async () => {
+    await sendKickoffReminders(NOW);
+    expect([...received().mine, ...received().all].some((p) => p.url === `/matches/${ids.laterFixture}`)).toBe(false);
+    const rows = await db.select().from(pushEventsTable).where(eq(pushEventsTable.key, `kickoff:${ids.laterFixture}`));
+    expect(rows).toHaveLength(0);
   });
 
   it("3: skips club friendlies", async () => {

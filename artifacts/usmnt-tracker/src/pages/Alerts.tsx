@@ -28,9 +28,9 @@ type State =
   | { kind: "off"; publicKey: string }
   | { kind: "on"; subscription: PushSubscription; prefs: AlertPrefs };
 
-function withAlert(prefs: AlertPrefs, key: AlertKind, on: boolean): AlertPrefs {
+function withAlert(prefs: AlertPrefs, keys: AlertKind[], on: boolean): AlertPrefs {
   const next = { ...prefs };
-  next[key] = on;
+  for (const key of keys) next[key] = on;
   return next;
 }
 
@@ -213,7 +213,7 @@ export default function Alerts() {
               <CardTitle className="text-lg uppercase tracking-tight">Alert types</CardTitle>
             </CardHeader>
             <CardContent className="divide-y divide-border">
-              {ALERT_KINDS.map(({ key, label, description }) => (
+              {ALERT_KINDS.map(({ key, label, description, alsoSets }) => (
                 <label key={key} className="flex items-center justify-between gap-4 py-3 cursor-pointer">
                   <span>
                     <span className="block font-medium text-sm">{label}</span>
@@ -223,7 +223,7 @@ export default function Alerts() {
                     aria-label={label}
                     checked={state.prefs[key]}
                     onCheckedChange={(checked) =>
-                      handlePrefs(state.subscription, state.prefs, withAlert(state.prefs, key, checked))
+                      handlePrefs(state.subscription, state.prefs, withAlert(state.prefs, [key, ...(alsoSets ?? [])], checked))
                     }
                   />
                 </label>
