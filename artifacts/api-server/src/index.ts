@@ -2,13 +2,10 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startRssIngestionSchedule } from "./lib/rssIngest";
 import { startApiFootballSyncSchedule } from "./lib/apiFootballSync";
-import { startPlayerClubSyncSchedule } from "./lib/playerClubSync";
-import { startPlayerStatsSyncSchedule } from "./lib/playerStatsSync";
-import { startNationalTeamSyncSchedule } from "./lib/nationalTeamSync";
 import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
-import { startUsmntStatsSyncSchedule, syncUsmntStats, promoteNtSentinelIds } from "./lib/usmntSync";
-import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
-import { runCommitmentSweep } from "./lib/commitmentTracker";
+import { startUsmntStatsSyncSchedule, promoteNtSentinelIds } from "./lib/usmntSync";
+import { checkAndApplyWeightDrift } from "./lib/playerDiscovery";
+import { startScheduledJobs } from "./lib/scheduledJobs";
 import { seedLeagueStrengthDefaults } from "./lib/qualityScore";
 import { installUnhandledRejectionLogger, runNonFatal } from "./lib/startupGuards";
 import { db } from "@workspace/db";
@@ -332,56 +329,20 @@ app.listen(port, async (err) => {
   // National-team fixtures stay seeded/curated.
   startApiFootballSyncSchedule();
 
-  // Keeps each player's club assignment current by checking API-Football's
-  // transfer history daily, instead of relying on one-off manual audits.
-  // Skips itself if API_FOOTBALL_KEY isn't set.
-  startPlayerClubSyncSchedule();
-
-  // Live-syncs real club season stats, match logs (last 5 finished matches
-  // per club), and injuries from API-Football, replacing the old seed's
-  // fabricated data entirely. Runs daily — see playerStatsSync.ts for the
-  // call-volume/rate-limit reasoning. Skips itself if API_FOOTBALL_KEY isn't set.
-  //
-  // The USMNT sync is chained as an afterSync callback so it always runs after
-  // all player IDs are resolved and club stats are committed — running them
-  // concurrently starved the USMNT sync of rate-limit quota and left it unable
-  // to complete before the next server restart.
-  // Chain: club-stats → USMNT stats → commitment sweep.
-  // The commitment check must run after fresh stat data is committed so it
-  // evaluates the latest competition history (not stale data from a prior run).
-  startPlayerStatsSyncSchedule(undefined, async () => {
-    await syncUsmntStats();
-    await runCommitmentSweep().catch((err) =>
-      logger.error({ err }, "Commitment sweep (chained after daily stats sync) failed"),
-    );
-  });
-
   // Also keeps an independent hourly poll so a newly-finished USMNT match
   // shows up promptly — not just on the next daily club-sync cycle.
   startUsmntStatsSyncSchedule();
-
-  // Syncs senior USMNT caps/goals from Wikidata daily. Separate from both
-  // pipelines above since API-Football doesn't reliably cover international
-  // career totals — see nationalTeamSync.ts for why Wikidata was chosen over
-  // ESPN's site API. No API key needed.
-  startNationalTeamSyncSchedule();
 
   // Removes orphaned anon_user rows (no follows, older than 90 days) once per
   // day. Runs immediately on server boot, then every 24 hours — mirrors what
   // POST /admin/cleanup-anon-users does but without requiring a manual trigger.
   startAnonUserCleanupSchedule();
 
-  // Weekly eligibility rescore — re-evaluates all non-dismissed candidates
-  // with the current signal registry weights and writes updated scores and
-  // signal rows back to the DB.  Chained after the discovery run by scheduling
-  // it on the same 7-day cadence but offset by a few seconds so the previous
-  // discovery pass has time to settle.  Never touches the `players` table.
-  if (process.env["API_FOOTBALL_KEY"]) {
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-    setInterval(() => {
-      rescoreAllCandidates().catch((err) =>
-        logger.error({ err }, "Scheduled eligibility rescore failed"),
-      );
-    }, SEVEN_DAYS_MS);
-  }
+  // Daily club, stats and caps syncs and the weekly candidate rescore. Run
+  // when due (see scheduledJobs.ts) by the 5-minute cron tick and by a
+  // 30-minute check here, instead of 24-hour timers that rarely fire on
+  // Autoscale. Daily jobs run after 09:00 UTC; a run that dies is retried
+  // after its run window rather than the next day. The daily stats job keeps
+  // the old chain: club stats → USMNT stats → commitment sweep.
+  startScheduledJobs();
 });

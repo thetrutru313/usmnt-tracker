@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vites
 const mocks = vi.hoisted(() => ({
   afFetch: vi.fn(),
   postMatch: vi.fn(),
+  runDueJobs: vi.fn(async () => ({ started: [] as string[], finished: Promise.resolve() })),
 }));
 
 vi.mock("web-push", () => ({
@@ -24,6 +25,9 @@ vi.mock("../playerStatsSync", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../playerStatsSync")>()),
   syncStatsForFinishedFixture: mocks.postMatch,
 }));
+
+// The route also starts due daily jobs; never run the real syncs here.
+vi.mock("../scheduledJobs", () => ({ APP_JOBS: [], runDueJobs: mocks.runDueJobs }));
 
 import webpush from "web-push";
 import request from "supertest";
@@ -248,5 +252,20 @@ describe("POST /api/cron/tick", () => {
     process.env["CRON_SECRET"] = `tick-secret-${RUN}`;
     const res = await request(app).post("/api/cron/tick").set({ Authorization: `Bearer tick-secret-${RUN}` }).expect(200);
     expect("skipped" in res.body || "fixturesChecked" in res.body).toBe(true);
+  });
+
+  it("8: starts due daily jobs on every authorised call, even when the tick itself is skipped", async () => {
+    process.env["CRON_SECRET"] = `tick-secret-${RUN}`;
+    mocks.runDueJobs.mockReset();
+    mocks.runDueJobs.mockResolvedValue({ started: ["playerStats"], finished: Promise.resolve() });
+    const auth = { Authorization: `Bearer tick-secret-${RUN}` };
+    const first = await request(app).post("/api/cron/tick").set(auth).expect(200);
+    const second = await request(app).post("/api/cron/tick").set(auth).expect(200);
+    expect(second.body.skipped).toBe("ran recently");
+    expect(mocks.runDueJobs).toHaveBeenCalledTimes(2);
+    expect(first.body.jobsStarted).toEqual(["playerStats"]);
+    expect(second.body.jobsStarted).toEqual(["playerStats"]);
+    await request(app).post("/api/cron/tick").set({ Authorization: "Bearer wrong" }).expect(401);
+    expect(mocks.runDueJobs).toHaveBeenCalledTimes(2);
   });
 });
