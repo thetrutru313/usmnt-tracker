@@ -10,8 +10,13 @@ import { startUsmntStatsSyncSchedule, syncUsmntStats, promoteNtSentinelIds } fro
 import { rescoreAllCandidates, checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { runCommitmentSweep } from "./lib/commitmentTracker";
 import { seedLeagueStrengthDefaults } from "./lib/qualityScore";
+import { installUnhandledRejectionLogger, runNonFatal } from "./lib/startupGuards";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+
+// Log stray promise rejections instead of letting one stop the server.
+installUnhandledRejectionLogger();
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -218,7 +223,9 @@ await runCriticalStartupSeeds();
 
 // Seed league_strength defaults (insert-if-missing — never overwrites a
 // hand-tuned coefficient). Cheap and idempotent; safe to run every boot.
-await seedLeagueStrengthDefaults();
+// Non-fatal: the defaults are already in every existing database, so a
+// failure here (e.g. a dropped connection) must not stop the server.
+await runNonFatal("seedLeagueStrengthDefaults", seedLeagueStrengthDefaults);
 
 app.listen(port, async (err) => {
   if (err) {
@@ -232,9 +239,7 @@ app.listen(port, async (err) => {
   // since the last server start. Uses stored signals — no API calls required.
   // Runs before any sync schedules so the candidate queue is consistent from
   // the first moment the server is live.
-  (async () => {
-    await checkAndApplyWeightDrift();
-  })();
+  void runNonFatal("checkAndApplyWeightDrift", checkAndApplyWeightDrift);
 
   // Block D — NT fixture ID backfill (belt-and-braces startup call).
   // The primary path is now promoteNtSentinelIds() running hourly inside
@@ -247,9 +252,7 @@ app.listen(port, async (err) => {
   // determine when this backfill can be retired. When both legs bind,
   // promoteNtSentinelIds() can also be removed from the schedule in
   // startUsmntStatsSyncSchedule().
-  (async () => {
-    await promoteNtSentinelIds();
-  })();
+  void runNonFatal("promoteNtSentinelIds", promoteNtSentinelIds);
 
   // KEEP (pending): insert the 6 US U20 / US U17 youth NT fixtures if not
   // already present. syncYouthNtFixtures() will eventually own these rows, but
