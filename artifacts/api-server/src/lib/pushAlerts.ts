@@ -14,6 +14,7 @@ import {
 import { and, eq, gt, gte, inArray, isNotNull, lt, lte, notIlike, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPush, type PushPayload } from "./push";
+import { displayTeamName } from "./teamNames";
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export async function sendKickoffReminders(now = new Date()): Promise<number> {
     const minutes = Math.max(1, Math.round((f.kickoff.getTime() - now.getTime()) / 60_000));
     const names = new Map(fixtureRows.map((r) => [r.playerId, r.playerName]));
     await sendAlert("kickoff", [...names.keys()], (ids) => ({
-      title: `Kicks off in ${minutes} min: ${f.homeTeam} vs ${f.awayTeam}`,
+      title: `Kicks off in ${minutes} min: ${displayTeamName(f.homeTeam)} vs ${displayTeamName(f.awayTeam)}`,
       body: nameList(ids.map((id) => names.get(id)!)),
       url: `/matches/${fixtureId}`,
       tag: `kickoff-${fixtureId}`,
@@ -200,7 +201,7 @@ export async function sendRatingAlerts(now = new Date()): Promise<number> {
     const byPlayer = new Map(fresh.map((r) => [r.playerId, r]));
     const score = f.homeScore !== null && f.awayScore !== null ? ` ${f.homeScore}–${f.awayScore} ` : " vs ";
     await sendAlert("ratings", [...byPlayer.keys()], (ids) => ({
-      title: `Ratings: ${f.homeTeam}${score}${f.awayTeam}`,
+      title: `Ratings: ${displayTeamName(f.homeTeam)}${score}${displayTeamName(f.awayTeam)}`,
       body: ids.map((id) => ratingLine(byPlayer.get(id)!)).join(" · "),
       url: `/matches/${fixtureId}`,
       tag: `ratings-${fixtureId}`,

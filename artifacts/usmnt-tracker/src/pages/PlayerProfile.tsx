@@ -13,6 +13,7 @@ import { formatDate, formatKickoff } from "@/lib/formatTime";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
 import { toast } from "sonner";
 import { compactMoney, monthYear } from "@/lib/marketValue";
+import { displayTeamName } from "@/lib/teamNames";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
 
@@ -606,9 +607,9 @@ export default function PlayerProfile() {
                         <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-medium">
-                        <span className="truncate w-1/3">{fixture.homeTeam}</span>
+                        <span className="truncate w-1/3">{displayTeamName(fixture.homeTeam)}</span>
                         <span className="text-muted-foreground text-xs font-mono px-2">v</span>
-                        <span className="truncate w-1/3 text-right">{fixture.awayTeam}</span>
+                        <span className="truncate w-1/3 text-right">{displayTeamName(fixture.awayTeam)}</span>
                       </div>
                     </div>
                   ))}

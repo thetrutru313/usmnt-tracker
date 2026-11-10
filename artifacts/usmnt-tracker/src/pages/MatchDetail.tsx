@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { goBackIfCameFrom } from "@/lib/scrollRestoration";
+import { displayTeamName } from "@/lib/teamNames";
 import type { FixtureTrackedPlayer } from "@workspace/api-client-react";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
@@ -254,8 +255,8 @@ export default function MatchDetail() {
           </div>
 
           <ScoreBlock
-            homeTeam={fixture.homeTeam}
-            awayTeam={fixture.awayTeam}
+            homeTeam={displayTeamName(fixture.homeTeam)}
+            awayTeam={displayTeamName(fixture.awayTeam)}
             homeLogoUrl={fixture.homeLogoUrl}
             awayLogoUrl={fixture.awayLogoUrl}
             homeScore={fixture.homeScore}

@@ -48,7 +48,7 @@ vi.mock("../logger.js", () => ({
   logger: { info: state.info, warn: state.warn, error: vi.fn() },
 }));
 
-const teams = [10306, 12522];
+const teams = [10306, 12522, 17883, 27072];
 const paths = (team: number) => [
   `/fixtures?team=${team}&season=2027`, `/fixtures?team=${team}&season=2026`,
   `/fixtures?team=${team}&next=10`, `/fixtures?team=${team}&last=10`,
@@ -198,5 +198,36 @@ describe("youth season-fetch regression guards — green before and after", () =
     expect(completedU20()).toMatchObject({ fetchComplete: false });
     expect(state.deleted).not.toContain(2);
     expect(fetchWarnings()).toHaveLength(1);
+  });
+});
+
+describe("Olympic-cycle teams (U23 / U21) — change-verifying", () => {
+  it("7: the U21 team (where API-Football lists the 2026 'U-23' camp) is fetched and its fixtures kept up to date", async () => {
+    state.rows = [stored(930050, 50, "U21")];
+    const match = provider(930050);
+    match.teams.home = { id: 8221, name: "Scotland U21", logo: null };
+    match.teams.away = { id: 27072, name: "USA U21", logo: null };
+    responses.set("/fixtures?team=27072&next=10", [match]);
+    const result = await runSync();
+    expect(requested).toEqual(expect.arrayContaining([...paths(17883), ...paths(27072)]));
+    expect(result.fixturesUpdated).toBe(1);
+    expect(state.updates).toEqual([{ id: 50, payload: {
+      status: "finished", homeScore: 2, awayScore: 1, elapsedMinute: null,
+    } }]);
+    expect(state.deleted).not.toContain(50);
+  });
+
+  it("8: USA U21 and United States U23 are classified, so they stay off the senior Schedule", async () => {
+    const { deriveNtLevel } = await import("../apiFootballSync.js");
+    expect(deriveNtLevel("Scotland U21", "USA U21")).toBe("U21");
+    expect(deriveNtLevel("United States U23", "Japan U23")).toBe("U23");
+    expect(deriveNtLevel("United States U20", "Georgia U21")).toBe("U20");
+  });
+
+  it("9: a US U20 match against a U21 opponent is never purged on the U21 team's data", async () => {
+    state.rows = [{ ...stored(930060, 60, "U20"), awayTeam: "Georgia U21" }];
+    rejected.add(nextWindow); // U20 data incomplete; U17, U23 and U21 complete and empty
+    await runSync();
+    expect(state.deleted).not.toContain(60);
   });
 });

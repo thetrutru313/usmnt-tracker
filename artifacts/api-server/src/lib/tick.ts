@@ -5,6 +5,7 @@ import { mapStatus, type AfFixture } from "./fixtureReconciliation";
 import { syncStatsForFinishedFixture } from "./playerStatsSync";
 import { claimPushEvent, runDueAlerts, sendAlert } from "./pushAlerts";
 import { logger } from "./logger";
+import { displayTeamName } from "./teamNames";
 
 // ─── Timing ──────────────────────────────────────────────────────────────────
 
@@ -88,7 +89,8 @@ async function linkedPlayers(fixtureId: number) {
 }
 
 function scoreLine(f: { homeTeam: string; awayTeam: string }, home: number | null, away: number | null): string {
-  return home !== null && away !== null ? `${f.homeTeam} ${home}–${away} ${f.awayTeam}` : `${f.homeTeam} vs ${f.awayTeam}`;
+  const [h, a] = [displayTeamName(f.homeTeam), displayTeamName(f.awayTeam)];
+  return home !== null && away !== null ? `${h} ${home}–${away} ${a}` : `${h} vs ${a}`;
 }
 
 // ─── Due matches: status, score, lineups, goals ──────────────────────────────
@@ -159,8 +161,8 @@ async function handleLineups(f: DueFixture, fresh: AfFixtureDetail, status: stri
   if (!(await claimPushEvent(`kickoff:${f.id}`, "kickoff"))) return false;
   const minutes = Math.round((f.kickoff.getTime() - now.getTime()) / 60_000);
   const title = minutes >= 1
-    ? `Kicks off in ${minutes} min: ${f.homeTeam} vs ${f.awayTeam}`
-    : `Lineups: ${f.homeTeam} vs ${f.awayTeam}`;
+    ? `Kicks off in ${minutes} min: ${displayTeamName(f.homeTeam)} vs ${displayTeamName(f.awayTeam)}`
+    : `Lineups: ${displayTeamName(f.homeTeam)} vs ${displayTeamName(f.awayTeam)}`;
   await sendAlert("kickoff", [...roles.keys()], (ids) => ({
     title,
     body: ids.map((id) => `${roles.get(id)!.name} ${roles.get(id)!.role}`).join(" · "),

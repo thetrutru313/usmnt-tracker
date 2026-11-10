@@ -262,9 +262,9 @@ function isUsMensNationalTeamName(name: string): boolean {
 }
 
 /** Age-group levels recorded on `fixtures.nt_level`. */
-export type NtLevel = "SENIOR" | "U23" | "U20" | "U17";
+export type NtLevel = "SENIOR" | "U23" | "U21" | "U20" | "U17";
 
-const NT_LEVEL_VALUES: ReadonlySet<string> = new Set(["SENIOR", "U23", "U20", "U17"]);
+const NT_LEVEL_VALUES: ReadonlySet<string> = new Set(["SENIOR", "U23", "U21", "U20", "U17"]);
 
 /**
  * Derives the `nt_level` value for a national-team fixture from its two team
@@ -1943,7 +1943,7 @@ export async function syncNationalTeamFixtures(): Promise<{
 // hand-maintained startup seed means those new games are silently absent until
 // someone edits index.ts and redeploys.
 //
-// This function fetches the full fixture list for the US U20 and US U17 teams
+// This function fetches the full fixture list for the US youth teams below
 // directly from API-Football and upserts every fixture where a US youth team
 // is a participant:
 //   • Row not yet in DB → INSERT with is_national_team = true.
@@ -1957,6 +1957,13 @@ export async function syncNationalTeamFixtures(): Promise<{
 const YOUTH_NT_TEAMS: ReadonlyArray<{ teamId: number; label: string }> = [
   { teamId: 10306, label: "US U20" },
   { teamId: 12522, label: "US U17" },
+  // Olympic-cycle teams. US Soccer calls the 2026–28 group "U-23", but
+  // API-Football lists its matches under "USA U21" (27072); 17883 is the
+  // Paris 2024 U23 side, kept for when the 2028 Olympic team plays under it.
+  // Their matches show on Fixtures but never on the senior-only Schedule or
+  // dashboard (seniorNtFixtureCondition).
+  { teamId: 17883, label: "US U23" },
+  { teamId: 27072, label: "US U21" },
 ];
 
 /**
@@ -2024,8 +2031,9 @@ export async function purgePhantomYouthNtFixtures(
   // team with complete data.
   //
   // Ownership is determined by name: extract the age-group suffix from each
-  // team label ("US U20" → "U20") and match against home/away team names in
-  // the DB row (e.g. "USA U20", "United States U20").
+  // team label ("US U20" → "U20") and match it against the US side's name in
+  // the DB row ("USA U20", "United States U20") — never the opponent's, so a
+  // US U20 match against "Georgia U21" is never judged by the U21 team's data.
   const safeAgeGroups = new Map<string, Set<number>>(); // ageGroup → seenAfIds
   for (const t of safeTeams) {
     // Label format is "US U20" or "US U17" — extract the "U20"/"U17" suffix.
@@ -2071,7 +2079,7 @@ export async function purgePhantomYouthNtFixtures(
     // naturally excluded.
     let ownerSeenIds: Set<number> | undefined;
     for (const [ageGroup, seenIds] of safeAgeGroups) {
-      const ageGroupPattern = new RegExp(`\\b${ageGroup}\\b`);
+      const ageGroupPattern = new RegExp(`^(USA|United States) ${ageGroup}$`);
       if (ageGroupPattern.test(row.homeTeam) || ageGroupPattern.test(row.awayTeam)) {
         ownerSeenIds = seenIds;
         break;
