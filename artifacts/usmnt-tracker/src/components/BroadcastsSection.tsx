@@ -242,7 +242,10 @@ export function BroadcastsSection({ token, onUnauthorized }: { token: string; on
     queryFn: async () => (await apiFetch("/admin/broadcasts", token)) as BroadcastData,
     retry: false,
   });
+  // Each list defaults to empty, so a partial or older response never breaks the admin page.
   const fixtures = data?.fixtures ?? [];
+  const leagues = data?.leagues ?? [];
+  const unmapped = data?.unmappedCompetitions ?? [];
   const missing = fixtures.filter((f) => !hasBroadcast(f)).length;
   const visible = onlyMissing ? fixtures.filter((f) => !hasBroadcast(f) || f.id === editingId) : fixtures;
 
@@ -290,7 +293,7 @@ export function BroadcastsSection({ token, onUnauthorized }: { token: string; on
       <div className="space-y-2">
         <h3 className="font-semibold text-sm">Competition defaults</h3>
         <div className="rounded-xl border border-border bg-card max-h-[50vh] overflow-y-auto">
-          {(data?.leagues ?? []).map((row) => (
+          {leagues.map((row) => (
             <LeagueRow key={`${row.league}-${row.tvNetwork}-${row.streamingService}`} row={row} write={write} />
           ))}
         </div>
@@ -314,7 +317,7 @@ export function BroadcastsSection({ token, onUnauthorized }: { token: string; on
               className={INPUT_CLASS}
             />
             <datalist id="unmapped-competitions">
-              {(data?.unmappedCompetitions ?? []).map((c) => <option key={c} value={c} />)}
+              {unmapped.map((c) => <option key={c} value={c} />)}
             </datalist>
           </label>
           <input aria-label="New competition TV channel" value={newLeague.tvNetwork} onChange={(e) => setNewLeague({ ...newLeague, tvNetwork: e.target.value })} maxLength={80} placeholder="TV channel" className={INPUT_CLASS} />
@@ -327,9 +330,9 @@ export function BroadcastsSection({ token, onUnauthorized }: { token: string; on
             Add competition
           </button>
         </form>
-        {data && data.unmappedCompetitions.length > 0 && (
+        {unmapped.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            Upcoming matches in competitions with no default: {data.unmappedCompetitions.join(", ")}. For one-off
+            Upcoming matches in competitions with no default: {unmapped.join(", ")}. For one-off
             matches like friendlies, set the match itself above rather than the whole competition.
           </p>
         )}

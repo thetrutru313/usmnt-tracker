@@ -20,9 +20,9 @@ const DATA = {
   unmappedCompetitions: ["Friendlies"],
 };
 
-function setup() {
+function setup(data: unknown = DATA) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (!init?.method || init.method === "GET") return new Response(JSON.stringify(DATA), { status: 200 });
+    if (!init?.method || init.method === "GET") return new Response(JSON.stringify(data), { status: 200 });
     return new Response(JSON.stringify({ ok: true, fixturesUpdated: 0 }), { status: 200 });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -78,5 +78,13 @@ describe("Admin — Where to watch", () => {
       body: { league: "Eredivisie", tvNetwork: "", streamingService: "ESPN+" },
     });
     expect(writes()[0]!.url).toMatch(/\/api\/admin\/broadcasts\/leagues$/);
+  });
+
+  it("4: an empty or partial response renders without crashing (the full admin page test mocks every endpoint with {})", async () => {
+    setup({});
+    // Wait for the response to arrive, then check the section is still on screen.
+    await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+    expect(screen.getByText(/0 without broadcast info/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add competition" })).toBeInTheDocument();
   });
 });
