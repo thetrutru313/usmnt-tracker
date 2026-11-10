@@ -103,6 +103,16 @@ describe("December Jamaica friendly — actual seed and routes", () => {
       expect(await tx.select().from(fixturesTable).where(eq(fixturesTable.apiFootballFixtureId, -2007))).toEqual([]);
     });
   });
+  it("keeps TV / streaming an admin set by hand when the startup seed runs again", async () => {
+    await isolated(async tx => {
+      await tx.update(fixturesTable)
+        .set({ tvNetwork: "TNT", streamingService: "HBO Max", broadcastSetByAdmin: true })
+        .where(eq(fixturesTable.apiFootballFixtureId, -2007));
+      await startupSeed(tx);
+      const [row] = await tx.select().from(fixturesTable).where(eq(fixturesTable.apiFootballFixtureId, -2007));
+      expect(row).toMatchObject({ tvNetwork: "TNT", streamingService: "HBO Max", broadcastSetByAdmin: true });
+    });
+  });
   it("GET /api/schedule attaches -2007 to December and no other event", async () => {
     await isolated(async () => {
       const response = await request(app).get("/api/schedule").expect(200);

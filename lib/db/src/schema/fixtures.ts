@@ -36,6 +36,10 @@ export const fixturesTable = pgTable("fixtures", {
   tvNetwork: text("tv_network"),
   streamingService: text("streaming_service"),
   broadcastLink: text("broadcast_link"),
+  // True once an admin sets this match's TV / streaming / link by hand. The
+  // syncs and the startup seed then leave those three fields alone; "Use
+  // league default" on the admin page clears it.
+  broadcastSetByAdmin: boolean("broadcast_set_by_admin").notNull().default(false),
   // City/state display string for venue location, e.g. "Orlando, FL".
   // Populated for seeded NT fixtures; null for club fixtures synced from API-Football.
   city: text("city"),

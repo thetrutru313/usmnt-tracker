@@ -1,6 +1,7 @@
 import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, transfersTable } from "@workspace/db";
 import { eq, and, inArray, isNotNull, isNull, sql, desc } from "drizzle-orm";
 import { logger } from "./logger.js";
+import { broadcastFor, syncBroadcastColumns } from "./broadcasts.js";
 import { claimSyncRun } from "./syncGuard.js";
 import { nationalTeamFixtureUpdate } from "./nationalTeamFixtureUpdate.js";
 import { pickClubLeague } from "./clubLeague.js";
@@ -89,118 +90,8 @@ interface AfTeamSearchResult {
   team: { id: number; name: string; logo: string | null; national?: boolean; country?: string };
 }
 
-// API-Football's fixtures endpoint doesn't return US broadcast info on our
-// plan, so map each league to its primary US TV/streaming home. Falls back
-// to null for leagues not explicitly listed.
-// Keys must match the exact league-name strings returned by API-Football.
-// Rights change regularly — update this map when deals change rather than
-// touching fixture rows.
-const BROADCAST_BY_LEAGUE: Record<string, { tvNetwork: string | null; streamingService: string | null }> = {
-  // ── England ──────────────────────────────────────────────────────────────
-  "Premier League":      { tvNetwork: "NBC Sports / Peacock", streamingService: "Peacock" },
-  "Championship":        { tvNetwork: null,                   streamingService: "Paramount+" },
-  "League One":          { tvNetwork: null,                   streamingService: "Paramount+" },
-  "League Two":          { tvNetwork: null,                   streamingService: "Paramount+" },
-  "FA Cup":              { tvNetwork: null,                   streamingService: "ESPN+" },
-  "League Cup":          { tvNetwork: null,                   streamingService: "Paramount+" }, // Carabao Cup
-  "EFL Trophy":          { tvNetwork: null,                   streamingService: "Paramount+" },
-
-  // ── Spain ─────────────────────────────────────────────────────────────────
-  "La Liga":             { tvNetwork: "ESPN Deportes",        streamingService: "ESPN+" },
-  "La Liga 2":           { tvNetwork: null,                   streamingService: "ESPN+" },
-
-  // ── Germany ───────────────────────────────────────────────────────────────
-  // New US deal (2026-27 onward): USA Network & Fubo
-  "Bundesliga":          { tvNetwork: "USA Network",          streamingService: "Fubo" },
-  "2. Bundesliga":       { tvNetwork: null,                   streamingService: "Fubo" },
-  "DFB Pokal":           { tvNetwork: null,                   streamingService: "Fubo" },
-
-  // ── Italy ─────────────────────────────────────────────────────────────────
-  "Serie A":             { tvNetwork: "CBS Sports Network",   streamingService: "Paramount+" },
-  "Coppa Italia":        { tvNetwork: null,                   streamingService: "Paramount+" },
-
-  // ── France ────────────────────────────────────────────────────────────────
-  "Ligue 1":             { tvNetwork: "beIN Sports",          streamingService: "beIN Sports Connect" },
-
-  // ── Netherlands ───────────────────────────────────────────────────────────
-  "Eredivisie":          { tvNetwork: null,                   streamingService: "ESPN+" },
-
-  // ── Portugal ──────────────────────────────────────────────────────────────
-  "Primeira Liga":       { tvNetwork: null,                   streamingService: "GolTV / Fanatiz" },
-  "Segunda Liga":        { tvNetwork: null,                   streamingService: "GolTV / Fanatiz" },
-
-  // ── Belgium ───────────────────────────────────────────────────────────────
-  "Belgian Pro League":  { tvNetwork: null,                   streamingService: "DAZN" },
-  "Jupiler Pro League":  { tvNetwork: null,                   streamingService: "DAZN" }, // alt name
-
-  // ── Scotland ──────────────────────────────────────────────────────────────
-  "Premiership":         { tvNetwork: null,                   streamingService: "Paramount+" }, // Scottish Premiership
-
-  // ── Austria ───────────────────────────────────────────────────────────────
-  "Austrian Bundesliga": { tvNetwork: null,                   streamingService: "OneFootball" },
-  "Bundesliga Austria":  { tvNetwork: null,                   streamingService: "OneFootball" }, // alt name
-
-  // ── Switzerland ───────────────────────────────────────────────────────────
-  "Super League":        { tvNetwork: null,                   streamingService: "OneFootball / Fanatiz" },
-
-  // ── Denmark ───────────────────────────────────────────────────────────────
-  "Superliga":           { tvNetwork: null,                   streamingService: "OneFootball" }, // Danish Superliga & Serbian SuperLiga
-
-  // ── Norway ────────────────────────────────────────────────────────────────
-  "Eliteserien":         { tvNetwork: null,                   streamingService: "OneFootball" },
-
-  // ── Sweden ────────────────────────────────────────────────────────────────
-  "Allsvenskan":         { tvNetwork: null,                   streamingService: "OneFootball" },
-
-  // ── Turkey ────────────────────────────────────────────────────────────────
-  "Süper Lig":           { tvNetwork: "beIN Sports",          streamingService: "beIN Sports" },
-
-  // ── Croatia ───────────────────────────────────────────────────────────────
-  "HNL":                 { tvNetwork: null,                   streamingService: "OneFootball" },
-
-  // ── MLS / US ──────────────────────────────────────────────────────────────
-  "Major League Soccer": { tvNetwork: "Apple TV",             streamingService: "MLS Season Pass" },
-  "MLS Next Pro":        { tvNetwork: null,                   streamingService: "MLS Season Pass" },
-  "Leagues Cup":         { tvNetwork: null,                   streamingService: "MLS Season Pass" },
-  "USL Championship":    { tvNetwork: null,                   streamingService: "ESPN+ / Paramount+" },
-  "USL League One":      { tvNetwork: null,                   streamingService: "ESPN+" },
-
-  // ── Mexico ────────────────────────────────────────────────────────────────
-  "Liga MX":             { tvNetwork: "TUDN / UniMás",        streamingService: "ViX / Peacock" },
-  "Liga de Expansión":   { tvNetwork: null,                   streamingService: "ViX" },
-
-  // ── Brazil ────────────────────────────────────────────────────────────────
-  "Brasileirão Série A": { tvNetwork: null,                   streamingService: "Fanatiz" },
-  "Serie A Brazil":      { tvNetwork: null,                   streamingService: "Fanatiz" }, // alt name
-
-  // ── Argentina ─────────────────────────────────────────────────────────────
-  "Liga Profesional":    { tvNetwork: null,                   streamingService: "Fanatiz" },
-
-  // ── UEFA club competitions ─────────────────────────────────────────────────
-  "UEFA Champions League":   { tvNetwork: "CBS",  streamingService: "Paramount+" },
-  "UEFA Europa League":      { tvNetwork: null,   streamingService: "Paramount+" },
-  "UEFA Conference League":  { tvNetwork: null,   streamingService: "Paramount+" },
-
-  // ── CONCACAF club competitions ────────────────────────────────────────────
-  "CONCACAF Champions Cup":  { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "CONCACAF U20":            { tvNetwork: "FOX Sports", streamingService: "Fox One" },
-
-  // ── International / national team ─────────────────────────────────────────
-  "FIFA World Cup":          { tvNetwork: "FOX",        streamingService: "FOX Sports App" },
-  "World Cup - U17":         { tvNetwork: null,         streamingService: "FIFA+" },
-  "FIFA Club World Cup":     { tvNetwork: null,         streamingService: "DAZN" },
-  "CONCACAF Nations League": { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "CONCACAF Gold Cup":       { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "Copa América":            { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "UEFA Nations League":     { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "International Friendly":  { tvNetwork: "FOX Sports", streamingService: "FOX Sports App" },
-  "Copa Libertadores":       { tvNetwork: "beIN Sports", streamingService: "beIN Sports" },
-  "Copa Sudamericana":       { tvNetwork: "beIN Sports", streamingService: "beIN Sports" },
-};
-
-function broadcastFor(leagueName: string): { tvNetwork: string | null; streamingService: string | null } {
-  return BROADCAST_BY_LEAGUE[leagueName] ?? { tvNetwork: null, streamingService: null };
-}
+// US TV / streaming for each competition now lives in the league_broadcasts
+// table, edited on the admin page — see broadcasts.ts.
 
 // Reserve/academy/development sides (e.g. "Leeds United U21" in the EFL
 // Trophy) show up as a club's "fixture" in API-Football but never field
@@ -1538,7 +1429,6 @@ export async function syncApiFootballFixtures(
     }
 
     for (const f of upcoming) {
-      const broadcast = broadcastFor(f.league.name);
       const values = {
         apiFootballFixtureId: f.fixture.id,
         // Mark as national-team if either participant is a US men's national
@@ -1561,21 +1451,26 @@ export async function syncApiFootballFixtures(
         awayLogoUrl: f.teams.away.logo,
         status: mapStatus(f.fixture.status.short),
         elapsedMinute: mapStatus(f.fixture.status.short) === "live" ? (f.fixture.status.elapsed ?? null) : null,
-        tvNetwork: broadcast.tvNetwork,
-        streamingService: broadcast.streamingService,
       };
 
       const [existing] = await db
-        .select({ id: fixturesTable.id })
+        .select({ id: fixturesTable.id, broadcastSetByAdmin: fixturesTable.broadcastSetByAdmin })
         .from(fixturesTable)
         .where(eq(fixturesTable.apiFootballFixtureId, f.fixture.id));
 
       let fixtureId: number;
       if (existing) {
-        await db.update(fixturesTable).set(values).where(eq(fixturesTable.id, existing.id));
+        // Keeps a broadcast an admin set by hand; otherwise follows the league table.
+        await db
+          .update(fixturesTable)
+          .set({ ...values, ...syncBroadcastColumns(f.league.name, existing) })
+          .where(eq(fixturesTable.id, existing.id));
         fixtureId = existing.id;
       } else {
-        const [inserted] = await db.insert(fixturesTable).values(values).returning({ id: fixturesTable.id });
+        const [inserted] = await db
+          .insert(fixturesTable)
+          .values({ ...values, ...broadcastFor(f.league.name) })
+          .returning({ id: fixturesTable.id });
         if (!inserted) continue;
         fixtureId = inserted.id;
       }

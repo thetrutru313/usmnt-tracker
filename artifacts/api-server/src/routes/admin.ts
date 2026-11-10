@@ -14,6 +14,14 @@ import { cleanupOrphanedAnonUsers } from "../lib/anonUserCleanup";
 import { runCommitmentSweep } from "../lib/commitmentTracker";
 import { announcementAudience, sendAnnouncement } from "../lib/pushAlerts";
 import { listMarketValues, refreshEurUsd, saveMarketValues, storedEurUsd } from "../lib/marketValues";
+import {
+  deleteLeagueBroadcast,
+  listLeagueBroadcasts,
+  resetFixtureBroadcast,
+  saveLeagueBroadcast,
+  setFixtureBroadcast,
+  upcomingBroadcastFixtures,
+} from "../lib/broadcasts";
 import { z } from "zod";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
@@ -1231,6 +1239,108 @@ router.put("/admin/market-values", async (req, res): Promise<void> => {
   const updated = await saveMarketValues(players, asOf, eurUsd?.rate ?? null);
   logger.info({ updated, asOf }, "Admin: market values saved");
   res.json({ updated, eurUsd });
+});
+
+// ─── Broadcast info (TV / streaming) ─────────────────────────────────────────
+
+/** Optional short text: trimmed; empty becomes null. */
+const optionalText = z
+  .string()
+  .trim()
+  .max(80)
+  .nullable()
+  .transform((v) => (v ? v : null));
+
+const LeagueBroadcastBody = z.object({
+  league: z.string().trim().min(1, "Enter the competition name").max(100),
+  tvNetwork: optionalText,
+  streamingService: optionalText,
+});
+
+const FixtureBroadcastBody = z.object({
+  tvNetwork: optionalText,
+  streamingService: optionalText,
+  broadcastLink: z
+    .string()
+    .trim()
+    .max(300)
+    .nullable()
+    .transform((v) => (v ? v : null))
+    .refine((v) => v === null || /^https:\/\/\S+$/.test(v), "The watch link must start with https://"),
+});
+
+/**
+ * GET /admin/broadcasts
+ * League defaults, upcoming tracked matches (next 3 weeks) with their
+ * broadcast info, and competitions among those matches with no league row.
+ */
+router.get("/admin/broadcasts", async (_req, res): Promise<void> => {
+  const [leagues, fixtures] = await Promise.all([listLeagueBroadcasts(), upcomingBroadcastFixtures()]);
+  const known = new Set(leagues.map((l) => l.league));
+  const unmappedCompetitions = [...new Set(fixtures.map((f) => f.competition))].filter((c) => !known.has(c)).sort();
+  res.json({ leagues, fixtures, unmappedCompetitions });
+});
+
+/**
+ * PUT /admin/broadcasts/leagues  { league, tvNetwork, streamingService }
+ * Add or change a competition's usual US broadcast. Applied straight away to
+ * upcoming club matches in it that weren't set by hand.
+ */
+router.put("/admin/broadcasts/leagues", async (req, res): Promise<void> => {
+  const parsed = LeagueBroadcastBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    return;
+  }
+  const { league, tvNetwork, streamingService } = parsed.data;
+  const fixturesUpdated = await saveLeagueBroadcast(league, { tvNetwork, streamingService });
+  logger.info({ league, tvNetwork, streamingService, fixturesUpdated }, "Admin: league broadcast saved");
+  res.json({ ok: true, fixturesUpdated });
+});
+
+/** DELETE /admin/broadcasts/leagues?league=…  Remove a competition's row. */
+router.delete("/admin/broadcasts/leagues", async (req, res): Promise<void> => {
+  const league = typeof req.query["league"] === "string" ? req.query["league"] : "";
+  if (!league) {
+    res.status(400).json({ error: "league is required" });
+    return;
+  }
+  if (!(await deleteLeagueBroadcast(league))) {
+    res.status(404).json({ error: "No broadcast row for that competition" });
+    return;
+  }
+  logger.info({ league }, "Admin: league broadcast removed");
+  res.json({ ok: true });
+});
+
+/**
+ * PUT /admin/broadcasts/fixtures/:id  { tvNetwork, streamingService, broadcastLink }
+ * Set one match's broadcast by hand. The syncs won't overwrite it.
+ */
+router.put("/admin/broadcasts/fixtures/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  const parsed = FixtureBroadcastBody.safeParse(req.body);
+  if (Number.isNaN(id) || !parsed.success) {
+    res.status(400).json({ error: parsed.success ? "Invalid fixture id" : (parsed.error.issues[0]?.message ?? "Invalid request") });
+    return;
+  }
+  if (!(await setFixtureBroadcast(id, parsed.data))) {
+    res.status(404).json({ error: "Fixture not found" });
+    return;
+  }
+  logger.info({ fixtureId: id, ...parsed.data }, "Admin: match broadcast set");
+  res.json({ ok: true });
+});
+
+/** DELETE /admin/broadcasts/fixtures/:id  Hand a match back to its league's broadcast. */
+router.delete("/admin/broadcasts/fixtures/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (Number.isNaN(id) || !(await resetFixtureBroadcast(id))) {
+    res.status(404).json({ error: "Fixture not found" });
+    return;
+  }
+  logger.info({ fixtureId: id }, "Admin: match broadcast reset to league default");
+  res.json({ ok: true });
 });
 
 /**

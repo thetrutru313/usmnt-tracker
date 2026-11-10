@@ -6,6 +6,7 @@ import { startAnonUserCleanupSchedule } from "./lib/anonUserCleanup";
 import { startUsmntStatsSyncSchedule, promoteNtSentinelIds } from "./lib/usmntSync";
 import { checkAndApplyWeightDrift } from "./lib/playerDiscovery";
 import { startScheduledJobs } from "./lib/scheduledJobs";
+import { refreshLeagueBroadcasts, seedLeagueBroadcastDefaults, startLeagueBroadcastRefresh } from "./lib/broadcasts";
 import { seedLeagueStrengthDefaults } from "./lib/qualityScore";
 import { installUnhandledRejectionLogger, runNonFatal } from "./lib/startupGuards";
 import { db } from "@workspace/db";
@@ -140,6 +141,7 @@ async function runCriticalStartupSeeds(): Promise<void> {
       // Correct field values on any remaining sentinel row (no-op if already bound to a real ID).
       // Also backfills logo URLs when null — this handles rows that were inserted before
       // logo URLs were added to the seed (e.g. existing production rows on first deploy).
+      // TV / streaming an admin set by hand (broadcast_set_by_admin) are kept.
       const correctResult = await db.execute(sql`
         UPDATE fixtures
         SET kickoff        = ${m.kickoffUtc}::timestamptz,
@@ -147,8 +149,8 @@ async function runCriticalStartupSeeds(): Promise<void> {
             city           = ${m.city},
             competition    = ${m.competition},
             kickoff_time_tbd = ${m.kickoffTimeTbd},
-            tv_network     = ${m.tvNetwork},
-            streaming_service = ${m.streamingService},
+            tv_network     = CASE WHEN broadcast_set_by_admin THEN tv_network ELSE ${m.tvNetwork} END,
+            streaming_service = CASE WHEN broadcast_set_by_admin THEN streaming_service ELSE ${m.streamingService} END,
             home_logo_url  = ${m.homeLogoUrl},
             away_logo_url  = ${m.awayLogoUrl}
         WHERE api_football_fixture_id = ${m.sentinelId}
@@ -158,8 +160,8 @@ async function runCriticalStartupSeeds(): Promise<void> {
             OR city        IS DISTINCT FROM ${m.city}
             OR competition IS DISTINCT FROM ${m.competition}
             OR kickoff_time_tbd IS DISTINCT FROM ${m.kickoffTimeTbd}
-            OR tv_network IS DISTINCT FROM ${m.tvNetwork}
-            OR streaming_service IS DISTINCT FROM ${m.streamingService}
+            OR (NOT broadcast_set_by_admin AND tv_network IS DISTINCT FROM ${m.tvNetwork})
+            OR (NOT broadcast_set_by_admin AND streaming_service IS DISTINCT FROM ${m.streamingService})
             OR home_logo_url IS DISTINCT FROM ${m.homeLogoUrl}
             OR away_logo_url IS DISTINCT FROM ${m.awayLogoUrl}
           )
@@ -223,6 +225,12 @@ await runCriticalStartupSeeds();
 // Non-fatal: the defaults are already in every existing database, so a
 // failure here (e.g. a dropped connection) must not stop the server.
 await runNonFatal("seedLeagueStrengthDefaults", seedLeagueStrengthDefaults);
+
+// League TV / streaming table: seeded once when empty, then loaded so the
+// fixture syncs use the admin page's values. Non-fatal: the built-in defaults
+// stay in use if either step fails.
+await runNonFatal("seedLeagueBroadcastDefaults", seedLeagueBroadcastDefaults);
+await runNonFatal("refreshLeagueBroadcasts", refreshLeagueBroadcasts);
 
 app.listen(port, async (err) => {
   if (err) {
@@ -345,4 +353,7 @@ app.listen(port, async (err) => {
   // after its run window rather than the next day. The daily stats job keeps
   // the old chain: club stats → USMNT stats → commitment sweep.
   startScheduledJobs();
+
+  // Picks up league TV / streaming edits made on another instance.
+  startLeagueBroadcastRefresh();
 });

@@ -19,3 +19,4 @@ export * from "./adminSessions";
 export * from "./apiFootballTeams";
 export * from "./leagueStrength";
 export * from "./pushSubscriptions";
+export * from "./leagueBroadcasts";

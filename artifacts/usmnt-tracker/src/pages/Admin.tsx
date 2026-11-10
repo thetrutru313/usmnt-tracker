@@ -26,6 +26,7 @@ import {
   apiFetch,
 } from "../lib/adminSession";
 import { MarketValuesSection } from "../components/MarketValuesSection";
+import { BroadcastsSection } from "../components/BroadcastsSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1173,6 +1174,9 @@ function AdminPanel({ token, onLogout, onReauth }: { token: string; onLogout: ()
 
         {/* Market values (Transfermarkt, quarterly) and bios */}
         <MarketValuesSection token={token} onUnauthorized={handleUnauthorized} />
+
+        {/* Where to watch: per-match and per-competition TV / streaming */}
+        <BroadcastsSection token={token} onUnauthorized={handleUnauthorized} />
 
         {/* Transparency section */}
         <section className="space-y-4">

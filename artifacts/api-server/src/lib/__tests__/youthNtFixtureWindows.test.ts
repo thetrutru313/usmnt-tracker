@@ -65,7 +65,7 @@ function stored(apiId = 930001, id = 1, group = "U20"): Row {
     competition: `World Cup ${group}`, kickoff: new Date("2027-03-25T18:00:00Z"),
     status: "scheduled", homeScore: null, awayScore: null, elapsedMinute: null,
     venue: "Test stadium", city: null, homeLogoUrl: null, awayLogoUrl: null,
-    kickoffTimeTbd: false, tvNetwork: null, streamingService: null,
+    kickoffTimeTbd: false, tvNetwork: null, streamingService: null, broadcastSetByAdmin: false,
     createdAt: new Date("2027-01-01T00:00:00Z"), squadSyncedAt: null, broadcastLink: null,
   };
 }
