@@ -2,11 +2,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo } from "react";
 import { Link } from "wouter";
 import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 import { type PoolTier, POOL_TIER_LABELS, POOL_TIER_STYLES } from "@/lib/poolTiers";
 import { displayTeamName } from "@/lib/teamNames";
+import { useAnimatedExpand } from "@/hooks/useAnimatedExpand";
 
 export type { PoolTier } from "@/lib/poolTiers";
 
@@ -102,7 +103,8 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
   const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, fixture.status === "live");
   const home = displayTeamName(fixture.homeTeam);
   const away = displayTeamName(fixture.awayTeam);
-  const [showAllPlayers, setShowAllPlayers] = useState(false);
+  // The player list opens and closes with its height animated.
+  const { ref: playersRef, expanded: showAllPlayers, toggle: toggleAllPlayers } = useAnimatedExpand<HTMLDivElement>();
   // Core squad first, then in the mix, then prospects, so a collapsed card shows the best-known names.
   const players = useMemo(
     () => [...fixture.featuredPlayers].sort((a, b) => TIER_ORDER[a.poolTier] - TIER_ORDER[b.poolTier]),
@@ -267,7 +269,7 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
 
       {/* Full-width player footer — outside the 3-col row so tags span the whole card */}
       {players.length > 0 && (
-        <div className="border-t border-border px-4 py-3 flex flex-wrap gap-2 relative pointer-events-none">
+        <div ref={playersRef} className="border-t border-border px-4 py-3 flex flex-wrap gap-2 relative pointer-events-none">
           {shownPlayers.map((p) => (
             <Link
               key={p.id}
@@ -287,7 +289,7 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
                 // Don't open the match page underneath.
                 e.preventDefault();
                 e.stopPropagation();
-                setShowAllPlayers((v) => !v);
+                toggleAllPlayers();
               }}
               className="text-xs px-2 py-1 rounded font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors pointer-events-auto"
             >

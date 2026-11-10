@@ -12,6 +12,7 @@ import { localDateLabel, toLocalDateStr } from "@/lib/dateLabels";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
 import { useHistoryState } from "@/lib/scrollRestoration";
 import { dayGroups } from "@/lib/stickyHeading";
+import { adjustScrollForRowsAbove, useSameFrameRowUpdates } from "@/lib/virtualRows";
 
 const POOL_FILTERS: { value: "all" | PoolTier; label: string }[] = [
   { value: "all", label: "All" },
@@ -196,6 +197,9 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
     return () => ro.disconnect();
   }, [getScrollElement]);
 
+  // A card that resizes on screen (its player list opening) moves the rows
+  // below it in the same frame, without shifting the scroll position.
+  const onRowsChange = useSameFrameRowUpdates();
   const virtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement,
@@ -212,7 +216,9 @@ function VirtualFixtureList({ flatRows }: { flatRows: FlatRow[] }) {
     initialOffset: () => getScrollElement().scrollTop,
     scrollMargin,
     overscan: 5,
+    onChange: onRowsChange,
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = adjustScrollForRowsAbove;
 
   useEffect(() => () => { savedMeasurements = virtualizer.measurementsCache; }, [virtualizer]);
 

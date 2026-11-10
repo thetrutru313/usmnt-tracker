@@ -7,8 +7,8 @@
  * the indicator without a page reload.
  */
 
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Router } from "wouter";
 import { FixtureCard, type FixtureCardFixture } from "@/components/FixtureCard";
 
@@ -248,5 +248,60 @@ describe("FixtureCard — collapsing a long player list", () => {
     renderCard(withPlayers(8));
     expect(shownNames()).toHaveLength(8);
     expect(screen.queryByRole("button", { name: /more|Show less/ })).not.toBeInTheDocument();
+  });
+});
+
+// ─── Animated open/close (jsdom has no Element.animate, so it's stubbed) ──────
+
+describe("FixtureCard — player list animation", () => {
+  type FakeAnimation = { keyframes: Keyframe[]; onfinish: (() => void) | null; cancel: () => void };
+  let animations: FakeAnimation[] = [];
+
+  function stubLayout() {
+    animations = [];
+    // Each tag or button is 10px tall, so a block's height shows how much it holds.
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.children.length * 10;
+    });
+    HTMLElement.prototype.animate = function (keyframes: Keyframe[]) {
+      const anim: FakeAnimation = { keyframes, onfinish: null, cancel: vi.fn() };
+      animations.push(anim);
+      return anim as unknown as Animation;
+    } as HTMLElement["animate"];
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (HTMLElement.prototype as { animate?: unknown }).animate;
+  });
+
+  const card = () => ({
+    ...makeFixture("scheduled"),
+    featuredPlayers: Array.from({ length: 26 }, (_, i) => ({ id: i + 1, name: `Player ${i + 1}`, poolTier: "core" as const })),
+  });
+  const shown = () => screen.getAllByRole("link", { name: /^Player \d+$/ }).length;
+
+  it("opens by growing from the short list's height to the full list's", () => {
+    stubLayout();
+    renderCard(card());
+    fireEvent.click(screen.getByRole("button", { name: "+20 more" }));
+    expect(shown()).toBe(26);
+    expect(animations).toHaveLength(1);
+    expect(animations[0]!.keyframes.map((k) => k.height)).toEqual(["70px", "270px"]);
+  });
+
+  it("closes by shrinking over the full list, and only then shows the short list", () => {
+    stubLayout();
+    renderCard(card());
+    fireEvent.click(screen.getByRole("button", { name: "+20 more" }));
+    animations[0]!.onfinish!();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+    expect(animations[1]!.keyframes.map((k) => k.height)).toEqual(["270px", "70px"]);
+    expect(shown()).toBe(26);
+
+    act(() => animations[1]!.onfinish!());
+    expect(shown()).toBe(6);
+    expect(screen.getByRole("button", { name: "+20 more" })).toBeInTheDocument();
   });
 });
