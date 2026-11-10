@@ -367,3 +367,58 @@ describe("PlayerProfile — market value", () => {
     expect(screen.queryByText("Contract Until")).not.toBeInTheDocument();
   });
 });
+
+// ─── Profile deep dive (Nov 2026): recent USMNT matches, caps, dates, details ─
+
+describe("PlayerProfile — recent matches, caps and details", () => {
+  beforeEach(() => { currentPlayerData = PLAYER; });
+
+  const CLUB = { ...MATCH_LOG_WIN, id: 10, date: "2026-11-08", opponent: "Liverpool", competition: "Premier League", isNationalTeam: false };
+  const PLAYED = { ...MATCH_LOG_WIN, id: 11, date: "2026-10-07", opponent: "Canada", result: "W 1-0", isNationalTeam: true, minutes: 90, goals: 0, rating: 6.9 };
+  const UNUSED = { ...PLAYED, id: -12, fixtureId: 12, date: "2026-10-04", opponent: "Mexico", result: "D 0-0", minutes: 0, rating: null, didNotPlay: true };
+
+  it("shows an unused-sub USMNT match in the USMNT tab, marked as such", async () => {
+    currentPlayerData = { ...PLAYER, matchLog: [CLUB, PLAYED, UNUSED] };
+    renderProfile();
+    await userEvent.click(screen.getByRole("button", { name: "USMNT" }));
+    expect(screen.getByText("Canada")).toBeInTheDocument();
+    expect(screen.getByText("Mexico")).toBeInTheDocument();
+    expect(screen.getByText("Unused sub")).toBeInTheDocument();
+    expect(screen.queryByText("Liverpool")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty-tab message instead of a blank table", async () => {
+    currentPlayerData = { ...PLAYER, matchLog: [CLUB] };
+    renderProfile();
+    await userEvent.click(screen.getByRole("button", { name: "USMNT" }));
+    expect(screen.getByText("No recent USMNT matches.")).toBeInTheDocument();
+  });
+
+  it("shows a match's calendar date, not the day before (a date-only value read as UTC midnight)", () => {
+    currentPlayerData = { ...PLAYER, matchLog: [CLUB] };
+    renderProfile();
+    expect(screen.getByText("11/8")).toBeInTheDocument();
+  });
+
+  it("counts caps this cycle from appearances, not starts", () => {
+    currentPlayerData = {
+      ...PLAYER,
+      nationalTeamStats: { ...PLAYER.nationalTeamStats, season: "2030 World Cup", minutes: 120, starts: 1 },
+      cycleCaps: 3,
+    };
+    renderProfile();
+    expect(screen.getByText("Caps this cycle").nextSibling).toHaveTextContent("3");
+  });
+
+  it("hides Youth NT when it isn't known, instead of saying None", () => {
+    currentPlayerData = { ...PLAYER, youthNationalTeam: null };
+    renderProfile();
+    expect(screen.queryByText("Youth NT")).not.toBeInTheDocument();
+  });
+
+  it("says when there are no upcoming matches", () => {
+    currentPlayerData = { ...PLAYER, upcomingFixtures: [] };
+    renderProfile();
+    expect(screen.getByText("No upcoming matches scheduled.")).toBeInTheDocument();
+  });
+});

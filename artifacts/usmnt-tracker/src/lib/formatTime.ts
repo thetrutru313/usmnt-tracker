@@ -44,3 +44,14 @@ export function formatTime(value: string | Date): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * A calendar date ("2026-11-08", or the API's "2026-11-08T00:00:00.000Z" for
+ * date-only fields) as local midnight on that day. `new Date("2026-11-08")` is
+ * UTC midnight, which shows as Nov 7 anywhere in the Americas.
+ */
+export function dateOnly(value: string | Date): Date {
+  const iso = typeof value === "string" ? value : value.toISOString();
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y!, (m ?? 1) - 1, d ?? 1);
+}

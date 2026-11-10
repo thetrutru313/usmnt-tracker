@@ -27,6 +27,7 @@ import {
 } from "../lib/adminSession";
 import { MarketValuesSection } from "../components/MarketValuesSection";
 import { BroadcastsSection } from "../components/BroadcastsSection";
+import { CallupsSection } from "../components/CallupsSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1177,6 +1178,9 @@ function AdminPanel({ token, onLogout, onReauth }: { token: string; onLogout: ()
 
         {/* Where to watch: per-match and per-competition TV / streaming */}
         <BroadcastsSection token={token} onUnauthorized={handleUnauthorized} />
+
+        {/* Senior USMNT call-ups for upcoming windows */}
+        <CallupsSection token={token} onUnauthorized={handleUnauthorized} />
 
         {/* Transparency section */}
         <section className="space-y-4">

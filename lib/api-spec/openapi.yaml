@@ -494,6 +494,12 @@ components:
         # True for a USMNT national-team appearance, false for a club match —
         # used to pick which crest (club logo vs. USMNT crest) a row renders with.
         isNationalTeam: { type: boolean }
+        # Kickoff time when the match is in the fixtures table, so the UI can
+        # show the date in the viewer's time zone (`date` is the UTC date).
+        kickoff: { type: ["string", "null"], format: date-time }
+        # True for a senior USMNT match where the player was in the matchday
+        # squad but didn't play (an unused substitute).
+        didNotPlay: { type: boolean }
 
     PlayerInjurySummary:
       type: object
@@ -562,6 +568,7 @@ components:
         - availableClubSeasons
         - nationalTeamStats
         - availableCycles
+        - cycleCaps
         - matchLog
         - injuries
         - transfers
@@ -636,6 +643,8 @@ components:
         availableCycles:
           type: array
           items: { type: string }
+        # USMNT appearances (not just starts) in the selected cycle.
+        cycleCaps: { type: integer }
         matchLog:
           type: array
           items:

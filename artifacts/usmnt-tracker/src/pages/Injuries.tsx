@@ -2,6 +2,7 @@ import { useListInjuries } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FormBadge } from "@/components/FormBadge";
+import { dateOnly } from "@/lib/formatTime";
 import { format } from "date-fns";
 import { Activity, Clock, ShieldAlert } from "lucide-react";
 import { Link } from "wouter";
@@ -84,7 +85,7 @@ export default function Injuries() {
                       <Clock size={12} /> Expected Return
                     </div>
                     <div className="font-bold font-mono">
-                      {injury.expectedReturn ? format(new Date(injury.expectedReturn), "MMM d, yyyy") : 'TBD'}
+                      {injury.expectedReturn ? format(dateOnly(injury.expectedReturn), "MMM d, yyyy") : 'TBD'}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Missed: {injury.daysMissed}d / {injury.matchesMissed} matches

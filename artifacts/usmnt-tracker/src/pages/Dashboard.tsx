@@ -8,6 +8,7 @@ import { ScheduleMatchRow } from "@/components/ScheduleMatchRow";
 import { Trophy, CalendarDays, RefreshCw, HeartPulse, Newspaper, ArrowUpRight, ChevronRight } from "lucide-react";
 import soccerBall from "@/assets/soccer-ball.png";
 import { Link } from "wouter";
+import { dateOnly } from "@/lib/formatTime";
 import { format } from "date-fns";
 import { KIND_LABELS, KIND_COLORS, STATUS_COLORS, STATUS_LABELS, type EventKind, type EventStatus } from "@/data/schedule";
 
@@ -288,7 +289,7 @@ export default function Dashboard() {
                         <FormBadge trend={injury.performanceTrend} showEmoji={false} className="h-4 text-[9px] shrink-0" />
                       </div>
                       <span className="text-xs font-mono text-muted-foreground whitespace-nowrap ml-1">
-                        {injury.expectedReturn ? format(new Date(injury.expectedReturn), "MMM d") : 'TBD'}
+                        {injury.expectedReturn ? format(dateOnly(injury.expectedReturn), "MMM d") : 'TBD'}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground truncate">{injury.bodyPart} • {injury.status}</div>

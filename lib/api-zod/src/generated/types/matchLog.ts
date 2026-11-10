@@ -20,4 +20,7 @@ export interface MatchLog {
   /** @nullable */
   rating: number | null;
   isNationalTeam: boolean;
+  /** @nullable */
+  kickoff?: Date | null;
+  didNotPlay?: boolean;
 }

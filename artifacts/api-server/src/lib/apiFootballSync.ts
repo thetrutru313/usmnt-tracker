@@ -637,6 +637,10 @@ export async function runNationalTeamRepairPass(): Promise<{ linked: number }> {
   let linked = 0;
 
   for (const { competition, ntLevel, ids: fixtureIds } of byCompetition.values()) {
+    // Senior rosters change every window, so a past squad says nothing about
+    // the next one: upcoming senior call-ups are entered on the admin page
+    // (callups.ts). Youth tournament squads are fixed, so they're still copied.
+    if (ntLevel === "SENIOR") continue;
     // Find players who have ever played in a *finished* NT fixture in this
     // competition and age level — they should be linked to upcoming ones too.
     const veterans = await db

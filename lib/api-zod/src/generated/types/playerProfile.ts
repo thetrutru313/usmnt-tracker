@@ -59,6 +59,7 @@ export interface PlayerProfile {
   availableClubSeasons: string[];
   nationalTeamStats: PlayerStats;
   availableCycles: string[];
+  cycleCaps: number;
   matchLog: MatchLog[];
   injuries: PlayerInjurySummary[];
   transfers: PlayerTransferSummary[];

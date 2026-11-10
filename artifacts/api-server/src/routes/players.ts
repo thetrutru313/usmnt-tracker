@@ -14,22 +14,19 @@ import {
   getAvailableClubSeasons,
   getNationalTeamCycleStats,
   getAvailableNationalTeamCycles,
-  getMatchLogForPlayer,
   getInjuriesForPlayer,
   getTransfersForPlayer,
   attachFeaturedPlayers,
   attachPlayersToNews,
   fixturesTable,
-  fixturePlayersTable,
   newsArticlesTable,
   newsArticlePlayersTable,
-  and,
   desc,
   eq,
-  gte,
   inArray,
 } from "../lib/queries";
 import { db } from "@workspace/db";
+import { countCycleCaps, getRecentMatchesForPlayer, getUpcomingFixtureIdsForPlayer } from "../lib/playerProfileMatches";
 
 const router: IRouter = Router();
 
@@ -73,30 +70,26 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     getAvailableClubSeasons(id),
     getNationalTeamCycleStats(id, cycle),
     getAvailableNationalTeamCycles(id),
-    getMatchLogForPlayer(id, 10),
+    getRecentMatchesForPlayer(id),
     getInjuriesForPlayer(id),
     getTransfersForPlayer(id),
   ]);
 
-  const upcomingFixtureIds = await db
-    .select({ fixtureId: fixturePlayersTable.fixtureId })
-    .from(fixturePlayersTable)
-    .where(eq(fixturePlayersTable.playerId, id));
-
+  // Unfinished matches only, no club friendlies, no links left from a previous club.
+  const upcomingFixtureIds = await getUpcomingFixtureIdsForPlayer(id);
   let upcomingFixtures: Awaited<ReturnType<typeof attachFeaturedPlayers>> = [];
   if (upcomingFixtureIds.length > 0) {
     const rows = await db
       .select()
       .from(fixturesTable)
-      .where(
-        and(
-          inArray(fixturesTable.id, upcomingFixtureIds.map((r) => r.fixtureId)),
-          gte(fixturesTable.kickoff, new Date(Date.now() - 1000 * 60 * 60 * 24)),
-        ),
-      )
+      .where(inArray(fixturesTable.id, upcomingFixtureIds))
       .orderBy(fixturesTable.kickoff);
     upcomingFixtures = await attachFeaturedPlayers(rows);
   }
+
+  const cycleLabel = nationalTeamStats?.season ?? availableCycles[0] ?? "2026 World Cup";
+  // Appearances, not starts: a substitute appearance is a cap too.
+  const cycleCaps = await countCycleCaps(id, cycleLabel);
 
   const articleIdRows = await db
     .select({ articleId: newsArticlePlayersTable.articleId })
@@ -142,8 +135,9 @@ router.get("/players/:id", async (req, res): Promise<void> => {
     previous5Stats: previous5Stats ?? null,
     clubSeasonStats: clubSeasonStats ?? emptyStats,
     availableClubSeasons,
-    nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: availableCycles[0] ?? "2026 World Cup" },
+    nationalTeamStats: nationalTeamStats ?? { ...emptyStats, season: cycleLabel },
     availableCycles,
+    cycleCaps,
     matchLog,
     injuries,
     transfers,

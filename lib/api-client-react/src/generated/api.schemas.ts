@@ -126,6 +126,9 @@ export interface MatchLog {
   /** @nullable */
   rating: number | null;
   isNationalTeam: boolean;
+  /** @nullable */
+  kickoff?: string | null;
+  didNotPlay?: boolean;
 }
 
 export interface PlayerInjurySummary {
@@ -296,6 +299,7 @@ export interface PlayerProfile {
   availableClubSeasons: string[];
   nationalTeamStats: PlayerStats;
   availableCycles: string[];
+  cycleCaps: number;
   matchLog: MatchLog[];
   injuries: PlayerInjurySummary[];
   transfers: PlayerTransferSummary[];

@@ -22,6 +22,7 @@ import {
   setFixtureBroadcast,
   upcomingBroadcastFixtures,
 } from "../lib/broadcasts";
+import { CallupError, callupPlayerOptions, setCallups, upcomingSeniorCallups } from "../lib/callups";
 import { z } from "zod";
 
 /** Minimal shape we need from the /players API-Football endpoint. */
@@ -1341,6 +1342,47 @@ router.delete("/admin/broadcasts/fixtures/:id", async (req, res): Promise<void> 
   }
   logger.info({ fixtureId: id }, "Admin: match broadcast reset to league default");
   res.json({ ok: true });
+});
+
+// ─── USMNT call-ups ───────────────────────────────────────────────────────────
+
+const CallupsBody = z.object({
+  fixtureIds: z.array(z.number().int().positive()).min(1, "Pick at least one match").max(10),
+  playerIds: z.array(z.number().int().positive()).max(60),
+});
+
+/**
+ * GET /admin/callups
+ * Upcoming senior USMNT matches with their current call-ups, and every
+ * tracked player for the picker.
+ */
+router.get("/admin/callups", async (_req, res): Promise<void> => {
+  const [fixtures, players] = await Promise.all([upcomingSeniorCallups(), callupPlayerOptions()]);
+  res.json({ fixtures, players });
+});
+
+/**
+ * PUT /admin/callups  { fixtureIds, playerIds }
+ * Set the roster for one or more upcoming senior USMNT matches (usually a
+ * window's two games). Replaces the previous call-ups for those matches.
+ */
+router.put("/admin/callups", async (req, res): Promise<void> => {
+  const parsed = CallupsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    return;
+  }
+  try {
+    const result = await setCallups(parsed.data.fixtureIds, parsed.data.playerIds);
+    logger.info({ ...parsed.data, ...result }, "Admin: USMNT call-ups saved");
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err instanceof CallupError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 });
 
 /**

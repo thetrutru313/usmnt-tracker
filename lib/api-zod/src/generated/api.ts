@@ -188,6 +188,7 @@ export const GetPlayerResponse = zod.object({
   "avgRating": zod.number().nullable()
 }),
   "availableCycles": zod.array(zod.string()),
+  "cycleCaps": zod.number(),
   "matchLog": zod.array(zod.object({
   "id": zod.number(),
   "fixtureId": zod.number().nullish(),
@@ -199,7 +200,9 @@ export const GetPlayerResponse = zod.object({
   "goals": zod.number(),
   "assists": zod.number(),
   "rating": zod.number().nullable(),
-  "isNationalTeam": zod.boolean()
+  "isNationalTeam": zod.boolean(),
+  "kickoff": zod.coerce.date().nullish(),
+  "didNotPlay": zod.boolean().optional()
 })),
   "injuries": zod.array(zod.object({
   "id": zod.number(),

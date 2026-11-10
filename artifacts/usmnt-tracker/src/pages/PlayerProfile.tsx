@@ -9,7 +9,7 @@ import { PoolTierIcon } from "@/components/FixtureCard";
 import { type PoolTier, POOL_TIER_STYLES } from "@/lib/poolTiers";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { formatDate, formatKickoff } from "@/lib/formatTime";
+import { dateOnly, formatDate, formatKickoff } from "@/lib/formatTime";
 import { useMyPlayers } from "@/hooks/useMyPlayers";
 import { toast } from "sonner";
 import { compactMoney, monthYear } from "@/lib/marketValue";
@@ -96,6 +96,12 @@ export default function PlayerProfile() {
       </div>
     );
   }
+
+  // The server sends club and USMNT matches separately (10 each), so each tab
+  // has its own five most recent.
+  const visibleMatches = player.matchLog
+    .filter(match => matchFilter === "all" || (matchFilter === "usmnt") === match.isNationalTeam)
+    .slice(0, 5);
 
   return (
     <div className="space-y-6 pb-10">
@@ -286,7 +292,7 @@ export default function PlayerProfile() {
                   </div>
                   <div className="p-4 flex flex-col justify-center items-center text-center">
                     <span className="text-[10px] text-muted-foreground uppercase font-mono tracking-wide mb-1">Caps this cycle</span>
-                    <span className="text-xl font-bold data-value">{player.nationalTeamStats.starts}</span>
+                    <span className="text-xl font-bold data-value">{player.cycleCaps}</span>
                   </div>
                 </div>
               ) : (
@@ -334,10 +340,14 @@ export default function PlayerProfile() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {player.matchLog
-                      .filter(match => matchFilter === "all" || (matchFilter === "usmnt") === match.isNationalTeam)
-                      .slice(0, 5)
-                      .map(match => {
+                    {visibleMatches.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-4 text-center text-sm text-muted-foreground">
+                          {matchFilter === "usmnt" ? "No recent USMNT matches." : "No recent matches synced yet."}
+                        </td>
+                      </tr>
+                    )}
+                    {visibleMatches.map(match => {
                         const fixtureId = (match as any).fixtureId as number | null | undefined;
                         const isClickable = fixtureId != null;
                         return (
@@ -357,7 +367,8 @@ export default function PlayerProfile() {
                           </td>
                           <td className="py-2 text-muted-foreground font-mono whitespace-nowrap">
                             <div className="flex items-center gap-1">
-                              {format(new Date(match.date), "M/d")}
+                              {/* Kickoff in the viewer's zone when known; match.date is a UTC calendar date. */}
+                              {format(match.kickoff ? new Date(match.kickoff) : dateOnly(match.date), "M/d")}
                               {isClickable && (
                                 <ArrowUpRight size={11} className="text-muted-foreground/50 shrink-0" />
                               )}
@@ -371,11 +382,17 @@ export default function PlayerProfile() {
                             </div>
                           </td>
                           <td className="py-2 text-muted-foreground text-xs hidden sm:table-cell">{match.competition}</td>
-                          <td className="py-2 font-mono hidden sm:table-cell">{match.minutes}'</td>
+                          <td className="py-2 font-mono hidden sm:table-cell">{match.didNotPlay ? "—" : `${match.minutes}'`}</td>
                           <td className="py-2 font-mono">
-                            {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
-                            {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
-                            {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
+                            {match.didNotPlay ? (
+                              <span className="text-muted-foreground text-xs font-sans whitespace-nowrap">Unused sub</span>
+                            ) : (
+                              <>
+                                {match.goals > 0 && <span className="text-primary mr-1">{match.goals}G</span>}
+                                {match.assists > 0 && <span className="text-secondary">{match.assists}A</span>}
+                                {match.goals === 0 && match.assists === 0 && <span className="text-muted-foreground">-</span>}
+                              </>
+                            )}
                           </td>
                           <td className="py-2 text-right font-bold data-value">
                             {match.rating != null ? (
@@ -414,11 +431,11 @@ export default function PlayerProfile() {
                         <span className="font-bold">{injury.bodyPart}</span>
                         <Badge variant="outline" className="text-[10px] uppercase font-mono text-destructive border-destructive">{injury.status}</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2">Since {format(new Date(injury.startDate), "MMM d")} • Missed {injury.matchesMissed} matches</p>
+                      <p className="text-xs text-muted-foreground mb-2">Since {format(dateOnly(injury.startDate), "MMM d")} • Missed {injury.matchesMissed} matches</p>
                       {injury.expectedReturn && (
                         <div className="bg-background rounded p-2 text-xs border border-destructive/20 flex items-center gap-2">
                           <Clock size={12} className="text-muted-foreground" />
-                          Expected return: <span className="font-bold">{format(new Date(injury.expectedReturn), "MMM d, yyyy")}</span>
+                          Expected return: <span className="font-bold">{format(dateOnly(injury.expectedReturn), "MMM d, yyyy")}</span>
                         </div>
                       )}
                     </div>
@@ -525,8 +542,8 @@ export default function PlayerProfile() {
 
               <div className={`space-y-3 ${player.bio ? "pt-4 border-t border-border" : ""}`}>
                 {player.marketValueAsOf && player.marketValueEur != null && (
-                  <div className="flex justify-between items-center gap-3 text-sm">
-                    <span className="text-muted-foreground">Market value</span>
+                  <div className="flex justify-between items-start gap-3 text-sm">
+                    <span className="text-muted-foreground whitespace-nowrap">Market value</span>
                     <span className="font-medium text-right">
                       {compactMoney(player.marketValueEur, "€")}
                       {player.marketValueUsd != null && ` (${compactMoney(player.marketValueUsd, "$")})`}
@@ -542,13 +559,16 @@ export default function PlayerProfile() {
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Youth NT</span>
-                  <span className="font-medium">{player.youthNationalTeam || 'None'}</span>
-                </div>
+                {/* Hidden when unknown rather than claiming "None". */}
+                {player.youthNationalTeam && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Youth NT</span>
+                    <span className="font-medium">{player.youthNationalTeam}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Senior Debut</span>
-                  <span className="font-medium">{player.debutDate ? format(new Date(player.debutDate), "MMM yyyy") : 'Not capped'}</span>
+                  <span className="font-medium">{player.debutDate ? format(dateOnly(player.debutDate), "MMM yyyy") : 'Not capped'}</span>
                 </div>
               </div>
             </CardContent>
@@ -590,7 +610,7 @@ export default function PlayerProfile() {
           )}
 
           {/* Upcoming Fixtures */}
-          {player.upcomingFixtures && player.upcomingFixtures.length > 0 && (
+          {player.upcomingFixtures && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
@@ -600,8 +620,15 @@ export default function PlayerProfile() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
+                  {player.upcomingFixtures.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No upcoming matches scheduled.</p>
+                  )}
                   {player.upcomingFixtures.slice(0, 3).map(fixture => (
-                    <div key={fixture.id} className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border">
+                    <Link
+                      key={fixture.id}
+                      href={`/matches/${fixture.id}`}
+                      className="flex flex-col gap-1 p-2 rounded bg-muted/30 border border-border hover:border-primary/50 transition-colors"
+                    >
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-mono uppercase text-muted-foreground">{fixture.kickoffTimeTbd ? `${formatDate(fixture.kickoff)} · Time TBD` : formatKickoff(fixture.kickoff)}</span>
                         <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{fixture.competition}</span>
@@ -611,7 +638,7 @@ export default function PlayerProfile() {
                         <span className="text-muted-foreground text-xs font-mono px-2">v</span>
                         <span className="truncate w-1/3 text-right">{displayTeamName(fixture.awayTeam)}</span>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </CardContent>
