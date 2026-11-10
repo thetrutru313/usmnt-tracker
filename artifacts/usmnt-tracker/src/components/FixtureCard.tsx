@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MonitorPlay, MapPin } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/formatTime";
-import { memo } from "react";
+import { memo, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useLiveElapsedMinute } from "@/hooks/useLiveElapsedMinute";
 import { type PoolTier, POOL_TIER_LABELS, POOL_TIER_STYLES } from "@/lib/poolTiers";
@@ -68,6 +68,12 @@ export type FixtureCardFixture = {
   }>;
 };
 
+/** Cards with more players than this show the first few and a "+N more" button. */
+const MAX_PLAYERS_BEFORE_COLLAPSE = 8;
+/** How many player tags a collapsed card shows. */
+const COLLAPSED_PLAYER_COUNT = 6;
+const TIER_ORDER: Record<PoolTier, number> = { core: 0, inMix: 1, prospect: 2 };
+
 /** Pulsing red dot + "LIVE" label shown on in-progress fixtures. */
 function LiveIndicator({ size = "md" }: { size?: "sm" | "md" }) {
   if (size === "sm") {
@@ -96,6 +102,14 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
   const liveMinute = useLiveElapsedMinute(fixture.elapsedMinute, fixture.status === "live");
   const home = displayTeamName(fixture.homeTeam);
   const away = displayTeamName(fixture.awayTeam);
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
+  // Core squad first, then in the mix, then prospects, so a collapsed card shows the best-known names.
+  const players = useMemo(
+    () => [...fixture.featuredPlayers].sort((a, b) => TIER_ORDER[a.poolTier] - TIER_ORDER[b.poolTier]),
+    [fixture.featuredPlayers],
+  );
+  const collapsible = players.length > MAX_PLAYERS_BEFORE_COLLAPSE;
+  const shownPlayers = collapsible && !showAllPlayers ? players.slice(0, COLLAPSED_PLAYER_COUNT) : players;
 
   return (
     <Card className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer relative">
@@ -252,9 +266,9 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
       </div>
 
       {/* Full-width player footer — outside the 3-col row so tags span the whole card */}
-      {fixture.featuredPlayers.length > 0 && (
+      {players.length > 0 && (
         <div className="border-t border-border px-4 py-3 flex flex-wrap gap-2 relative pointer-events-none">
-          {fixture.featuredPlayers.map((p) => (
+          {shownPlayers.map((p) => (
             <Link
               key={p.id}
               href={`/players/${p.id}`}
@@ -265,6 +279,21 @@ export const FixtureCard = memo(function FixtureCard({ fixture, showDate = false
               {p.name}
             </Link>
           ))}
+          {collapsible && (
+            <button
+              type="button"
+              aria-expanded={showAllPlayers}
+              onClick={(e) => {
+                // Don't open the match page underneath.
+                e.preventDefault();
+                e.stopPropagation();
+                setShowAllPlayers((v) => !v);
+              }}
+              className="text-xs px-2 py-1 rounded font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors pointer-events-auto"
+            >
+              {showAllPlayers ? "Show less" : `+${players.length - COLLAPSED_PLAYER_COUNT} more`}
+            </button>
+          )}
         </div>
       )}
     </Card>

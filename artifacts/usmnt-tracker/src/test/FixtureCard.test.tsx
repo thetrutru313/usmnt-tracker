@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Router } from "wouter";
 import { FixtureCard, type FixtureCardFixture } from "@/components/FixtureCard";
 
@@ -210,5 +210,43 @@ describe("FixtureCard — LiveIndicator in showDate layout", () => {
   it('hides the LIVE indicator in the showDate layout when status is "postponed"', () => {
     renderCard(makeFixture("postponed"), /* showDate */ true);
     expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
+  });
+});
+
+// ─── Long player lists (Nov 2026: a 26-player USMNT roster) ────────────────────
+
+describe("FixtureCard — collapsing a long player list", () => {
+  /** n players; every third is core, the rest prospects (listed first), like an unsorted roster. */
+  function withPlayers(n: number): FixtureCardFixture {
+    return {
+      ...makeFixture("scheduled"),
+      featuredPlayers: Array.from({ length: n }, (_, i) => ({
+        id: i + 1,
+        name: `Player ${i + 1}`,
+        poolTier: i % 3 === 2 ? ("core" as const) : ("prospect" as const),
+      })),
+    };
+  }
+  const shownNames = () => screen.getAllByRole("link", { name: /^Player \d+$/ }).map((l) => l.textContent);
+
+  it("shows the first six (core squad first) and a +N more button; the button expands and collapses", () => {
+    renderCard(withPlayers(26));
+    expect(shownNames()).toEqual(["Player 3", "Player 6", "Player 9", "Player 12", "Player 15", "Player 18"]);
+    const more = screen.getByRole("button", { name: "+20 more" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(more);
+    expect(shownNames()).toHaveLength(26);
+    const less = screen.getByRole("button", { name: "Show less" });
+    expect(less).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(less);
+    expect(shownNames()).toHaveLength(6);
+  });
+
+  it("shows every player, with no button, when there are eight or fewer", () => {
+    renderCard(withPlayers(8));
+    expect(shownNames()).toHaveLength(8);
+    expect(screen.queryByRole("button", { name: /more|Show less/ })).not.toBeInTheDocument();
   });
 });
