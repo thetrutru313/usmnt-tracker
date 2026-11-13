@@ -1036,3 +1036,17 @@ mtime_ms = 1794600134102
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/efff53d7-0bc7-44d8-a4f9-f513fa77ce2c/5110de7d-19ed-41f5-b3dc-541ad7a7795d"
 storage_version_token = "1794600407276660"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "Om-5aYW_l5RkBE8CtDHN1"
+uri = "file://.local/reports/d2-per-league-seasons-report.md"
+type = "text"
+title = "D2 per-league seasons report"
+description = "Commit and push result, before/after tests, assertion-failure evidence, mock diagnosis, exact development SQL, and boot verification."
+logical_id = "eb66b6a2-6d80-4478-a982-9bd80e46440e"
+content_hash = "sha256:a764b85d31e641b59e25bd81a158c7cf72495cbb4bb75a99d3bf40133965c0bd"
+size = 18699
+mtime_ms = 1794611480945
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:e0862c95-9600-4fba-95c3-2b3b4958c43d/eb66b6a2-6d80-4478-a982-9bd80e46440e/4ef10f9c-d0b8-4c3b-bb02-5c52484c588d"
+storage_version_token = "1794611481635146"
+content_type = "text/markdown"
