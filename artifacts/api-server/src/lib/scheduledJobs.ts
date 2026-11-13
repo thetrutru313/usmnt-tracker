@@ -17,8 +17,14 @@
  *     30-minute timer from server start (dev, and any long-lived instance).
  *     The claim stops two callers from starting the same job.
  *   - Jobs run in the background; the tick doesn't wait for them.
+ *   - Each finished run is recorded in server_config `job.<name>.lastRun`
+ *     (ok / partial / failed). A run that returns normally but mostly failed
+ *     (e.g. the provider's limit ran out part-way) is "partial": it gets one
+ *     retry after its run window, and a second partial run in a row counts
+ *     as done so it can't burn the API quota every two hours. GET
+ *     /api/healthz/jobs (lib/jobHealth.ts) reports partial and stale jobs.
  */
-import { db, syncMetadataTable } from "@workspace/db";
+import { db, serverConfigTable, syncMetadataTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { claimSyncRun } from "./syncGuard";
 import { logger } from "./logger";
@@ -36,7 +42,40 @@ export type ScheduledJob = {
   /** Jobs that need a provider key skip themselves when it isn't set. */
   enabled?: () => boolean;
   run: () => Promise<unknown>;
+  /**
+   * Judges a run that returned normally, from its result. A string (what went
+   * wrong) marks the run partial; null means it's fine. Omit to trust any run
+   * that doesn't throw.
+   */
+  problem?: (result: unknown) => string | null;
 };
+
+export type JobOutcome = "ok" | "partial" | "failed";
+
+export type JobRun = {
+  outcome: JobOutcome;
+  startedAt: string;
+  finishedAt: string;
+  /** For partial runs: what the job's problem() reported. */
+  problem?: string;
+  /** For partial runs: true when it was the retry and counted as done. */
+  counted?: boolean;
+  /** For failed runs: the error message (kept in the database, not served publicly). */
+  error?: string;
+};
+
+/**
+ * problem() for a job whose result counts successes and failures: partial
+ * when more units failed than succeeded.
+ */
+export function mostlyFailed(okKey: string, failedKey: string): (result: unknown) => string | null {
+  return (result) => {
+    const counts = (result ?? {}) as Record<string, unknown>;
+    const ok = Number(counts[okKey] ?? 0);
+    const failed = Number(counts[failedKey] ?? 0);
+    return failed > ok ? `${failed} ${failedKey} vs ${ok} ${okKey}` : null;
+  };
+}
 
 /**
  * Due once per day, at or after `hourUtc`: due when the last success was
@@ -58,7 +97,7 @@ export function every(days: number): ScheduledJob["isDue"] {
 
 const okName = (name: string) => `${name}:ok`;
 
-async function lastSuccess(name: string): Promise<Date | null> {
+export async function lastSuccess(name: string): Promise<Date | null> {
   const [row] = await db
     .select({ at: syncMetadataTable.lastRunAt })
     .from(syncMetadataTable)
@@ -73,18 +112,75 @@ async function recordSuccess(name: string): Promise<void> {
     .onConflictDoUpdate({ target: syncMetadataTable.syncName, set: { lastRunAt: sql`now()` } });
 }
 
+const lastRunKey = (name: string) => `job.${name}.lastRun`;
+
+/** The most recent finished run of a job, or null if none is recorded. */
+export async function readLastRun(name: string): Promise<JobRun | null> {
+  const [row] = await db
+    .select({ value: serverConfigTable.value })
+    .from(serverConfigTable)
+    .where(eq(serverConfigTable.key, lastRunKey(name)));
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value) as JobRun;
+  } catch {
+    return null;
+  }
+}
+
+async function writeLastRun(name: string, run: JobRun): Promise<void> {
+  const value = JSON.stringify(run);
+  await db
+    .insert(serverConfigTable)
+    .values({ key: lastRunKey(name), value, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: serverConfigTable.key, set: { value, updatedAt: new Date() } });
+}
+
 /** Jobs running in this process, so one still going past maxRunMs isn't started twice here. */
 const running = new Set<string>();
 
 async function runJob(job: ScheduledJob): Promise<void> {
   running.add(job.name);
-  const started = Date.now();
+  const startedAt = new Date();
   try {
-    await job.run();
-    await recordSuccess(job.name);
-    logger.info({ job: job.name, minutes: Math.round((Date.now() - started) / 60_000) }, "Scheduled job finished");
+    let outcome: JobOutcome;
+    let problem: string | undefined;
+    let error: string | undefined;
+    try {
+      const result = await job.run();
+      problem = job.problem?.(result) ?? undefined;
+      outcome = problem ? "partial" : "ok";
+    } catch (err) {
+      outcome = "failed";
+      error = (err instanceof Error ? err.message : String(err)).slice(0, 500);
+      logger.error({ err, job: job.name }, "Scheduled job failed — will retry after its run window");
+    }
+
+    // A partial run is retried once (it stays due; the claim waits out its
+    // run window). If the retry is partial too, take it as this period's run.
+    const previous = outcome === "partial" ? await readLastRun(job.name) : null;
+    const isRetry = previous?.outcome === "partial" && !previous.counted;
+    const counts = outcome === "ok" || (outcome === "partial" && isRetry);
+    if (counts) await recordSuccess(job.name);
+    await writeLastRun(job.name, {
+      outcome,
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      ...(problem ? { problem } : {}),
+      ...(outcome === "partial" && counts ? { counted: true } : {}),
+      ...(error ? { error } : {}),
+    });
+
+    const minutes = Math.round((Date.now() - startedAt.getTime()) / 60_000);
+    if (outcome === "ok") logger.info({ job: job.name, minutes }, "Scheduled job finished");
+    if (outcome === "partial") {
+      logger.warn(
+        { job: job.name, minutes, problem },
+        counts ? "Scheduled job mostly failed again — counted as done; see /api/healthz/jobs" : "Scheduled job mostly failed — will retry once after its run window",
+      );
+    }
   } catch (err) {
-    logger.error({ err, job: job.name }, "Scheduled job failed — will retry after its run window");
+    logger.error({ err, job: job.name }, "Could not record a scheduled job's outcome");
   } finally {
     running.delete(job.name);
   }
@@ -134,6 +230,7 @@ export const APP_JOBS: ScheduledJob[] = [
     maxRunMs: 2 * HOUR_MS,
     enabled: hasApiFootballKey,
     run: async () => (await import("./playerClubSync.js")).syncPlayerClubs(),
+    problem: mostlyFailed("playersChecked", "failures"),
   },
   {
     // Club stats, match logs and injuries, then USMNT stats and the
@@ -146,12 +243,15 @@ export const APP_JOBS: ScheduledJob[] = [
       const { syncPlayerStatsAndInjuries } = await import("./playerStatsSync.js");
       const { syncUsmntStats } = await import("./usmntSync.js");
       const { runCommitmentSweep } = await import("./commitmentTracker.js");
-      await syncPlayerStatsAndInjuries();
+      const clubStats = await syncPlayerStatsAndInjuries();
       await syncUsmntStats();
       await runCommitmentSweep().catch((err) =>
         logger.error({ err }, "Commitment sweep (chained after daily stats sync) failed"),
       );
+      return clubStats;
     },
+    // Judged on the club loop, where provider limits show up as failed clubs.
+    problem: mostlyFailed("clubsProcessed", "failures"),
   },
   {
     // Caps and goals from Wikipedia. No API key needed.

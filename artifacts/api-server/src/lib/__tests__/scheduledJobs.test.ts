@@ -1,10 +1,10 @@
 /**
  * Daily/weekly jobs run when due, driven by the cron tick instead of 24-hour
- * timers. Dev database: sync_metadata rows under throwaway job names
- * (removed in afterAll). The jobs here are stand-ins; no real sync runs.
+ * timers. Dev database: sync_metadata and server_config rows under throwaway
+ * job names (removed in afterAll). The jobs here are stand-ins; no real sync runs.
  */
 import { describe, it, expect, vi, afterAll } from "vitest";
-import { db, syncMetadataTable } from "@workspace/db";
+import { db, serverConfigTable, syncMetadataTable } from "@workspace/db";
 import { eq, like } from "drizzle-orm";
 import { APP_JOBS, dailyAt, every, runDueJobs, type ScheduledJob } from "../scheduledJobs";
 
@@ -30,6 +30,7 @@ async function okRow(name: string) {
 
 afterAll(async () => {
   await db.delete(syncMetadataTable).where(like(syncMetadataTable.syncName, `${RUN}%`));
+  await db.delete(serverConfigTable).where(like(serverConfigTable.key, `job.${RUN}%`));
 });
 
 describe("schedules", () => {
