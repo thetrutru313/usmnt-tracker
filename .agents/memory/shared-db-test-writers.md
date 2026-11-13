@@ -33,3 +33,13 @@ up only those names. Exercise the real scheduled names only through mocks.
 **Why:** The user explicitly requires concurrency tests to leave the running
 development server's cooldown metadata unaffected. A broad cleanup or a real
 claim for a production scheduler name can suppress its next refresh.
+
+Tests calling the senior sentinel seed with a custom list must shadow **both**
+`fixtures` and `fixture_players` in the same rolled-back transaction.
+
+**Why:** The product owner highlighted that retirement treats the supplied list
+as authoritative: a test-only list against public tables would delete real dev
+sentinels and their child links.
+
+**How to apply:** Never run the real retirement step against public tables from
+a test, even when the match being inserted has a unique synthetic identity.

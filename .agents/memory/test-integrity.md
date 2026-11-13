@@ -14,3 +14,15 @@ Date-dependent regression tests must freeze the clock rather than depend on the 
 **Why freeze dates:** The product owner reports that this repo has already shipped two tests that failed on a future date.
 
 **How to apply:** Use real timers for animation-unmount regressions and assert that the actual pending timeout is cancelled. Audit other timers when requested, but do not broaden a narrowly authorized cleanup beyond the instances firing in the suite.
+
+New database tests must use rolled-back transactions, temp shadows of every
+table they control, and 2099 timestamps when time matters. Existing
+November/December fixture guards keep their specified 2026 dates and pinned
+clocks; the future-date rule applies only to new tests.
+
+**Why:** The product owner explicitly required isolation without changing the
+real-date fixture assertions or the unchanged baseline.
+
+**How to apply:** Convert rewritten DB tests to isolation, but preserve all
+existing behavior assertions. Do not treat baseline permission as permission
+for new tests to modify public development rows.

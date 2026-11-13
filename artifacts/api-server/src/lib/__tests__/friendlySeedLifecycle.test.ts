@@ -21,18 +21,16 @@
  *    bound row, the dedup sweep removes it.
  *
  * ## How it works
- * - Uses raw db queries to simulate the seed logic (INSERT … WHERE NOT EXISTS)
- *   and the NT sync bind (UPDATE api_football_fixture_id to a positive value).
- * - Does not call the actual startup seed function (it is embedded in the
- *   server entry point); instead it reproduces the SQL semantics so the test
- *   stays fast and isolated.
- * - afterAll removes all inserted rows.
+ * - Calls the real seed with a test-only match list, and simulates NT ID binding.
+ * - Both fixtures and fixture_players are temp-table shadows in a rolled-back
+ *   transaction: retirement of unlisted sentinels cannot touch dev rows.
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db, fixturesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { seedSeniorSentinelFixtures, type MatchDef } from "../ntFixtureSeeds";
 
 // ─── test parameters ──────────────────────────────────────────────────────────
 
@@ -45,68 +43,49 @@ const KICKOFF_UTC   = "2026-09-26 20:30:00+00";
 const WINDOW_START  = "2026-09-24 00:00:00+00";
 const WINDOW_END    = "2026-09-28 23:59:59+00";
 
-// ─── cleanup ─────────────────────────────────────────────────────────────────
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+const matches: MatchDef[] = [{
+  sentinelId: SENTINEL_ID, homeTeam: HOME, awayTeam: AWAY,
+  competition: COMPETITION, kickoffUtc: KICKOFF_UTC,
+  windowStart: WINDOW_START, windowEnd: WINDOW_END,
+  venue: "__Lifecycle Venue__", city: "__Lifecycle City, LC__",
+  homeLogoUrl: "home.png", awayLogoUrl: "away.png",
+  kickoffTimeTbd: false, tvNetwork: null, streamingService: null,
+}];
 
-afterAll(async () => {
-  // Belt-and-suspenders: remove any rows that survived (normal cases clean up
-  // in test assertions; this guard handles unexpected failures).
-  await db.execute(sql`
-    DELETE FROM fixtures
-    WHERE (api_football_fixture_id = ${SENTINEL_ID}
-        OR api_football_fixture_id = ${REAL_POSITIVE})
-      AND home_team   = ${HOME}
-      AND away_team   = ${AWAY}
-      AND competition = ${COMPETITION}
-  `).catch(() => {});
-});
+async function isolated(check: (tx: Tx) => Promise<void>) {
+  const rollback = new Error("intentional lifecycle rollback");
+  try {
+    await db.transaction(async tx => {
+      await tx.execute(sql`CREATE TEMP TABLE fixtures (LIKE public.fixtures INCLUDING ALL) ON COMMIT DROP`);
+      await tx.execute(sql`CREATE TEMP TABLE fixture_players (LIKE public.fixture_players INCLUDING ALL) ON COMMIT DROP`);
+      await check(tx);
+      throw rollback;
+    });
+  } catch (err) {
+    if (err !== rollback) throw err;
+  }
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-/** Simulate one run of the seed INSERT … WHERE NOT EXISTS logic. */
-async function runSeedInsert(): Promise<number> {
-  const result = await db.execute(sql`
-    INSERT INTO fixtures (
-      api_football_fixture_id, home_team, away_team,
-      competition, kickoff, venue, city, is_national_team, status
-    )
-    SELECT ${SENTINEL_ID}, ${HOME}, ${AWAY},
-           ${COMPETITION}, ${KICKOFF_UTC}::timestamptz,
-           '__Lifecycle Venue__', '__Lifecycle City, LC__', true, 'scheduled'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM fixtures
-      WHERE home_team        = ${HOME}
-        AND away_team        = ${AWAY}
-        AND is_national_team = true
-        AND competition      = ${COMPETITION}
-        AND kickoff BETWEEN ${WINDOW_START}::timestamptz
-                        AND ${WINDOW_END}::timestamptz
-    )
-  `);
-  return (result as unknown as { rowCount?: number }).rowCount ?? 0;
+/** Execute the real seed, measuring the inserted-row change for existing assertions. */
+async function runSeedInsert(tx: Tx): Promise<number> {
+  const before = await countMatchRows(tx);
+  await seedSeniorSentinelFixtures(tx, matches);
+  return await countMatchRows(tx) - before;
 }
 
 /** Simulate the dedup sweep (removes sentinel if a bound row exists for the same match). */
-async function runDedupSweep(): Promise<number> {
-  const result = await db.execute(sql`
-    DELETE FROM fixtures
-    WHERE api_football_fixture_id = ${SENTINEL_ID}
-      AND EXISTS (
-        SELECT 1 FROM fixtures f2
-        WHERE f2.home_team        = ${HOME}
-          AND f2.away_team        = ${AWAY}
-          AND f2.is_national_team = true
-          AND f2.competition      = ${COMPETITION}
-          AND f2.api_football_fixture_id > 0
-          AND f2.kickoff BETWEEN ${WINDOW_START}::timestamptz
-                          AND ${WINDOW_END}::timestamptz
-      )
-  `);
-  return (result as unknown as { rowCount?: number }).rowCount ?? 0;
+async function runDedupSweep(tx: Tx): Promise<number> {
+  const before = await countMatchRows(tx);
+  await seedSeniorSentinelFixtures(tx, matches);
+  return before - await countMatchRows(tx);
 }
 
 /** Count rows matching the test match identity. */
-async function countMatchRows(): Promise<number> {
-  const rows = await db.execute(sql`
+async function countMatchRows(tx: Tx): Promise<number> {
+  const rows = await tx.execute(sql`
     SELECT COUNT(*)::int AS cnt
     FROM fixtures
     WHERE home_team        = ${HOME}
@@ -125,23 +104,24 @@ describe("USMNT friendly seed — bind → restart lifecycle produces exactly on
   it(
     "seed → bind positive ID → re-seed → 1 row only (no duplicate sentinel)",
     async () => {
+      await isolated(async tx => {
       // ── Phase 0: pre-condition ─────────────────────────────────────────────
       // Remove any leftover rows from a previous test run.
-      await db.execute(sql`
+      await tx.execute(sql`
         DELETE FROM fixtures
         WHERE (api_football_fixture_id = ${SENTINEL_ID}
             OR api_football_fixture_id = ${REAL_POSITIVE})
           AND home_team = ${HOME} AND away_team = ${AWAY}
       `);
 
-      expect(await countMatchRows()).toBe(0);
+      expect(await countMatchRows(tx)).toBe(0);
 
       // ── Phase 1: first seed run ────────────────────────────────────────────
-      const inserted = await runSeedInsert();
+      const inserted = await runSeedInsert(tx);
       expect(inserted, "first seed should insert 1 row").toBe(1);
-      expect(await countMatchRows()).toBe(1);
+      expect(await countMatchRows(tx)).toBe(1);
 
-      const [row1] = await db
+      const [row1] = await tx
         .select({ id: fixturesTable.id, afId: fixturesTable.apiFootballFixtureId })
         .from(fixturesTable)
         .where(eq(fixturesTable.apiFootballFixtureId, SENTINEL_ID));
@@ -149,37 +129,37 @@ describe("USMNT friendly seed — bind → restart lifecycle produces exactly on
       const rowId = row1!.id;
 
       // ── Phase 2: second seed run (idempotency before bind) ─────────────────
-      const reInserted = await runSeedInsert();
+      const reInserted = await runSeedInsert(tx);
       expect(reInserted, "second seed should be a no-op (row already exists)").toBe(0);
-      expect(await countMatchRows()).toBe(1);
+      expect(await countMatchRows(tx)).toBe(1);
 
       // ── Phase 3: simulate sync binding the real positive ID ────────────────
-      await db
+      await tx
         .update(fixturesTable)
         .set({ apiFootballFixtureId: REAL_POSITIVE })
         .where(eq(fixturesTable.id, rowId));
 
-      const [bound] = await db
+      const [bound] = await tx
         .select({ afId: fixturesTable.apiFootballFixtureId })
         .from(fixturesTable)
         .where(eq(fixturesTable.id, rowId));
       expect(bound?.afId).toBe(REAL_POSITIVE);
-      expect(await countMatchRows()).toBe(1); // still 1 row, now with positive ID
+      expect(await countMatchRows(tx)).toBe(1); // still 1 row, now with positive ID
 
       // ── Phase 4: third seed run (restart after bind) ───────────────────────
-      const postBindInsert = await runSeedInsert();
+      const postBindInsert = await runSeedInsert(tx);
       expect(
         postBindInsert,
         "seed after bind should be a no-op — the WHERE NOT EXISTS should find " +
           "the bound row by match identity and not insert a new sentinel",
       ).toBe(0);
       expect(
-        await countMatchRows(),
+        await countMatchRows(tx),
         "there must be exactly 1 row after re-seeding a bound fixture",
       ).toBe(1);
 
       // Verify the remaining row is the bound one, not a new sentinel.
-      const [remaining] = await db
+      const [remaining] = await tx
         .select({ afId: fixturesTable.apiFootballFixtureId })
         .from(fixturesTable)
         .where(eq(fixturesTable.id, rowId));
@@ -188,7 +168,7 @@ describe("USMNT friendly seed — bind → restart lifecycle produces exactly on
       // ── Phase 5: dedup sweep removes sentinel when bound row coexists ───────
       // Force-insert a sentinel alongside the bound row (simulates a legacy
       // ON CONFLICT–based restart creating a duplicate).
-      await db.execute(sql`
+      await tx.execute(sql`
         INSERT INTO fixtures (
           api_football_fixture_id, home_team, away_team,
           competition, kickoff, venue, city, is_national_team, status
@@ -198,20 +178,21 @@ describe("USMNT friendly seed — bind → restart lifecycle produces exactly on
           '__Lifecycle Venue__', '__Lifecycle City, LC__', true, 'scheduled'
         )
       `);
-      expect(await countMatchRows()).toBe(2); // now 2 rows
+      expect(await countMatchRows(tx)).toBe(2); // now 2 rows
 
-      const deduped = await runDedupSweep();
+      const deduped = await runDedupSweep(tx);
       expect(deduped, "dedup sweep should remove the sentinel row").toBe(1);
-      expect(await countMatchRows()).toBe(1); // back to 1
+      expect(await countMatchRows(tx)).toBe(1); // back to 1
 
       // Cleanup this test's rows
-      await db.execute(sql`
+      await tx.execute(sql`
         DELETE FROM fixtures
         WHERE (api_football_fixture_id = ${SENTINEL_ID}
             OR api_football_fixture_id = ${REAL_POSITIVE})
           AND home_team = ${HOME} AND away_team = ${AWAY}
       `);
-      expect(await countMatchRows()).toBe(0);
+      expect(await countMatchRows(tx)).toBe(0);
+      });
     },
     60_000,
   );

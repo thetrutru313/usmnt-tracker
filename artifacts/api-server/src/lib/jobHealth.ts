@@ -11,6 +11,8 @@
  * monitor (cron-job.org) can alert on it. Error text stays in the database.
  */
 import { APP_JOBS, lastSuccess, readLastRun, type JobOutcome, type ScheduledJob } from "./scheduledJobs";
+import { db } from "@workspace/db";
+import { readDataMigrationHealth, type DataMigrationHealth } from "./dataMigrations";
 
 /** How long a job may stay due without succeeding (retries included) before it's stale. */
 export const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -28,6 +30,7 @@ export type JobsHealthReport = {
   status: "ok" | "unhealthy";
   checkedAt: string;
   jobs: JobHealth[];
+  dataMigrations: DataMigrationHealth;
 };
 
 export async function jobsHealth(jobs: ScheduledJob[] = APP_JOBS, now = new Date()): Promise<JobsHealthReport> {
@@ -44,9 +47,11 @@ export async function jobsHealth(jobs: ScheduledJob[] = APP_JOBS, now = new Date
     const healthy = !enabled || (!stale && lastRun?.outcome !== "partial");
     report.push({ name: job.name, enabled, lastSuccessAt: lastOk?.toISOString() ?? null, lastRun, stale, healthy });
   }
+  const dataMigrations = await readDataMigrationHealth(db);
   return {
-    status: report.every((j) => j.healthy) ? "ok" : "unhealthy",
+    status: report.every((j) => j.healthy) && !dataMigrations.failedId ? "ok" : "unhealthy",
     checkedAt: now.toISOString(),
     jobs: report,
+    dataMigrations,
   };
 }

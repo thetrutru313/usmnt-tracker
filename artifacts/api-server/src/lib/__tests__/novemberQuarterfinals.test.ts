@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { readFile } from "node:fs/promises";
-import { transform } from "esbuild";
+import { seedSeniorSentinelFixtures, SENIOR_SENTINEL_FIXTURES } from "../ntFixtureSeeds";
 import request from "supertest";
 import { db, fixturesTable, scheduleEventsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
@@ -42,21 +41,8 @@ type Match = {
 };
 
 async function startupSeed(tx: Tx): Promise<Match[]> {
-  // Execute the actual entry-point block, not a copied approximation of its SQL.
-  const source = await readFile(new URL("../../index.ts", import.meta.url), "utf8");
-  const start = source.indexOf("    type MatchDef =");
-  const end = source.indexOf("  } catch (err)", start);
-  expect(start).toBeGreaterThan(0);
-  expect(end).toBeGreaterThan(start);
-  const block = source.slice(start, end);
-  const { code } = await transform(
-    `async function seed(db, sql, logger) { ${block}\n return matches; }`,
-    { loader: "ts", target: "es2022" },
-  );
-  const run = new Function(`${code}; return seed;`)() as (
-    tx: Tx, sqlTag: typeof sql, logger: { info: () => void },
-  ) => Promise<Match[]>;
-  return run(tx, sql, { info: () => {} });
+  await seedSeniorSentinelFixtures(tx);
+  return SENIOR_SENTINEL_FIXTURES;
 }
 
 async function seededSandbox(check: (tx: Tx) => Promise<void>) {

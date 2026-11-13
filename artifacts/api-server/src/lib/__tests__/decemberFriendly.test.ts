@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { readFile } from "node:fs/promises";
-import { transform } from "esbuild";
+import { seedSeniorSentinelFixtures } from "../ntFixtureSeeds";
 import request from "supertest";
 import { db, fixturesTable, scheduleEventsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
@@ -46,19 +45,7 @@ const expectedFixture = {
 };
 
 async function startupSeed(tx: Tx) {
-  const source = await readFile(new URL("../../index.ts", import.meta.url), "utf8");
-  const start = source.indexOf("    type MatchDef =");
-  const end = source.indexOf("  } catch (err)", start);
-  expect(start).toBeGreaterThan(0);
-  expect(end).toBeGreaterThan(start);
-  const { code } = await transform(
-    `async function seed(db, sql, logger) { ${source.slice(start, end)}\n return matches; }`,
-    { loader: "ts", target: "es2022" },
-  );
-  const run = new Function(`${code}; return seed;`)() as (
-    tx: Tx, sqlTag: typeof sql, logger: { info: () => void },
-  ) => Promise<unknown>;
-  return run(tx, sql, { info: () => {} });
+  await seedSeniorSentinelFixtures(tx);
 }
 
 async function isolated(check: (tx: Tx) => Promise<void>) {
