@@ -23,6 +23,18 @@ clocks; the future-date rule applies only to new tests.
 **Why:** The product owner explicitly required isolation without changing the
 real-date fixture assertions or the unchanged baseline.
 
+Isolate incidental metadata loaders and diagnostic writes in legacy tests
+whose database responses are queued by call order. Preserve the business
+assertions and the original business-query sequence.
+
+**Why:** An added metadata read consumed a queued form-stat response and
+shifted every later input. Nonempty fixtures exposed a wrong score, while
+tests with empty fallback responses concealed the same unexpected read.
+
+**How to apply:** Confirm the actual call sequence before changing mocks.
+Mock the incidental loader explicitly, cover its diagnostic persistence in
+focused integration tests, and remove temporary call tracing before committing.
+
 **How to apply:** Convert rewritten DB tests to isolation, but preserve all
 existing behavior assertions. Do not treat baseline permission as permission
 for new tests to modify public development rows.

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ClubSeason } from './clubSeason';
 import type { Fixture } from './fixture';
 import type { MatchLog } from './matchLog';
 import type { NewsArticle } from './newsArticle';
@@ -56,7 +57,7 @@ export interface PlayerProfile {
   previousSeasonStats: PlayerStats;
   previous5Stats: PlayerStats | null;
   clubSeasonStats: PlayerStats;
-  availableClubSeasons: string[];
+  availableClubSeasons: ClubSeason[];
   nationalTeamStats: PlayerStats;
   availableCycles: string[];
   cycleCaps: number;

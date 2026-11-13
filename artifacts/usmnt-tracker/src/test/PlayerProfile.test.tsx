@@ -62,7 +62,7 @@ const PLAYER = {
   nationalTeamGoals: 26,
   photoUrl: null,
   bio: null,
-  availableClubSeasons: [],
+  availableClubSeasons: [] as { season: string; label: string }[],
   availableCycles: [],
   clubSeasonStats: {
     season: "2024",
@@ -112,6 +112,19 @@ vi.mock("@workspace/api-client-react", () => ({
 function renderProfile() {
   return render(<PlayerProfile />);
 }
+
+describe("Group A — API season labels", () => {
+  it("A9 shows the MLS API label in the selector and season heading", () => {
+    currentPlayerData = {
+      ...PLAYER,
+      availableClubSeasons: [{ season: "2026", label: "2026" }],
+      clubSeasonStats: { ...PLAYER.clubSeasonStats, season: "2026" },
+    };
+    expect(() => renderProfile()).not.toThrow();
+    expect(screen.getByRole("option", { name: "2026" })).toBeInTheDocument();
+    expect(screen.queryByText("2026/2027")).not.toBeInTheDocument();
+  });
+});
 
 /** Locate the follow/unfollow button by its aria-label. */
 function followBtn() {

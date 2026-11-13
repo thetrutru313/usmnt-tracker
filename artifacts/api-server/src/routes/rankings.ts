@@ -14,6 +14,7 @@ import {
   injuriesTable,
 } from "../lib/queries";
 import { seasonYearCandidates } from "../lib/playerStatsSync";
+import { leagueCurrentLabel, loadLeagueSeasons, resolvePlayerSeasons } from "../lib/leagueSeasons";
 
 /** Mirrors the `listPlayers` transform: resolves age from DOB, replaces `worldCupRoster` with the derived `poolTier`, and strips `dateOfBirth` from the response. */
 function withPoolTier<T extends { worldCupRoster: boolean; nationalTeamCaps: number; age: number; dateOfBirth?: string | null }>(
@@ -97,6 +98,47 @@ async function resolveLeaderboardSeasonYear(log: RouteLogger): Promise<string> {
   return bestYear;
 }
 
+/** Match history totals to each player's current-club season. Legacy rows
+ * without league IDs keep the shared-year resolver until their first sync. */
+async function leaderboardSeasonFilter(fallback: string) {
+  const [rows, seasons] = await Promise.all([
+    loadLeagueSeasons(),
+    db.select({
+      leagueId: playerStatsTable.apiFootballLeagueId,
+      season: playerStatsTable.season,
+    }).from(playerStatsTable).where(eq(playerStatsTable.periodType, "season")),
+  ]);
+  const today = new Date().toISOString().slice(0, 10);
+  const labelsByLeague = new Map<number, number[]>();
+  for (const row of seasons) {
+    if (row.leagueId === null) continue;
+    labelsByLeague.set(row.leagueId, [...(labelsByLeague.get(row.leagueId) ?? []), Number(row.season)]);
+  }
+  const leagueConditions = [...labelsByLeague].map(([leagueId, labelsWithData]) => {
+    const started = leagueCurrentLabel(leagueId, rows, today);
+    const resolved = resolvePlayerSeasons({ leagueId, rows, today, labelsWithData });
+    const target = started === null || resolved.flag === "needsRow" ? Math.max(...labelsWithData) : started;
+    return sql`(current_stats.api_football_league_id = ${leagueId} AND current_stats.season = ${String(target)})`;
+  });
+  const legacy = sql`(
+    ${playerStatsTable.season} = ${fallback}
+    AND NOT EXISTS (
+      SELECT 1 FROM player_stats current_stats
+      WHERE current_stats.player_id = ${playerStatsTable.playerId}
+      AND current_stats.period_type = 'season'
+      AND current_stats.api_football_league_id IS NOT NULL
+    )
+  )`;
+  if (leagueConditions.length === 0) return legacy;
+  return sql`(${legacy} OR EXISTS (
+    SELECT 1 FROM player_stats current_stats
+    WHERE current_stats.player_id = ${playerStatsTable.playerId}
+    AND current_stats.period_type = 'season'
+    AND current_stats.season = ${playerStatsTable.season}
+    AND (${sql.join(leagueConditions, sql` OR `)})
+  ))`;
+}
+
 const router: IRouter = Router();
 
 // Best Performances this week: a single game must be at least this long.
@@ -107,9 +149,9 @@ router.get("/rankings", async (req, res): Promise<void> => {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
 
-  // Resolve once — reused for both leaderboard queries and the seasonYear field.
-  // Never takes candidates[0] directly; see resolveLeaderboardSeasonYear above.
+  // Resolve the legacy fallback and each league's target once per request.
   const currentSeasonStr = await resolveLeaderboardSeasonYear(req.log);
+  const seasonFilter = await leaderboardSeasonFilter(currentSeasonStr);
 
   const [
     mostInFormRaw,
@@ -162,15 +204,14 @@ router.get("/rankings", async (req, res): Promise<void> => {
       ))
       .orderBy(desc(matchLogsTable.rating))
       .limit(8),
-    // Ironmen: season_all so goals/minutes from all clubs in the season are
-    // counted, not just the current club.  Pinned to currentSeasonStr so the
-    // leaderboard doesn't mix seasons when a player has multi-year history.
+    // Count all clubs' totals, using the season selected for the player's
+    // own league rather than one shared European/calendar-year label.
     db
       .select(playerSummaryColumns)
       .from(playerStatsTable)
       .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
       .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(and(eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, currentSeasonStr)))
+      .where(and(eq(playerStatsTable.periodType, "season_all"), seasonFilter))
       .orderBy(desc(playerStatsTable.minutes))
       .limit(8),
     db
@@ -182,7 +223,7 @@ router.get("/rankings", async (req, res): Promise<void> => {
       .from(playerStatsTable)
       .innerJoin(playersTable, eq(playerStatsTable.playerId, playersTable.id))
       .innerJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
-      .where(and(eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, currentSeasonStr)))
+      .where(and(eq(playerStatsTable.periodType, "season_all"), seasonFilter))
       .limit(50),
     injuriesWithPlayerQuery().where(eq(injuriesTable.status, "returned")).orderBy(desc(injuriesTable.startDate)).limit(6),
     // Rising Prospects: over-fetch candidates — badge computation below filters to on_fire/rising only.
@@ -249,9 +290,6 @@ router.get("/rankings", async (req, res): Promise<void> => {
     mostGoalContributions,
     returningFromInjury,
     risingFast,
-    // seasonYear: the year both leaderboards (mostMinutes + mostGoalContributions)
-    // cover — lets the UI label the "Ironmen" card without re-deriving the year.
-    seasonYear: currentSeasonStr,
   };
 
   res.json(GetRankingsResponse.parse(payload));

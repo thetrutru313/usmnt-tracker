@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+import { displaySeasonLabel, loadLeagueSeasons } from "./leagueSeasons";
 
 /**
  * Compute a player's current age from their stored date-of-birth string,
@@ -271,12 +272,14 @@ export async function getStatsForPlayer(playerId: number, periodType: "season" |
 
 /** Every season year (e.g. "2025", "2026") this player has real club-season stats for, most recent first — powers the club-season selector on the player profile. */
 export async function getAvailableClubSeasons(playerId: number) {
-  const rows = await db
-    .select({ season: playerStatsTable.season })
+  const [rows, leagueSeasons] = await Promise.all([db
+    .select({ season: playerStatsTable.season, leagueId: playerStatsTable.apiFootballLeagueId })
     .from(playerStatsTable)
     .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all")))
-    .orderBy(desc(playerStatsTable.season));
-  return rows.map((r) => r.season);
+    .orderBy(desc(playerStatsTable.season)), loadLeagueSeasons()]);
+  return rows.map((r) => ({
+    season: r.season, label: displaySeasonLabel(r.leagueId, Number(r.season), leagueSeasons),
+  }));
 }
 
 /**
@@ -286,11 +289,14 @@ export async function getAvailableClubSeasons(playerId: number) {
  * "season_all" history rows exist yet for this player.
  */
 export async function getClubSeasonStats(playerId: number, season?: string) {
-  if (season) {
+  // An explicit query wins. With no query, prefer the sync-selected current
+  // season, which can be older than early qualifier history.
+  const selected = season ?? (await getStatsForPlayer(playerId, "season"))?.season;
+  if (selected) {
     const [row] = await db
       .select()
       .from(playerStatsTable)
-      .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, season)))
+      .where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all"), eq(playerStatsTable.season, selected)))
       .limit(1);
     if (row) return row;
   }

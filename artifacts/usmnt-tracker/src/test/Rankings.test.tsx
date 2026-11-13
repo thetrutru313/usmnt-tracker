@@ -45,6 +45,10 @@ vi.mock("@workspace/api-client-react", () => ({
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("Rankings page — no Transfer Buzz section", () => {
+  it("A8 labels the Ironmen card Current season", () => {
+    render(<Rankings />);
+    expect(screen.queryByText("Ironmen (Minutes) · Current season")).toBeInTheDocument();
+  });
   it("does not render a 'Transfer Buzz' heading or section", () => {
     render(<Rankings />);
     // Confirm no heading or label contains "Transfer Buzz" or "transfer buzz"

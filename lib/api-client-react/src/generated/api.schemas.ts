@@ -177,6 +177,11 @@ export const PlayerProfilePerformanceTrend = {
   ice_cold: 'ice_cold',
 } as const;
 
+export interface ClubSeason {
+  season: string;
+  label: string;
+}
+
 export type FixtureStatus = typeof FixtureStatus[keyof typeof FixtureStatus];
 
 
@@ -296,7 +301,7 @@ export interface PlayerProfile {
   previousSeasonStats: PlayerStats;
   previous5Stats: PlayerStats | null;
   clubSeasonStats: PlayerStats;
-  availableClubSeasons: string[];
+  availableClubSeasons: ClubSeason[];
   nationalTeamStats: PlayerStats;
   availableCycles: string[];
   cycleCaps: number;
@@ -506,7 +511,6 @@ export interface Rankings {
   mostGoalContributions: PlayerSummary[];
   returningFromInjury: Injury[];
   risingFast: PlayerSummary[];
-  seasonYear: string;
 }
 
 export interface ClubResult {

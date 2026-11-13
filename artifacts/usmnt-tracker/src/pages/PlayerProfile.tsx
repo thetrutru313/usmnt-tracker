@@ -17,13 +17,6 @@ import { displayTeamName } from "@/lib/teamNames";
 
 const USMNT_CREST_URL = `${import.meta.env.BASE_URL}badges/usmnt-crest.png`;
 
-/** "2025" -> "2025/2026" — the season-selector display format the rest of the club-soccer calendar uses. */
-function formatSeasonLabel(season: string): string {
-  const year = parseInt(season, 10);
-  if (Number.isNaN(year)) return season;
-  return `${year}/${year + 1}`;
-}
-
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const playerId = parseInt(id || "0", 10);
@@ -220,8 +213,8 @@ export default function PlayerProfile() {
                     className="text-sm font-mono text-muted-foreground bg-background border border-border rounded px-2 py-1 cursor-pointer hover:text-foreground transition-colors"
                     aria-label="Select season"
                   >
-                    {player.availableClubSeasons.map(season => (
-                      <option key={season} value={season}>{formatSeasonLabel(season)}</option>
+                    {player.availableClubSeasons.map(({ season, label }) => (
+                      <option key={season} value={season}>{label}</option>
                     ))}
                   </select>
                 ) : (
@@ -455,7 +448,7 @@ export default function PlayerProfile() {
                 </div>
                 <span className="text-[10px] font-mono text-muted-foreground normal-case tracking-normal flex items-center gap-1">
                   {isFetching && <Loader2 size={10} className="animate-spin" />}
-                  {formatSeasonLabel(selectedSeason ?? player.clubSeasonStats.season)}
+                  {player.availableClubSeasons.find((entry) => entry.season === player.clubSeasonStats.season)?.label ?? player.clubSeasonStats.season}
                 </span>
               </CardTitle>
               {player.performanceTrend && (

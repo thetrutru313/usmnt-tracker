@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { db, dataMigrationsTable, serverConfigTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { applyDataMigrations } from "../dataMigrations";
+import { baseline } from "../../dataMigrations/0001_baseline";
 import type { DataMigration, DataMigrationBootResult, DataMigrationTransaction } from "../../dataMigrations/types";
 
 async function isolated(check: (tx: DataMigrationTransaction) => Promise<void>) {
@@ -101,7 +102,7 @@ describe("recorded data migrations", () => {
   });
   it("baseline: records the default no-op migration without changing application data", async () => {
     await isolated(async (tx) => {
-      await applyDataMigrations(tx);
+      await applyDataMigrations(tx, [baseline]);
       expect((await recorded(tx)).map(row => row.id)).toEqual(["0001_baseline"]);
       expect((await tx.select().from(serverConfigTable)).map(row => row.key)).toEqual(["dataMigrations.lastBoot"]);
     });

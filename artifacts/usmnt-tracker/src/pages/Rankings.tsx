@@ -122,7 +122,7 @@ export default function Rankings() {
           <CardHeader className="pb-3 border-b border-border">
             <CardTitle className="text-md uppercase tracking-tight flex items-center gap-2">
               <Clock size={16} className="text-muted-foreground" />
-              Ironmen (Minutes) · {rankings.seasonYear}
+              Ironmen (Minutes) · Current season
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

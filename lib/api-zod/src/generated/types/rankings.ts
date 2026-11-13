@@ -16,5 +16,4 @@ export interface Rankings {
   mostGoalContributions: PlayerSummary[];
   returningFromInjury: Injury[];
   risingFast: PlayerSummary[];
-  seasonYear: string;
 }

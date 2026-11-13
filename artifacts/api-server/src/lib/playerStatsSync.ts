@@ -1,8 +1,10 @@
-import { db, clubsTable, playersTable, playerStatsTable, matchLogsTable, injuriesTable } from "@workspace/db";
+import { db, clubsTable, playersTable, playerStatsTable, matchLogsTable, injuriesTable, serverConfigTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveTeamId, FINISHED_STATUSES } from "./apiFootballSync";
 import { ensurePlayerApiFootballIds, ageFromBirthDate } from "./playerClubSync";
+import { selectPrimaryLeagueBlock } from "./qualityScore";
+import { loadLeagueSeasons, resolvePlayerSeasons } from "./leagueSeasons";
 
 // ---------------------------------------------------------------------------
 // This module replaces the old seed's fabricated player_stats/match_logs/
@@ -46,13 +48,21 @@ export interface AfFixturePlayersTeam {
 
 export interface AfSeasonStatBlock {
   team: { id: number; name: string };
-  league: { name: string; season: number };
+  league: { id?: number; name: string; season: number };
   games: { minutes: number | null; lineups: number | null; position: string | null; rating: string | null };
   goals: { total: number | null; assists: number | null; conceded: number | null; saves: number | null };
   shots: { total: number | null };
   passes: { total: number | null; key: number | null; accuracy: string | null };
   tackles: { total: number | null; interceptions: number | null };
   duels: { total: number | null; won: number | null };
+}
+
+function primaryLeagueForBlocks(blocks: AfSeasonStatBlock[]) {
+  return selectPrimaryLeagueBlock(blocks.map((block) => ({
+    ...block,
+    league: { ...block.league, id: block.league.id ?? 0 },
+    games: { ...block.games, appearences: null },
+  })));
 }
 
 interface AfPlayerSeasonResponse {
@@ -491,7 +501,7 @@ async function deleteStatsRow(playerId: number, periodType: PeriodType): Promise
   await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, periodType)));
 }
 
-async function upsertStatsRow(playerId: number, periodType: PeriodType, season: string, stats: AggregatedSeasonStats, cleanSheets: number | null): Promise<void> {
+async function upsertStatsRow(playerId: number, periodType: PeriodType, season: string, stats: AggregatedSeasonStats, cleanSheets: number | null, apiFootballLeagueId: number | null = null): Promise<void> {
   // Delete scoped only by periodType (not season) — "season"/"previous_season"/
   // "last5" each keep exactly one row per player, and the season *label* for
   // that row can shift between runs (e.g. the year rolls over), so filtering
@@ -502,6 +512,7 @@ async function upsertStatsRow(playerId: number, periodType: PeriodType, season: 
     playerId,
     periodType,
     season,
+    apiFootballLeagueId,
     minutes: stats.minutes,
     starts: stats.starts,
     goals: stats.goals,
@@ -526,13 +537,14 @@ async function upsertStatsRow(playerId: number, periodType: PeriodType, season: 
  * periodType first since the set of years with data can shrink between runs
  * (e.g. a player transfers to a club with no historical stats for API-Football).
  */
-async function replaceSeasonHistoryRows(playerId: number, entries: { year: number; agg: AggregatedSeasonStats }[]): Promise<void> {
+async function replaceSeasonHistoryRows(playerId: number, entries: { year: number; agg: AggregatedSeasonStats; leagueId: number | null }[]): Promise<void> {
   await db.delete(playerStatsTable).where(and(eq(playerStatsTable.playerId, playerId), eq(playerStatsTable.periodType, "season_all")));
-  for (const { year, agg } of entries) {
+  for (const { year, agg, leagueId } of entries) {
     await db.insert(playerStatsTable).values({
       playerId,
       periodType: "season_all",
       season: `${year}`,
+      apiFootballLeagueId: leagueId,
       minutes: agg.minutes,
       starts: agg.starts,
       goals: agg.goals,
@@ -720,6 +732,9 @@ export async function syncPlayerStatsAndInjuries(
   // player list is excluded will have an empty playersByClub entry and are
   // naturally skipped by the club loop below — no special handling needed.
   const players = playerIds ? allPlayers.filter((p) => playerIds.includes(p.id)) : allPlayers;
+  const leagueSeasons = await loadLeagueSeasons();
+  const today = new Date().toISOString().slice(0, 10);
+  const seasonFlags = new Map<string, { leagueId: number | null; leagueName: string; label: number; flag: "unlisted" | "needsRow" }>();
 
   const clubsById = new Map(clubs.map((c) => [c.id, c]));
   // Set of every API-Football team ID that maps to a tracked club. Used by
@@ -852,18 +867,19 @@ export async function syncPlayerStatsAndInjuries(
           // loop completes — no per-player write needed here.
           continue;
         }
-        // Query several consecutive season-year labels and aggregate each —
-        // don't assume which one is "current" up front (see seasonYearCandidates
-        // for why). Whichever candidates actually returned real data, the
-        // most recent becomes "season" and the next-most-recent "previous_season".
+        // Query the same candidate labels as before; only selection of the
+        // current/previous club season is league-calendar aware.
         const seasonYears = seasonYearCandidates();
         const blocksByYear = await Promise.all(seasonYears.map((y) => fetchSeasonStats(player.apiFootballPlayerId!, y)));
         // Current-club filter: used for the primary season/previous_season rows
         // and the form-tier calculation, where mixing prior-club data into the
         // season baseline would skew the delta for a player who just transferred.
         const withData = seasonYears
-          .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, clubTeamId) }))
-          .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
+          .map((year, i) => ({
+            year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, clubTeamId),
+            primary: primaryLeagueForBlocks(blocksByYear[i].statistics.filter((b) => b.team.id === clubTeamId)),
+          }))
+          .filter((entry): entry is typeof entry & { agg: AggregatedSeasonStats } => entry.agg != null)
           .sort((a, b) => b.year - a.year);
         // All-clubs variant: used only for the season_all history dropdown.
         // Filters to any team ID present in our clubs table so prior-club stats
@@ -871,8 +887,11 @@ export async function syncPlayerStatsAndInjuries(
         // PSV 2024/25 season) while national-team blocks are still excluded
         // (USMNT is not a row in clubsTable, so its blocks are dropped here too).
         const withDataAllClubs = seasonYears
-          .map((year, i) => ({ year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, allClubTeamIds) }))
-          .filter((entry): entry is { year: number; agg: AggregatedSeasonStats } => entry.agg != null)
+          .map((year, i) => ({
+            year, agg: aggregateSeasonBlocks(blocksByYear[i].statistics, allClubTeamIds),
+            leagueId: primaryLeagueForBlocks(blocksByYear[i].statistics.filter((b) => allClubTeamIds.has(b.team.id)))?.league.id || null,
+          }))
+          .filter((entry): entry is typeof entry & { agg: AggregatedSeasonStats } => entry.agg != null)
           .sort((a, b) => b.year - a.year);
 
         // Keep `dateOfBirth` and `age` live from the same responses (no
@@ -892,15 +911,27 @@ export async function syncPlayerStatsAndInjuries(
           if (ageChanged) player.age = liveAge!;
         }
 
-        const [current, previous] = withData;
+        const primary = withData.find((entry) => entry.primary != null)?.primary ?? null;
+        const leagueId = primary?.league.id || null;
+        const resolved = resolvePlayerSeasons({
+          leagueId, rows: leagueSeasons, labelsWithData: withData.map((entry) => entry.year), today,
+        });
+        if (resolved.flag && withData.length > 0) {
+          const label = withData[0].year;
+          seasonFlags.set(`${leagueId}:${label}`, {
+            leagueId, leagueName: primary?.league.name ?? "Unknown", label, flag: resolved.flag,
+          });
+        }
+        const current = withData.find((entry) => entry.year === resolved.current);
+        const previous = withData.find((entry) => entry.year === resolved.previous);
         if (current) {
-          await upsertStatsRow(player.id, "season", `${current.year}`, current.agg, null);
+          await upsertStatsRow(player.id, "season", `${current.year}`, current.agg, null, current.primary?.league.id || null);
           playersWithSeasonStats++;
         } else {
           await deleteStatsRow(player.id, "season");
         }
         if (previous) {
-          await upsertStatsRow(player.id, "previous_season", `${previous.year}`, previous.agg, null);
+          await upsertStatsRow(player.id, "previous_season", `${previous.year}`, previous.agg, null, previous.primary?.league.id || null);
         } else {
           await deleteStatsRow(player.id, "previous_season");
         }
@@ -921,6 +952,17 @@ export async function syncPlayerStatsAndInjuries(
       failures++;
       logger.warn({ err, club: club.name }, "Player-stats sync failed for club");
     }
+  }
+
+  // Calendar maintenance warnings are diagnostic only, never job-health failures.
+  try {
+    const leagues = [...seasonFlags.values()];
+    for (const entry of leagues) logger.warn(entry, "League season calendar needs a row");
+    const value = JSON.stringify({ checkedAt: new Date().toISOString(), leagues });
+    await db.insert(serverConfigTable).values({ key: "leagueSeasons.needsRows", value })
+      .onConflictDoUpdate({ target: serverConfigTable.key, set: { value, updatedAt: new Date() } });
+  } catch (err) {
+    logger.warn({ err }, "Could not persist league-season diagnostics");
   }
 
   // USMNT national-team match logs + cycle stats now sync independently on

@@ -627,11 +627,11 @@ components:
         # latest two seasons) — this backs the season-year selector.
         clubSeasonStats:
           $ref: "#/components/schemas/PlayerStats"
-        # Every season year this player has club stats for, most recent
-        # first (e.g. ["2026", "2025", "2024"]) — populates the selector.
+        # API labels and league-specific display labels, newest first.
         availableClubSeasons:
           type: array
-          items: { type: string }
+          items:
+            $ref: "#/components/schemas/ClubSeason"
         # USMNT national-team stats aggregated from this player's synced
         # national-team match logs (current cycle). Zero/null fields when
         # the player has no USMNT appearances synced this cycle.
@@ -1019,6 +1019,13 @@ components:
         nextScheduleEvent:
           $ref: "#/components/schemas/NextScheduleEvent"
 
+    ClubSeason:
+      type: object
+      required: [season, label]
+      properties:
+        season: { type: string }
+        label: { type: string }
+
     Rankings:
       type: object
       required:
@@ -1028,7 +1035,6 @@ components:
         - mostGoalContributions
         - returningFromInjury
         - risingFast
-        - seasonYear
       properties:
         mostInForm:
           type: array
@@ -1054,10 +1060,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PlayerSummary"
-        # The season year both leaderboards (mostMinutes, mostGoalContributions) cover.
-        # Derived server-side via seasonYearCandidates() — never hardcoded.
-        seasonYear:
-          type: string
 
     MatchLogWithPlayer:
       type: object

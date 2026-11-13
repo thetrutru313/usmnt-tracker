@@ -21,3 +21,4 @@ export * from "./leagueStrength";
 export * from "./pushSubscriptions";
 export * from "./leagueBroadcasts";
 export * from "./dataMigrations";
+export * from "./leagueSeasons";

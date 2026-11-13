@@ -7,6 +7,7 @@
  */
 
 export * from './clubResult';
+export * from './clubSeason';
 export * from './dashboardSummary';
 export * from './errorResponse';
 export * from './featuredPlayer';

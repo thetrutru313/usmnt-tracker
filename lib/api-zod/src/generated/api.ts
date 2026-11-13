@@ -170,7 +170,10 @@ export const GetPlayerResponse = zod.object({
   "savePct": zod.number().nullable(),
   "avgRating": zod.number().nullable()
 }),
-  "availableClubSeasons": zod.array(zod.string()),
+  "availableClubSeasons": zod.array(zod.object({
+  "season": zod.string(),
+  "label": zod.string()
+})),
   "nationalTeamStats": zod.object({
   "season": zod.string(),
   "minutes": zod.number(),
@@ -843,8 +846,7 @@ export const GetRankingsResponse = zod.object({
   "trending": zod.boolean(),
   "performanceTrend": zod.enum(['on_fire', 'rising', 'steady', 'falling', 'ice_cold']),
   "potentialCallUpScore": zod.number().nullish()
-})),
-  "seasonYear": zod.string()
+}))
 })
 
 

@@ -160,8 +160,13 @@ const {
   };
 });
 
-vi.mock("@workspace/db", () => ({
-  db: mockDb,
+vi.mock("../leagueSeasons.js", async (original) => ({
+  ...await original<typeof import("../leagueSeasons.js")>(),
+  loadLeagueSeasons: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("@workspace/db", async () => ({
+  db: (await import("./helpers/leagueSeasonConfigMock")).withLeagueSeasonConfig(mockDb),
+  serverConfigTable: (await import("./helpers/leagueSeasonConfigMock")).serverConfigTable,
   clubsTable: tClubs,
   playersTable: tPlayers,
   playerStatsTable: tPlayerStats,

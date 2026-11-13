@@ -23,6 +23,7 @@ export const playerStatsTable = pgTable("player_stats", {
   playerId: integer("player_id").notNull().references(() => playersTable.id),
   periodType: text("period_type").notNull(),
   season: text("season").notNull(),
+  apiFootballLeagueId: integer("api_football_league_id"),
   minutes: integer("minutes").notNull().default(0),
   starts: integer("starts").notNull().default(0),
   goals: integer("goals").notNull().default(0),
