@@ -1,6 +1,7 @@
 import { date, index, integer, pgTable, serial, text, timestamp, doublePrecision, boolean, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { sql } from "drizzle-orm";
 import { clubsTable } from "./clubs";
 
 /**
@@ -67,6 +68,10 @@ export const playersTable = pgTable("players", {
   debutDate: date("debut_date", { mode: "string" }),
   potentialCallUpScore: integer("potential_call_up_score"),
   bio: text("bio").notNull().default(""),
+  // Other names the news uses for this player ("Gio Reyna" for Giovanni
+  // Reyna). RSS tagging matches these as well as `name`. Edited on the admin
+  // page (Market values & bios → pencil).
+  newsAliases: text("news_aliases").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Cached timestamp of the last successful /players/squads API call for this
   // player.  The hourly fixture sync skips the API call when this is within

@@ -1,7 +1,8 @@
 /**
- * Admin: quarterly market values (from Transfermarkt, in € millions) and
- * player bios. The server stores euros and converts to dollars at the daily
- * ECB rate; see artifacts/api-server/src/lib/marketValues.ts.
+ * Admin: quarterly market values (from Transfermarkt, in € millions), player
+ * bios and the other names the news uses for each player. The server stores
+ * euros and converts to dollars at the daily ECB rate; see
+ * artifacts/api-server/src/lib/marketValues.ts.
  */
 import * as React from "react";
 import { BadgeDollarSign, Pencil } from "lucide-react";
@@ -22,6 +23,8 @@ interface MarketValueRow {
   marketValueAsOf: string | null;
   transfermarktUrl: string | null;
   bio: string;
+  /** Other names the news uses ("Gio Reyna"); RSS tagging matches them too. */
+  newsAliases?: string[];
 }
 
 interface EurUsd {
@@ -34,6 +37,16 @@ interface MarketValueDraft {
   valueEurM?: string;
   transfermarktUrl?: string;
   bio?: string;
+  /** Comma-separated, as typed. */
+  newsAliases?: string;
+}
+
+/** RSS tagging ignores news names shorter than this (see rssIngest.ts). */
+const MIN_NEWS_NAME_LENGTH = 5;
+
+/** "Gio Reyna, Giovanni A. Reyna" → ["Gio Reyna", "Giovanni A. Reyna"]. */
+function parseNewsAliases(text: string): string[] {
+  return [...new Set(text.split(",").map((n) => n.trim()).filter(Boolean))];
 }
 
 /** A value older than this (or missing) counts as due for this quarter's update. */
@@ -59,7 +72,7 @@ function marketValueChanges(rows: MarketValueRow[], drafts: Record<number, Marke
   return rows.flatMap((row) => {
     const draft = drafts[row.id];
     if (!draft) return [];
-    const change: { id: number; valueEurM?: number | null; transfermarktUrl?: string | null; bio?: string } = { id: row.id };
+    const change: { id: number; valueEurM?: number | null; transfermarktUrl?: string | null; bio?: string; newsAliases?: string[] } = { id: row.id };
     if (draft.valueEurM !== undefined) {
       const typed = draft.valueEurM.trim().replace(",", ".");
       // A typed value is saved even if unchanged: that re-dates it ("still €25m in November").
@@ -73,6 +86,10 @@ function marketValueChanges(rows: MarketValueRow[], drafts: Record<number, Marke
       change.transfermarktUrl = draft.transfermarktUrl.trim() || null;
     }
     if (draft.bio !== undefined && draft.bio.trim() !== row.bio.trim()) change.bio = draft.bio.trim();
+    if (draft.newsAliases !== undefined) {
+      const aliases = parseNewsAliases(draft.newsAliases);
+      if (aliases.join("|") !== (row.newsAliases ?? []).join("|")) change.newsAliases = aliases;
+    }
     return Object.keys(change).length > 1 ? [change] : [];
   });
 }
@@ -95,7 +112,9 @@ export function MarketValuesSection({ token, onUnauthorized }: { token: string; 
   const rows = data?.players ?? [];
   const today = todayIso();
   const changes = marketValueChanges(rows, drafts);
-  const invalid = changes.some((c) => typeof c.valueEurM === "number" && !(c.valueEurM > 0 && c.valueEurM <= 500));
+  const invalidValue = changes.some((c) => typeof c.valueEurM === "number" && !(c.valueEurM > 0 && c.valueEurM <= 500));
+  const invalidAliases = changes.some((c) => c.newsAliases?.some((n) => n.length < MIN_NEWS_NAME_LENGTH));
+  const invalid = invalidValue || invalidAliases;
   const dueCount = rows.filter((r) => isDue(r, today)).length;
 
   const query = search.trim().toLowerCase();
@@ -233,6 +252,15 @@ export function MarketValuesSection({ token, onUnauthorized }: { token: string; 
                     />
                   </label>
                   <label className="block space-y-1">
+                    <span className="text-xs font-medium text-muted-foreground">Also called in the news</span>
+                    <input
+                      value={draft.newsAliases ?? (row.newsAliases ?? []).join(", ")}
+                      onChange={(e) => edit(row.id, { newsAliases: e.target.value })}
+                      placeholder="e.g. Gio Reyna (comma-separated full names)"
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                  <label className="block space-y-1">
                     <span className="text-xs font-medium text-muted-foreground">Bio</span>
                     <textarea
                       value={draft.bio ?? row.bio}
@@ -263,7 +291,10 @@ export function MarketValuesSection({ token, onUnauthorized }: { token: string; 
             Discard
           </button>
         )}
-        {invalid && <span className="text-sm text-destructive">Values are € millions between 0 and 500.</span>}
+        {invalidValue && <span className="text-sm text-destructive">Values are € millions between 0 and 500.</span>}
+        {invalidAliases && (
+          <span className="text-sm text-destructive">News names must be full names ({MIN_NEWS_NAME_LENGTH}+ characters).</span>
+        )}
         {message && <span role="status" className="text-sm text-muted-foreground">{message}</span>}
       </div>
     </section>

@@ -2,6 +2,7 @@ import { db, playersTable, playerStatsTable, matchLogsTable, fixturesTable, fixt
 import { eq, and, or, isNull, lt, gt, gte, lte, inArray, isNotNull, asc, desc, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { afFetch, resolveUsmntTeamId, FINISHED_STATUSES } from "./apiFootballSync";
+import { USMNT_TEAM_ID } from "./usmntTeam";
 import { pickBestNtFixtureId } from "./pickBestNtFixtureId.js";
 import {
   toNum,
@@ -492,7 +493,7 @@ export async function syncSeniorNtSquads(options: SeniorNtSquadOptions = {}) {
     try {
       counts.apiCallsMade++;
       const teams = await fetchPlayers(fixture.apiFootballFixtureId!);
-      const usa = teams.find((t) => ["usa", "united states", "usmnt"].includes(t.team.name.toLowerCase()));
+      const usa = teams.find((t) => t.team.id === USMNT_TEAM_ID);
       const squad = [...new Map((usa?.players ?? []).map((entry) => [entry.player.id, entry])).values()];
       if (squad.length < 11) {
         if (now.getTime() - fixture.kickoff.getTime() > 72 * 60 * 60 * 1000) {

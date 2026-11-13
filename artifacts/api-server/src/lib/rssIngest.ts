@@ -48,6 +48,31 @@ function cleanSummary(rawSummary: string, cleanedTitle: string): string {
   return normalized.slice(0, 400);
 }
 
+/** Lowercase with accents removed ("Castañeda" → "castaneda"), for name matching. */
+export function normalizeForMatch(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Shortest name or alias that's matched, so a stray "Gio" can't tag every article. */
+const MIN_MATCH_LENGTH = 5;
+
+export type NewsPlayer = { id: number; name: string; newsAliases: string[] };
+
+/**
+ * Tracked players named in `text` by their name or one of their news
+ * aliases (review D10). Case- and accent-insensitive.
+ */
+export function playersMentioned(text: string, players: NewsPlayer[]): { id: number; name: string }[] {
+  const haystack = normalizeForMatch(text);
+  return players
+    .filter((p) =>
+      [p.name, ...p.newsAliases]
+        .map((n) => normalizeForMatch(n.trim()))
+        .some((n) => n.length >= MIN_MATCH_LENGTH && haystack.includes(n)),
+    )
+    .map(({ id, name }) => ({ id, name }));
+}
+
 function categorize(text: string): string {
   const t = text.toLowerCase();
   if (/(injur|hamstring|ankle|acl|surger|out for)/.test(t)) return "Injuries";
@@ -79,7 +104,9 @@ interface Candidate {
 }
 
 export async function ingestRssNews(): Promise<{ fetched: number; inserted: number; feedsFailed: string[] }> {
-  const players = await db.select({ id: playersTable.id, name: playersTable.name }).from(playersTable);
+  const players: NewsPlayer[] = await db
+    .select({ id: playersTable.id, name: playersTable.name, newsAliases: playersTable.newsAliases })
+    .from(playersTable);
   const existingUrls = new Set((await db.select({ url: newsArticlesTable.url }).from(newsArticlesTable)).map((r) => r.url));
   const feedsFailed: string[] = [];
   let fetched = 0;
@@ -106,7 +133,7 @@ export async function ingestRssNews(): Promise<{ fetched: number; inserted: numb
       const snippet = (item.contentSnippet || item.content || "").toString();
       const haystack = `${rawTitle} ${snippet}`.toLowerCase();
 
-      const matchedPlayers = players.filter((p) => haystack.includes(p.name.toLowerCase()));
+      const matchedPlayers = playersMentioned(haystack, players);
       const hasKeyword = USMNT_KEYWORDS.some((k) => haystack.includes(k));
 
       // Only keep articles that are actually about tracked players or the
@@ -160,9 +187,13 @@ export async function ingestRssNews(): Promise<{ fetched: number; inserted: numb
         impactScore: c.matchedPlayers.length > 0 ? 6 : 4,
         sentiment: "neutral",
       })
+      // Another instance (or the same link under a second headline) may have
+      // stored this URL already; the unique index keeps one row.
+      .onConflictDoNothing({ target: newsArticlesTable.url })
       .returning({ id: newsArticlesTable.id });
+    if (!article) continue;
 
-    if (c.matchedPlayers.length > 0 && article) {
+    if (c.matchedPlayers.length > 0) {
       await db.insert(newsArticlePlayersTable).values(c.matchedPlayers.map((p) => ({ articleId: article.id, playerId: p.id })));
     }
     inserted++;

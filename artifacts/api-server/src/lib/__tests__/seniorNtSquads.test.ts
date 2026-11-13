@@ -4,6 +4,7 @@ import { db, clubsTable, playersTable, fixturesTable, fixturePlayersTable, match
 import { eq, sql } from "drizzle-orm";
 import app from "../../app";
 import { syncSeniorNtSquads } from "../usmntSync";
+import { resolveUsmntTeamId } from "../apiFootballSync";
 import type { AfFixtureListItem, AfFixturePlayersTeam } from "../playerStatsSync";
 
 const sandbox = vi.hoisted(() => ({ transaction: null as unknown }));
@@ -180,5 +181,32 @@ describe("syncSeniorNtSquads — transaction-local temp tables, injected API and
       expect((await syncSeniorNtSquads(opts)).fixturesSquadSynced).toBe(1);
       expect(opts.fetchPlayers).toHaveBeenCalledExactlyOnceWith(920);
     });
+  });
+});
+
+describe("USMNT by team id (review D4)", () => {
+  it("9: picks the USA squad block by team id 2384, whatever either team is called", async () => {
+    await isolated(async (tx) => {
+      await tx.insert(fixturesTable).values({ ...base, id: 1, apiFootballFixtureId: 930 });
+      const opts = options();
+      // A decoy block named "USA" (untracked players) listed first, and the
+      // real team under another name.
+      const decoy = { team: { id: 9999, name: "USA" }, players: squad()[0]!.players.map((p) => ({ ...p, player: { ...p.player, id: p.player.id + 1000 } })) };
+      const usa = { ...squad()[0]!, team: { id: 2384, name: "United States of America" } };
+      opts.fetchPlayers.mockResolvedValue([decoy, usa]);
+      await syncSeniorNtSquads(opts);
+      expect((await tx.select().from(fixturePlayersTable)).map((link) => link.playerId).sort()).toEqual([1, 2, 3, 4]);
+    });
+  });
+
+  it("10: resolveUsmntTeamId is 2384 without a provider call", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      expect(await resolveUsmntTeamId()).toBe(2384);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

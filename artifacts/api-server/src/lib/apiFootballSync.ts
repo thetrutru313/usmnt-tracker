@@ -14,6 +14,7 @@ import {
   purgeOrphanedUpcomingFixtures,
   purgeStaleOrphanedPastFixtures,
 } from "./fixtureReconciliation.js";
+import { USMNT_TEAM_ID } from "./usmntTeam.js";
 
 // Re-export so existing callers (usmntSync, playerStatsSync, etc.) keep working.
 export { FINISHED_STATUSES };
@@ -249,31 +250,13 @@ export const SEARCH_TERM_OVERRIDES: Record<string, string> = {
   "Orlando City SC": "Orlando City",
 };
 
-let usmntTeamId: number | null = null;
-
 /**
- * Finds (and caches in-memory) the USMNT senior men's national team's
- * API-Football team id. Searches for "USA" and takes the result flagged
- * `national: true` — API-Football represents national teams as regular
- * teams, and a plain name search also returns MLS clubs and USMNT youth/
- * women's sides, so the `national` flag is the only reliable way to pick
- * the senior men's side out of that list.
+ * The senior USMNT's API-Football team id (USMNT_TEAM_ID, usmntTeam.ts). It
+ * used to be looked up with a `/teams?search=USA` call matched on the name;
+ * it's a fixed id now. Kept async so callers don't change.
  */
-export async function resolveUsmntTeamId(): Promise<number | null> {
-  if (usmntTeamId) return usmntTeamId;
-  try {
-    const results = await afFetch<AfTeamSearchResult[]>(`/teams?search=USA`);
-    const match = results.find((r) => r.team.national === true && r.team.name === "USA");
-    if (!match) {
-      logger.warn("API-Football team search found no senior USMNT national team match");
-      return null;
-    }
-    usmntTeamId = match.team.id;
-    return usmntTeamId;
-  } catch (err) {
-    logger.warn({ err }, "API-Football USMNT team search failed");
-    return null;
-  }
+export function resolveUsmntTeamId(): Promise<number | null> {
+  return Promise.resolve(USMNT_TEAM_ID);
 }
 
 /** Finds (and caches) a club's API-Football team id via the team search endpoint. */

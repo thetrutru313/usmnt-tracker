@@ -1202,6 +1202,12 @@ const MarketValuesBody = z.object({
           .nullable()
           .optional(),
         bio: z.string().trim().max(2000).optional(),
+        // Full names only: RSS tagging ignores anything under 5 characters.
+        newsAliases: z
+          .array(z.string().trim().min(5, "News names must be at least 5 characters").max(80))
+          .max(10)
+          .transform((names) => [...new Set(names)])
+          .optional(),
       }),
     )
     .min(1)
@@ -1210,8 +1216,8 @@ const MarketValuesBody = z.object({
 
 /**
  * GET /admin/market-values
- * Every player's hand-entered value (euros, as-of date), Transfermarkt link
- * and bio, plus the current EUR→USD rate.
+ * Every player's hand-entered value (euros, as-of date), Transfermarkt link,
+ * bio and news names, plus the current EUR→USD rate.
  */
 router.get("/admin/market-values", async (_req, res): Promise<void> => {
   const [players, eurUsd] = await Promise.all([listMarketValues(), storedEurUsd()]);
@@ -1219,7 +1225,7 @@ router.get("/admin/market-values", async (_req, res): Promise<void> => {
 });
 
 /**
- * PUT /admin/market-values  { asOf, players: [{ id, valueEurM?, transfermarktUrl?, bio? }] }
+ * PUT /admin/market-values  { asOf, players: [{ id, valueEurM?, transfermarktUrl?, bio?, newsAliases? }] }
  * Saves only the fields sent. New values are dated `asOf` and converted to
  * dollars at the stored rate (fetched now if there isn't one yet).
  */

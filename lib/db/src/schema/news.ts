@@ -1,4 +1,4 @@
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,7 +14,11 @@ export const newsArticlesTable = pgTable("news_articles", {
   impactScore: integer("impact_score").notNull().default(5),
   sentiment: text("sentiment").notNull().default("neutral"), // positive | neutral | negative
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+},
+(table) => [
+  // One row per article: two instances ingesting at once can't both store it.
+  uniqueIndex("news_articles_url_unique").on(table.url),
+]);
 
 export const insertNewsArticleSchema = createInsertSchema(newsArticlesTable).omit({ id: true, createdAt: true });
 export type InsertNewsArticle = z.infer<typeof insertNewsArticleSchema>;

@@ -89,6 +89,7 @@ export async function listMarketValues() {
       marketValueAsOf: playersTable.marketValueAsOf,
       transfermarktUrl: playersTable.transfermarktUrl,
       bio: playersTable.bio,
+      newsAliases: playersTable.newsAliases,
     })
     .from(playersTable)
     .leftJoin(clubsTable, eq(playersTable.clubId, clubsTable.id))
@@ -102,6 +103,8 @@ export type MarketValueEdit = {
   valueEurM?: number | null;
   transfermarktUrl?: string | null;
   bio?: string;
+  /** Other names the news uses for the player (replaces the list). */
+  newsAliases?: string[];
 };
 
 /**
@@ -126,6 +129,7 @@ export async function saveMarketValues(edits: MarketValueEdit[], asOf: string, r
       }
       if (edit.transfermarktUrl !== undefined) set.transfermarktUrl = edit.transfermarktUrl;
       if (edit.bio !== undefined) set.bio = edit.bio;
+      if (edit.newsAliases !== undefined) set.newsAliases = edit.newsAliases;
       if (Object.keys(set).length === 0) continue;
       const rows = await tx
         .update(playersTable)
