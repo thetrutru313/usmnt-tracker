@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Link2, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -21,6 +21,10 @@ export function SyncMyPlayersModal({ open, onOpenChange }: SyncMyPlayersModalPro
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Clear the "Copied!" timer when the modal unmounts.
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   async function handleGenerate() {
     setGenerating(true);
@@ -42,7 +46,9 @@ export function SyncMyPlayersModal({ open, onOpenChange }: SyncMyPlayersModalPro
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // A second copy restarts the 2 s, rather than the first one cutting it short.
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API unavailable — show link text as fallback
     }
@@ -52,6 +58,7 @@ export function SyncMyPlayersModal({ open, onOpenChange }: SyncMyPlayersModalPro
     if (!next) {
       setLink(null);
       setError(null);
+      clearTimeout(copiedTimer.current);
       setCopied(false);
     }
     onOpenChange(next);

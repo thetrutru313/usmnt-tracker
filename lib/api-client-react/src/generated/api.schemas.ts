@@ -473,13 +473,6 @@ export interface DashboardSummary {
   nextScheduleEvent?: NextScheduleEvent;
 }
 
-export interface NationalTeamWindow {
-  name: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
 export type MatchLogWithPlayerPerformanceTrend = typeof MatchLogWithPlayerPerformanceTrend[keyof typeof MatchLogWithPlayerPerformanceTrend];
 
 

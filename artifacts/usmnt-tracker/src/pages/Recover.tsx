@@ -26,6 +26,9 @@ export default function Recover() {
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   useEffect(() => {
+    // Set on unmount: skip state updates and the redirect after leaving the page.
+    let cancelled = false;
+    let redirectTimer: ReturnType<typeof setTimeout> | undefined;
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
 
@@ -48,23 +51,31 @@ export default function Recover() {
         return res.json() as Promise<{ token: string }>;
       })
       .then(({ token: newToken }) => {
+        // Store the token even if the page has gone: the recovery link is
+        // single-use, so this is the only copy of the restored account.
         localStorage.setItem(ANON_TOKEN_KEY, newToken);
+        if (cancelled) return;
         setStatus("success");
         // Full page reload (not router navigate) so MyPlayersProvider re-mounts
         // cleanly from localStorage — this avoids any race with a concurrent
         // auto-provisioning request that may have started before recovery wrote
         // the token.
-        setTimeout(() => {
+        redirectTimer = setTimeout(() => {
           window.location.href = `${window.location.origin}${API_BASE}/`;
         }, 1500);
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         const msg =
           err instanceof Error ? err.message : "An unexpected error occurred.";
         setErrorMessage(msg);
         setStatus("error");
       });
-   
+
+    return () => {
+      cancelled = true;
+      clearTimeout(redirectTimer);
+    };
   }, []); // intentionally runs once on mount
 
   return (

@@ -6,7 +6,6 @@ import {
   fixturePlayersTable,
   newsArticlesTable,
   newsArticlePlayersTable,
-  nationalTeamWindowsTable,
 } from "@workspace/db";
 
 const TRUNCATED_TABLES = [
@@ -18,7 +17,6 @@ const TRUNCATED_TABLES = [
   "transfers",
   "fixtures",
   "news_articles",
-  "national_team_windows",
   "players",
   "clubs",
 ];
@@ -82,12 +80,12 @@ async function main() {
 
   // Destroys all synced data: TRUNCATEs fixture_players, news_article_players,
   // match_logs, player_stats, injuries, transfers, fixtures, news_articles,
-  // national_team_windows, players, and clubs with RESTART IDENTITY CASCADE.
-  // This is NOT a safe/idempotent no-op re-run — every row in these eleven
+  // players, and clubs with RESTART IDENTITY CASCADE.
+  // This is NOT a safe/idempotent no-op re-run — every row in these ten
   // tables is deleted and every id sequence is reset to 1.
   await db.execute(`TRUNCATE TABLE
     fixture_players, news_article_players, match_logs, player_stats,
-    injuries, transfers, fixtures, news_articles, national_team_windows,
+    injuries, transfers, fixtures, news_articles,
     players, clubs
     RESTART IDENTITY CASCADE`);
 
@@ -412,11 +410,6 @@ async function main() {
   // .agents/memory/usmnt-tracker.md for why this changed.
 
   // ---- Fixtures ----
-  function isoDateOffset(days: number): string {
-    const d = new Date("2026-07-13T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
   function isoDateTimeOffset(days: number, hour: number, minute = 0): Date {
     const d = new Date("2026-07-13T00:00:00Z");
     d.setUTCDate(d.getUTCDate() + days);
@@ -534,26 +527,6 @@ async function main() {
       .map((p) => ({ articleId: article.id, playerId: p.id }));
     if (rows.length) await db.insert(newsArticlePlayersTable).values(rows);
   }
-
-
-  // ---- National Team Windows ----
-  // Post-World Cup, the next two official FIFA windows are a CONCACAF
-  // Nations League group-stage window (first up) and a friendly window
-  // after it — not a lone "September friendlies" window (fixed 2026-07-13).
-  await db.insert(nationalTeamWindowsTable).values([
-    {
-      name: "CONCACAF Nations League - Group Stage",
-      startDate: isoDateOffset(42),
-      endDate: isoDateOffset(50),
-      description: "The USMNT opens Nations League group play on home soil, with the new-cycle player pool getting its first competitive minutes since the World Cup.",
-    },
-    {
-      name: "November International Friendlies",
-      startDate: isoDateOffset(119),
-      endDate: isoDateOffset(127),
-      description: "A pair of send-off-style friendlies against European opposition rounds out the fall calendar as Pochettino continues auditioning depth ahead of the next Nations League window.",
-    },
-  ]);
 
   console.log(`Seeded ${insertedClubs.length} clubs, ${insertedPlayers.length} players, ${fixtureDefs.length} fixtures, ${newsDefs.length} news articles. Transfers are populated by the live API-Football sync, not seeded.`);
   process.exit(0);

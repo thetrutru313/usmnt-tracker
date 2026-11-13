@@ -1019,15 +1019,6 @@ components:
         nextScheduleEvent:
           $ref: "#/components/schemas/NextScheduleEvent"
 
-    NationalTeamWindow:
-      type: object
-      required: [name, startDate, endDate, description]
-      properties:
-        name: { type: string }
-        startDate: { type: string, format: date }
-        endDate: { type: string, format: date }
-        description: { type: string }
-
     Rankings:
       type: object
       required:

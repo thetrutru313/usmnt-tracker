@@ -31,7 +31,6 @@ export * from './listTransfersParams';
 export * from './matchLog';
 export * from './matchLogWithPlayer';
 export * from './matchLogWithPlayerPerformanceTrend';
-export * from './nationalTeamWindow';
 export * from './newsArticle';
 export * from './newsArticleSentiment';
 export * from './nextScheduleEvent';

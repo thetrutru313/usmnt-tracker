@@ -52,7 +52,6 @@ import {
   newsArticlePlayersTable,
   injuriesTable,
   transfersTable,
-  nationalTeamWindowsTable,
 } from "@workspace/db";
 
 export type PlayerPoolTier = "core" | "inMix" | "prospect";
@@ -579,5 +578,4 @@ export {
   newsArticlePlayersTable,
   injuriesTable,
   transfersTable,
-  nationalTeamWindowsTable,
 };

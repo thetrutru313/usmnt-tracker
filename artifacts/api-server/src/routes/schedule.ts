@@ -4,6 +4,7 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdminSession } from "../lib/adminAuth";
 import { seniorNtFixtureCondition } from "../lib/queries";
+import { matchWindowEnd, matchWindowStart } from "../lib/scheduleWindow";
 
 const router: IRouter = Router();
 
@@ -49,10 +50,7 @@ router.get("/schedule", async (_req, res): Promise<void> => {
       .map((e) => e.endDate as string)
       .sort()
       .at(-1)!;
-    // Extend by 30 h to cover late-ET matches (e.g. 10 PM ET = 02:00 UTC next day).
-    const maxEndExclusive = new Date(
-      new Date(maxEndDate + "T00:00:00Z").getTime() + 30 * 60 * 60 * 1000,
-    );
+    const maxEndExclusive = matchWindowEnd(maxEndDate);
 
     const ntFixtures = await db
       .select()
@@ -60,7 +58,7 @@ router.get("/schedule", async (_req, res): Promise<void> => {
       .where(
         and(
           seniorNtFixtureCondition,
-          gte(fixturesTable.kickoff, new Date(minStart + "T00:00:00Z")),
+          gte(fixturesTable.kickoff, matchWindowStart(minStart)),
           lt(fixturesTable.kickoff, maxEndExclusive),
         ),
       )
@@ -68,14 +66,8 @@ router.get("/schedule", async (_req, res): Promise<void> => {
 
     // Group fixtures by the event they fall within.
     for (const event of windowedEvents) {
-      const start = new Date((event.startDate as string) + "T00:00:00Z");
-      // Extend by 30 hours rather than 24 so that late-ET matches (e.g. 10 PM
-      // ET on the endDate = 02:00 UTC the following day) still attach to their
-      // event. No real fixture can kick off more than 30 h after UTC midnight
-      // on the endDate, so this doesn't accidentally pull in the next event.
-      const endExclusive = new Date(
-        new Date((event.endDate as string) + "T00:00:00Z").getTime() + 30 * 60 * 60 * 1000,
-      );
+      const start = matchWindowStart(event.startDate as string);
+      const endExclusive = matchWindowEnd(event.endDate as string);
 
       const matching = ntFixtures.filter(
         (f) => f.kickoff >= start && f.kickoff < endExclusive,
