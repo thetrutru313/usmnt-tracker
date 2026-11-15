@@ -24,13 +24,6 @@ function groupByYear(events: ScheduleEvent[]): [string, ScheduleEvent[]][] {
   return Array.from(map.entries());
 }
 
-function getNextEvent(events: ScheduleEvent[]): ScheduleEvent | undefined {
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = events.find((e) => e.startDate !== null && e.startDate >= today);
-  if (upcoming) return upcoming;
-  return events.find((e) => e.startDate === null);
-}
-
 export default function Schedule() {
   const { data, isLoading, error } = useListScheduleEvents();
 
@@ -51,7 +44,8 @@ export default function Schedule() {
   }
 
   const events = data.events;
-  const nextEvent = getNextEvent(events);
+  // Chosen by the server with the dashboard hero's rule, so both agree.
+  const nextEventSlug = data.nextEventSlug ?? null;
   const groups = groupByYear(events);
 
   return (
@@ -104,7 +98,7 @@ export default function Schedule() {
 
           <div className="space-y-4">
             {yearEvents.map((event) => {
-              const isNext = event.slug === nextEvent?.slug;
+              const isNext = event.slug === nextEventSlug;
               const kind = event.kind as keyof typeof KIND_COLORS;
               const status = event.status as keyof typeof STATUS_COLORS;
               return (

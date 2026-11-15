@@ -4,7 +4,8 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdminSession } from "../lib/adminAuth";
 import { seniorNtFixtureCondition } from "../lib/queries";
-import { matchWindowEnd, matchWindowStart } from "../lib/scheduleWindow";
+import { viewerDay } from "../lib/viewerDay.js";
+import { matchWindowEnd, matchWindowStart, pickHeroEvent } from "../lib/scheduleWindow";
 
 const router: IRouter = Router();
 
@@ -84,7 +85,11 @@ router.get("/schedule", async (_req, res): Promise<void> => {
     })),
   }));
 
-  res.json({ events: eventsWithFixtures });
+  // The "NEXT UP" event, by the same rule as the dashboard hero (an event
+  // stays next until its last match is over), so the two pages agree.
+  const nextEventSlug = pickHeroEvent(events, new Date(), viewerDay(undefined).todayStr)?.slug ?? null;
+
+  res.json({ events: eventsWithFixtures, nextEventSlug });
 });
 
 // ---------------------------------------------------------------------------

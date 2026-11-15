@@ -9,4 +9,6 @@ import type { ScheduleEvent } from './scheduleEvent';
 
 export interface ScheduleEventsResult {
   events: ScheduleEvent[];
+  /** @nullable */
+  nextEventSlug?: string | null;
 }

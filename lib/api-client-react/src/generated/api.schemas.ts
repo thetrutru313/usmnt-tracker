@@ -443,6 +443,8 @@ export interface ScheduleEvent {
 
 export interface ScheduleEventsResult {
   events: ScheduleEvent[];
+  /** @nullable */
+  nextEventSlug?: string | null;
 }
 
 export interface NextScheduleEvent {

@@ -898,7 +898,8 @@ export const ListScheduleEventsResponse = zod.object({
   "poolTier": zod.enum(['core', 'inMix', 'prospect']).describe('Player pool classification used for fixture filtering. \"core\" = named to the 2026 World Cup roster. \"inMix\" = 5+ national team caps but not on the World Cup roster. \"prospect\" = everyone else under 25.\n')
 })))
 }))
-}))
+})),
+  "nextEventSlug": zod.string().nullish()
 })
 
 

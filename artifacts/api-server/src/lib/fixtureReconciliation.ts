@@ -98,6 +98,12 @@ export async function reconcileClubFixtures(
   // correct final score) once they end. Without this, a fixture updated to
   // "live, 0-0" would be invisible to all future reconciliation runs and stay
   // stuck forever.
+  //
+  // Club fixtures only. National-team matches are linked to the same players
+  // (admin call-ups and senior squads, club_id NULL) but are never in a
+  // club's fixture list, so here they would look "gone from the provider"
+  // and be deleted once they kicked off. That deleted Haiti v USA on 14 Nov
+  // 2026 mid-match. The national-team syncs and the cron tick own them.
   const trackedRows = await db
     .select({
       id: fixturesTable.id,
@@ -111,7 +117,11 @@ export async function reconcileClubFixtures(
     })
     .from(fixturesTable)
     .innerJoin(fixturePlayersTable, eq(fixturePlayersTable.fixtureId, fixturesTable.id))
-    .where(and(inArray(fixturePlayersTable.playerId, clubPlayerIds), inArray(fixturesTable.status, ["scheduled", "live"])));
+    .where(and(
+      inArray(fixturePlayersTable.playerId, clubPlayerIds),
+      inArray(fixturesTable.status, ["scheduled", "live"]),
+      eq(fixturesTable.isNationalTeam, false),
+    ));
 
   const trackedFixtures = new Map(trackedRows.map((row) => [row.id, row]));
   for (const tracked of trackedFixtures.values()) {

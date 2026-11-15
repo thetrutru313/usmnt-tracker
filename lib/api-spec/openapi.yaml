@@ -926,6 +926,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScheduleEvent"
+        # Slug of the event shown as NEXT UP, by the dashboard hero's rule
+        # (lib/scheduleWindow.ts pickHeroEvent). Null when none qualifies.
+        nextEventSlug: { type: ["string", "null"] }
 
     NextScheduleEvent:
       type: object
