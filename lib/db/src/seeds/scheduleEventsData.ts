@@ -59,7 +59,7 @@ export const events = [
     endDate: "2027-03-28",
     dateLabel: "Mar 25–28, 2027",
     description:
-      "The semifinals, third-place match and final take place March 25–28, 2027, at SoFi Stadium in Inglewood, California. The USA plays in the Finals only if it wins its November quarterfinal against Haiti.",
+      "The USA plays Mexico in the semifinals on Thursday, March 25, then the final or third-place match on Sunday, March 28, all at SoFi Stadium in Inglewood, California.",
     sortOrder: 40,
   },
   {

@@ -8,8 +8,8 @@ export type MatchDef = {
   sentinelId: number;
   homeTeam: string;
   awayTeam: string;
-  homeLogoUrl: string;
-  awayLogoUrl: string;
+  homeLogoUrl: string | null;
+  awayLogoUrl: string | null;
   kickoffUtc: string;
   venue: string;
   city: string | null;
@@ -45,6 +45,17 @@ export type MatchDef = {
 // Logo URLs from the API-Football CDN: media.api-sports.io/football/teams/{id}.png
 // Verified via API-Football /teams?name=Haiti: USA=2384, Haiti=2386.
 // /leagues?search=CONCACAF Nations League: league 536, exact name below.
+//
+// March 2027 Nations League Finals, SoFi Stadium, Inglewood (PDT, UTC-7).
+// Semifinal slots (4 PM / later) aren't assigned yet, so times are TBD
+// placeholders at 00:00 UTC the next day (= 5 PM PDT, the right US date):
+//   Mar 25 USA vs Mexico semifinal (USA listed first as the 1 seed; the NT
+//   sync takes the API's home/away order when it binds).
+//   Mar 28 USA vs TBD: the final or third-place match. Its opponent is
+//   filled in when the NT sync binds it to the real fixture.
+// Mexico's logo: API-Football team 16 (binding replaces logos with the API's).
+// Windows stay clear of each other: semis end by 26 Mar UTC, Sunday's
+// matches start after 28 Mar 22:00 UTC.
 export const SENIOR_SENTINEL_FIXTURES: MatchDef[] = [
   {
     sentinelId: -2005, homeTeam: "Haiti", awayTeam: "USA",
@@ -73,7 +84,45 @@ export const SENIOR_SENTINEL_FIXTURES: MatchDef[] = [
     venue: "Inter Miami CF Stadium", city: "Fort Lauderdale, FL", tvNetwork: null, streamingService: null,
     windowStart: "2026-12-12 00:00:00+00", windowEnd: "2026-12-16 23:59:59+00",
   },
+  {
+    sentinelId: -2008, homeTeam: "USA", awayTeam: "Mexico",
+    homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+    awayLogoUrl: "https://media.api-sports.io/football/teams/16.png",
+    competition: "CONCACAF Nations League",
+    kickoffUtc: "2027-03-26 00:00:00+00", kickoffTimeTbd: true,
+    venue: "SoFi Stadium", city: "Inglewood, CA", tvNetwork: "TNT", streamingService: "HBO Max",
+    windowStart: "2027-03-24 00:00:00+00", windowEnd: "2027-03-26 23:59:59+00",
+  },
+  {
+    sentinelId: -2009, homeTeam: "USA", awayTeam: "TBD",
+    homeLogoUrl: "https://media.api-sports.io/football/teams/2384.png",
+    awayLogoUrl: null,
+    competition: "CONCACAF Nations League",
+    kickoffUtc: "2027-03-29 00:00:00+00", kickoffTimeTbd: true,
+    venue: "SoFi Stadium", city: "Inglewood, CA", tvNetwork: "TNT", streamingService: "HBO Max",
+    windowStart: "2027-03-28 12:00:00+00", windowEnd: "2027-03-30 23:59:59+00",
+  },
 ];
+
+/** Placeholder opponent for a match whose opponent isn't decided yet. */
+export const TBD_TEAM = "TBD";
+
+/**
+ * Rows (alias `f`) that are the same match as `m`: same pair in either order
+ * (the NT sync takes the API's home/away order on binding), or, for a
+ * "USA vs TBD" placeholder, any row with the known team, since binding fills
+ * in the real opponent. Always combined with competition + date window.
+ */
+function sameMatchAs(m: MatchDef, alias: string) {
+  const f = (column: string) => sql.raw(`${alias}.${column}`);
+  const hasTbd = m.homeTeam === TBD_TEAM || m.awayTeam === TBD_TEAM;
+  const known = m.homeTeam === TBD_TEAM ? m.awayTeam : m.homeTeam;
+  return sql`(
+    (${f("home_team")} = ${m.homeTeam} AND ${f("away_team")} = ${m.awayTeam})
+    OR (${f("home_team")} = ${m.awayTeam} AND ${f("away_team")} = ${m.homeTeam})
+    OR (${hasTbd}::boolean AND ${known}::text IN (${f("home_team")}, ${f("away_team")}))
+  )`;
+}
 
 export async function seedSeniorSentinelFixtures(db: FixtureSeedDatabase, matches = SENIOR_SENTINEL_FIXTURES): Promise<void> {
   try {
@@ -94,13 +143,12 @@ export async function seedSeniorSentinelFixtures(db: FixtureSeedDatabase, matche
                ${m.venue}, ${m.city}, true, 'SENIOR', 'scheduled',
                ${m.homeLogoUrl}, ${m.awayLogoUrl}, ${m.kickoffTimeTbd}, ${m.tvNetwork}, ${m.streamingService}
         WHERE NOT EXISTS (
-          SELECT 1 FROM fixtures
-          WHERE home_team       = ${m.homeTeam}
-            AND away_team       = ${m.awayTeam}
-            AND is_national_team = true
-            AND competition      = ${m.competition}
-            AND kickoff BETWEEN ${m.windowStart}::timestamptz
-                            AND ${m.windowEnd}::timestamptz
+          SELECT 1 FROM fixtures f
+          WHERE ${sameMatchAs(m, "f")}
+            AND f.is_national_team = true
+            AND f.competition      = ${m.competition}
+            AND f.kickoff BETWEEN ${m.windowStart}::timestamptz
+                              AND ${m.windowEnd}::timestamptz
         )
       `);
       totalInserted += (insertResult as unknown as { rowCount?: number }).rowCount ?? 0;
@@ -143,8 +191,7 @@ export async function seedSeniorSentinelFixtures(db: FixtureSeedDatabase, matche
         WHERE api_football_fixture_id = ${m.sentinelId}
           AND EXISTS (
             SELECT 1 FROM fixtures f2
-            WHERE f2.home_team       = ${m.homeTeam}
-              AND f2.away_team       = ${m.awayTeam}
+            WHERE ${sameMatchAs(m, "f2")}
               AND f2.is_national_team = true
               AND f2.competition      = ${m.competition}
               AND f2.api_football_fixture_id > 0

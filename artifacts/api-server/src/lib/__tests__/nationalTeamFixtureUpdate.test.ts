@@ -87,3 +87,36 @@ describe("senior NT schedule details", () => {
     }
   });
 });
+
+describe("team names when a placeholder is bound", () => {
+  const usaHome = {
+    ...api,
+    teams: { home: { id: 2384, name: "USA", logo: "usa.png" }, away: { id: 5529, name: "Canada", logo: "canada.png" } },
+  };
+  const unbound = { ...stored, apiFootballFixtureId: -2009 };
+
+  it("takes the API's teams when the placeholder's opponent is TBD", () => {
+    expect(nationalTeamFixtureUpdate({ ...unbound, homeTeam: "USA", awayTeam: "TBD" }, usaHome))
+      .toMatchObject({ homeTeam: "USA", awayTeam: "Canada", awayLogoUrl: "canada.png" });
+  });
+
+  it("takes the API's order when the placeholder listed the pair the other way round", () => {
+    const usaHaiti = {
+      ...api, teams: { home: { id: 2384, name: "USA", logo: "usa.png" }, away: { id: 2386, name: "Haiti", logo: "haiti.png" } },
+    };
+    expect(nationalTeamFixtureUpdate({ ...unbound, homeTeam: "Haiti", awayTeam: "USA" }, usaHaiti))
+      .toMatchObject({ homeTeam: "USA", awayTeam: "Haiti", homeLogoUrl: "usa.png", awayLogoUrl: "haiti.png" });
+  });
+
+  it("leaves names alone when they already match the API (existing behaviour)", () => {
+    const update = nationalTeamFixtureUpdate({ ...unbound, homeTeam: "Haiti", awayTeam: "USA" }, api);
+    expect(update).not.toHaveProperty("homeTeam");
+    expect(update).not.toHaveProperty("awayTeam");
+  });
+
+  it("never renames a row that is already bound (existing behaviour)", () => {
+    const update = nationalTeamFixtureUpdate({ ...stored, homeTeam: "USA", awayTeam: "TBD" }, usaHome);
+    expect(update).not.toHaveProperty("homeTeam");
+    expect(update).not.toHaveProperty("awayTeam");
+  });
+});

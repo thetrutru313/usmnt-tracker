@@ -5,7 +5,7 @@ export type StoredNationalTeamFixture = Pick<
   typeof fixturesTable.$inferSelect,
   "apiFootballFixtureId" | "status" | "homeScore" | "awayScore" |
   "kickoff" | "kickoffTimeTbd" | "venue" | "city" | "ntLevel"
->;
+> & Partial<Pick<typeof fixturesTable.$inferSelect, "homeTeam" | "awayTeam">>;
 
 /** Pure calculation; binding and score/status behavior match the existing sync. */
 export function nationalTeamFixtureUpdate(row: StoredNationalTeamFixture, match: AfFixture) {
@@ -20,6 +20,19 @@ export function nationalTeamFixtureUpdate(row: StoredNationalTeamFixture, match:
     update.apiFootballFixtureId = match.fixture.id;
     if (match.teams.home.logo) update.homeLogoUrl = match.teams.home.logo;
     if (match.teams.away.logo) update.awayLogoUrl = match.teams.away.logo;
+    // Take the API's teams when the placeholder had no opponent yet ("USA vs
+    // TBD") or listed the pair the other way round, so names match the logos
+    // just taken from the API.
+    if (row.homeTeam !== undefined && row.awayTeam !== undefined) {
+      const apiHome = match.teams.home.name;
+      const apiAway = match.teams.away.name;
+      const hasTbd = row.homeTeam === "TBD" || row.awayTeam === "TBD";
+      const reversed = apiHome !== apiAway && row.homeTeam === apiAway && row.awayTeam === apiHome;
+      if (hasTbd || reversed) {
+        update.homeTeam = apiHome;
+        update.awayTeam = apiAway;
+      }
+    }
   }
   // Do not change club/youth/unclassified schedule details, or started games.
   if (row.ntLevel === "SENIOR" && row.status === "scheduled") {

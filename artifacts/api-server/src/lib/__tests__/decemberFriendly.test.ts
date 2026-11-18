@@ -83,10 +83,10 @@ describe("December Jamaica friendly — actual seed and routes", () => {
       expect(rows[0]).toMatchObject(expectedFixture);
       expect(rows[0]!.kickoff.toISOString()).toBe("2026-12-14T00:00:00.000Z");
       await startupSeed(tx);
-      expect(await tx.select().from(fixturesTable)).toHaveLength(3);
+      expect(await tx.select().from(fixturesTable)).toHaveLength(5);
       await tx.update(fixturesTable).set({ apiFootballFixtureId: 9992007 }).where(eq(fixturesTable.id, rows[0]!.id));
       await startupSeed(tx);
-      expect(await tx.select().from(fixturesTable)).toHaveLength(3);
+      expect(await tx.select().from(fixturesTable)).toHaveLength(5);
       expect(await tx.select().from(fixturesTable).where(eq(fixturesTable.apiFootballFixtureId, -2007))).toEqual([]);
     });
   });
